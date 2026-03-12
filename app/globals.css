@@ -1,26 +1,37 @@
-@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Bricolage+Grotesque:wght@400;500;700;800&display=swap');
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --banana: #F5C842;
+  --banana-bright: #FFE135;
+  --banana-dark: #C49A10;
+  --banana-glow: rgba(245,200,66,0.15);
+  --banana-glow2: rgba(245,200,66,0.06);
+  --bg: #080807;
+  --bg2: #0e0e0c;
+  --bg3: #141410;
+  --surface: #1c1c17;
+  --surface2: #242420;
+  --border: #2a2a22;
+  --border2: #333328;
+  --text: #eeeadb;
+  --text2: #a8a48e;
+  --text3: #5a5848;
+  --green: #2EE89A;
+  --red: #FF4545;
+  --blue: #4DAAFF;
+  --purple: #C87BFF;
+  --orange: #FF8C42;
+  --eth: #627EEA;
+  --bsc: #F3BA2F;
+  --sol: #9945FF;
+  --base: #0052FF;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+* { margin: 0; padding: 0; box-sizing: border-box; }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+html, body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Bricolage Grotesque', sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
