@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
       const data = await res.json();
       const accounts = data.result?.value || [];
       const total = accounts.reduce((s: number, a: any) => s + Number(a.amount), 0) || 1;
-      const holders = accounts.slice(0, 100).map((a: any, i: number) => ({
+      const holders = accounts.slice(0, 50).map((a: any, i: number) => ({
         address: a.address,
         balance: Number(a.amount),
         pct: (Number(a.amount) / total) * 100,
@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
       const data = await res.json();
       if (!data.result || !Array.isArray(data.result)) return NextResponse.json({ holders: [], debug: JSON.stringify(data).slice(0, 200) });
       const total = data.result.reduce((s: number, h: any) => s + Number(h.balance_formatted || h.balance), 0) || 1;
-      const holders = data.result.slice(0, 100).map((h: any, i: number) => ({
+      const holders = data.result.slice(0, 50).map((h: any, i: number) => ({
         address: h.owner_address,
         balance: Number(h.balance_formatted || h.balance),
         pct: (Number(h.balance_formatted || h.balance) / total) * 100,
