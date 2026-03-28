@@ -26,18 +26,18 @@ export default function Home() {
       {/* Nav */}
       <nav style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '18px 40px', borderBottom: '1px solid var(--border)', flexShrink: 0,
+        padding: '14px max(12px, env(safe-area-inset-left)) 14px max(12px, env(safe-area-inset-right))', borderBottom: '1px solid var(--border)', flexShrink: 0,
       }}>
         <a href="/" style={{ display: 'flex', alignItems: 'center', gap: 8, fontFamily: "'Bricolage Grotesque', sans-serif", fontWeight: 800, fontSize: 19, cursor: 'pointer', textDecoration: 'none', color: 'inherit' }}>
           <span style={{ fontSize: 22, display: 'inline-block', animation: 'wobble 4s ease-in-out infinite' }}>🍌</span>
           <span style={{ color: 'var(--text)' }}>Banana<span style={{ color: 'var(--banana)' }}>Maps</span></span>
         </a>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <span className="nav-link-home">Watchlist</span>
-          <span className="nav-link-home">Docs</span>
-          <button className="pro-btn-home" onClick={() => {}}>🍌 Go Pro</button>
-          <button className="login-btn-home" onClick={() => {}}>Log in</button>
-          <button className="signup-btn-home" onClick={() => {}}>Sign up</button>
+          <span className="nav-link-home nav-hide-mobile">Watchlist</span>
+          <span className="nav-link-home nav-hide-mobile">Docs</span>
+          <button className="pro-btn-home nav-hide-mobile" onClick={() => {}}>🍌 Go Pro</button>
+          <button className="login-btn-home nav-hide-mobile" onClick={() => {}}>Log in</button>
+          <button className="signup-btn-home nav-hide-mobile" onClick={() => {}}>Sign up</button>
           <Link href="/app">
             <button className="launch-btn-home">Launch App →</button>
           </Link>

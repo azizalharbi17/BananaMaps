@@ -35,3 +35,9 @@ html, body {
   font-family: 'Bricolage Grotesque', sans-serif;
   -webkit-font-smoothing: antialiased;
 }
+
+@media (max-width: 768px) {
+  .nav-hide-mobile {
+    display: none !important;
+  }
+}
