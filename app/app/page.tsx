@@ -297,7 +297,7 @@ function AppContent() {
             </select>
           )}
           <input value={search} onChange={e=>setSearch(e.target.value)} onKeyDown={e=>e.key==='Enter'&&doSearch()} placeholder="Token name or address..." style={{ flex:1,background:'none',border:'none',outline:'none',color:'#e8e8f0',fontSize:13,padding:'10px 0',minWidth:0 }}/>
-          <button onClick={doSearch} style={{ background:'#F5C842',color:'#000',border:'none',borderRadius:6,padding:'5px 12px',fontWeight:700,fontSize:12,cursor:'pointer',flexShrink:0 }}>{loading?'...':'Go'}</button>
+          <button onClick={doSearch} style={{ background:'#F5C842',color:'#000',border:'none',borderRadius:6,padding:'5px 8px',fontWeight:700,fontSize:11,cursor:'pointer',flexShrink:0 }}>{loading?'...':'Go'}</button>
         </div>
         {tokenName&&isMobile&&(
           <button onClick={()=>setShowList(true)} style={{ background:'rgba(100,120,200,0.1)',border:'1px solid rgba(100,120,200,0.2)',borderRadius:6,padding:'6px 10px',color:'rgba(180,190,255,0.8)',fontSize:11,cursor:'pointer',flexShrink:0 }}>List</button>
