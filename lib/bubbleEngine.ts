@@ -18,7 +18,6 @@ export function initBubbles(holders: Holder[], width: number, height: number): H
   const minR = 8, maxR = 55;
   const total = holders.length;
   const cx = width / 2, cy = height / 2;
-  // Use the smaller dimension for spread so it fits both portrait and landscape
   const maxSpread = Math.min(width, height) * 0.42;
   return holders.map((h, i) => {
     const angle = i * 2.399963;
@@ -55,7 +54,6 @@ export function detectClusters(holders: Holder[]): Holder[] {
 export function applyForces(bubbles: Holder[], width: number, height: number): Holder[] {
   const arr = bubbles.map(b => ({ ...b }));
   const cx = width / 2, cy = height / 2;
-  // Keep boundary circular based on smaller dimension
   const boundaryR = Math.min(width, height) * 0.44;
   for (let i = 0; i < arr.length; i++) {
     let fx = 0, fy = 0;
@@ -86,7 +84,6 @@ export function applyForces(bubbles: Holder[], width: number, height: number): H
         if (dist < 180) { const f=(180-dist)/180; fx+=(dx/dist)*f*0.25; fy+=(dy/dist)*f*0.25; }
       }
     }
-    // Circular boundary using min(width,height) so it works on all screens
     const dc = Math.sqrt((ax-cx)**2+(ay-cy)**2);
     if (dc > boundaryR) {
       const f = (dc - boundaryR) / boundaryR;
@@ -129,14 +126,13 @@ export function drawBubbles(
 ) {
   ctx.clearRect(0,0,width,height);
 
-  // Dark background
-  const bg = ctx.createRadialGradient(width/2,height/2,0,width/2,height/2,Math.max(width,height)*0.7);
-  bg.addColorStop(0,'#0d0d1a');
-  bg.addColorStop(0.5,'#080810');
-  bg.addColorStop(1,'#050508');
+  // Clean dark background — no vignette
+  const bg = ctx.createRadialGradient(width/2,height/2,0,width/2,height/2,Math.max(width,height)*0.8);
+  bg.addColorStop(0,'#0e0e1c');
+  bg.addColorStop(1,'#07070f');
   ctx.fillStyle=bg; ctx.fillRect(0,0,width,height);
 
-  // Stars
+  // Subtle stars
   for(let i=0;i<60;i++){
     ctx.beginPath();
     ctx.arc((Math.sin(i*137.508)*0.5+0.5)*width,(Math.cos(i*97.311)*0.5+0.5)*height,0.4+(i%3)*0.25,0,Math.PI*2);
@@ -191,11 +187,4 @@ export function drawBubbles(
     ctx.beginPath(); ctx.arc(x-r*0.28,y-r*0.28,r*0.1,0,Math.PI*2);
     ctx.fillStyle='rgba(255,255,255,0.08)'; ctx.fill();
   });
-
-  // Vignette — use min(width,height) so it's circular on ALL screen sizes
-  const vigR = Math.min(width, height);
-  const vig = ctx.createRadialGradient(width/2, height/2, vigR*0.32, width/2, height/2, vigR*0.56);
-  vig.addColorStop(0,'transparent');
-  vig.addColorStop(1,'rgba(5,5,8,0.9)');
-  ctx.fillStyle=vig; ctx.fillRect(0,0,width,height);
 }
