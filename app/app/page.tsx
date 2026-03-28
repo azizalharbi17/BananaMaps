@@ -276,8 +276,8 @@ function AppContent() {
   }
 
   return (
-    <div style={{ height:'100dvh',background:'#07070f',display:'flex',flexDirection:'column',overflow:'hidden' }}>
-      <nav style={{ display:'flex',alignItems:'center',padding:'0 12px',borderBottom:'1px solid rgba(100,120,200,0.12)',height:50,gap:8,flexShrink:0,background:'rgba(6,6,14,0.98)' }}>
+    <div style={{ height:'100dvh',background:'#0e0e1c',display:'flex',flexDirection:'column',overflow:'hidden' }}>
+      <nav style={{ display:'flex',alignItems:'center',padding:'0 12px',borderBottom:'1px solid rgba(100,120,200,0.12)',height:50,gap:8,flexShrink:0,background:'rgba(14,14,28,0.98)' }}>
         <a href="/" style={{ display:'flex',alignItems:'center',gap:6,fontWeight:800,fontSize:16,textDecoration:'none',color:'#f0ede6',flexShrink:0 }}>
           <span>🍌</span><span className="nav-hide-mobile">Banana<span style={{color:'#F5C842'}}>Maps</span></span>
         </a>
@@ -305,7 +305,7 @@ function AppContent() {
       </nav>
 
       <div style={{ flex:1,display:'flex',overflow:'hidden',position:'relative' }}>
-        <div style={{ flex:1,position:'relative' }}>
+        <div style={{ flex:1,position:'relative',background:'#0e0e1c' }}>
           <canvas ref={canvasRef}
             onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp}
             onMouseLeave={()=>{isDraggingRef.current=false;hoveredRef.current=-1;}}
@@ -392,7 +392,7 @@ function AppContent() {
         </div>
 
         {!isMobile&&(
-          <div style={{ width:250,borderLeft:'1px solid rgba(100,120,200,0.08)',background:'rgba(6,6,14,0.95)',display:'flex',flexDirection:'column',flexShrink:0 }}>
+          <div style={{ width:250,borderLeft:'1px solid rgba(100,120,200,0.08)',background:'rgba(14,14,28,0.95)',display:'flex',flexDirection:'column',flexShrink:0 }}>
             <div style={{ padding:'10px 14px',borderBottom:'1px solid rgba(100,120,200,0.08)',fontSize:9,letterSpacing:'1.5px',textTransform:'uppercase',color:'rgba(180,180,255,0.25)' }}>Holders</div>
             <div style={{ flex:1,overflowY:'auto' }}>
               {bubblesRef.current.length===0?(
