@@ -141,7 +141,7 @@ export function drawBubbles(
 
   const bg = ctx.createRadialGradient(width/2,height/2,0,width/2,height/2,Math.max(width,height)*0.8);
   bg.addColorStop(0,'#0e0e1c');
-  bg.addColorStop(1,'#07070f');
+  bg.addColorStop(1,'#0e0e1c');
   ctx.fillStyle=bg; ctx.fillRect(0,0,width,height);
 
   for(let i=0;i<60;i++){
