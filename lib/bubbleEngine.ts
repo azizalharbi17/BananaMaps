@@ -18,7 +18,7 @@ export function initBubbles(holders: Holder[], width: number, height: number): H
   const minR = 8, maxR = 55;
   const total = holders.length;
   const cx = width / 2, cy = height / 2;
-  const maxSpread = Math.min(width, height) * 0.42;
+  const maxSpread = Math.min(width, height) * 0.40;
   return holders.map((h, i) => {
     const angle = i * 2.399963;
     const r = maxSpread * Math.sqrt((i + 0.5) / total);
@@ -54,48 +54,61 @@ export function detectClusters(holders: Holder[]): Holder[] {
 export function applyForces(bubbles: Holder[], width: number, height: number): Holder[] {
   const arr = bubbles.map(b => ({ ...b }));
   const cx = width / 2, cy = height / 2;
-  const boundaryR = Math.min(width, height) * 0.44;
+  // Strictly circular boundary — this is what makes it globe shaped
+  const boundaryR = Math.min(width, height) * 0.43;
+
   for (let i = 0; i < arr.length; i++) {
     let fx = 0, fy = 0;
     const a = arr[i], ax = a.x || 0, ay = a.y || 0;
-    fx += (cx - ax) * 0.00015;
-    fy += (cy - ay) * 0.00015;
+
+    // Center gravity
+    fx += (cx - ax) * 0.0002;
+    fy += (cy - ay) * 0.0002;
+
+    // Cluster attraction
     if (a.cluster !== undefined) {
       for (let j = 0; j < arr.length; j++) {
         if (i === j || arr[j].cluster !== a.cluster) continue;
         const dx = (arr[j].x||0)-ax, dy = (arr[j].y||0)-ay;
         const dist = Math.sqrt(dx*dx+dy*dy)||1;
-        const target = (a.radius||10)+(arr[j].radius||10)+25;
-        if (dist > target) { fx += (dx/dist)*0.01; fy += (dy/dist)*0.01; }
+        const target = (a.radius||10)+(arr[j].radius||10)+22;
+        if (dist > target) { fx += (dx/dist)*0.012; fy += (dy/dist)*0.012; }
       }
     }
+
+    // Bubble repulsion
     for (let j = 0; j < arr.length; j++) {
       if (i === j) continue;
       const dx = ax-(arr[j].x||0), dy = ay-(arr[j].y||0);
       const dist = Math.sqrt(dx*dx+dy*dy)||1;
-      const minD = (a.radius||10)+(arr[j].radius||10)+50;
-      if (dist < minD) { const f=(minD-dist)/minD; fx+=(dx/dist)*f*0.4; fy+=(dy/dist)*f*0.4; }
+      const minD = (a.radius||10)+(arr[j].radius||10)+45;
+      if (dist < minD) { const f=(minD-dist)/minD; fx+=(dx/dist)*f*0.5; fy+=(dy/dist)*f*0.5; }
     }
+
+    // Cross cluster repulsion
     if (a.cluster !== undefined) {
       for (let j = 0; j < arr.length; j++) {
         if (i===j||arr[j].cluster===a.cluster) continue;
         const dx = ax-(arr[j].x||0), dy = ay-(arr[j].y||0);
         const dist = Math.sqrt(dx*dx+dy*dy)||1;
-        if (dist < 180) { const f=(180-dist)/180; fx+=(dx/dist)*f*0.25; fy+=(dy/dist)*f*0.25; }
+        if (dist < 160) { const f=(160-dist)/160; fx+=(dx/dist)*f*0.3; fy+=(dy/dist)*f*0.3; }
       }
     }
-    const dc = Math.sqrt((ax-cx)**2+(ay-cy)**2);
-    if (dc > boundaryR) {
-      const f = (dc - boundaryR) / boundaryR;
-      fx += (cx-ax)/dc*f*0.6;
-      fy += (cy-ay)/dc*f*0.6;
+
+    // CIRCULAR boundary only — no square walls
+    const distFromCenter = Math.sqrt((ax-cx)**2 + (ay-cy)**2);
+    if (distFromCenter > boundaryR - (a.radius||10)) {
+      // Push back toward center along the radial direction
+      const strength = Math.pow((distFromCenter - (boundaryR - (a.radius||10))) / boundaryR, 1.5) * 2;
+      fx += (cx - ax) / distFromCenter * strength;
+      fy += (cy - ay) / distFromCenter * strength;
     }
-    let vx = ((a.vx||0)+fx)*0.86, vy = ((a.vy||0)+fy)*0.86;
-    let x = ax+vx, y = ay+vy;
-    const pad = (a.radius||10)+15;
-    if(x<pad){x=pad;vx*=-0.3;} if(x>width-pad){x=width-pad;vx*=-0.3;}
-    if(y<pad){y=pad;vy*=-0.3;} if(y>height-pad){y=height-pad;vy*=-0.3;}
-    arr[i] = {...a,x,y,vx,vy};
+
+    let vx = ((a.vx||0)+fx)*0.87;
+    let vy = ((a.vy||0)+fy)*0.87;
+    // NO hard wall clamping — only circular boundary
+    const x = ax+vx, y = ay+vy;
+    arr[i] = {...a, x, y, vx, vy};
   }
   return arr;
 }
@@ -126,20 +139,17 @@ export function drawBubbles(
 ) {
   ctx.clearRect(0,0,width,height);
 
-  // Clean dark background — no vignette
   const bg = ctx.createRadialGradient(width/2,height/2,0,width/2,height/2,Math.max(width,height)*0.8);
   bg.addColorStop(0,'#0e0e1c');
   bg.addColorStop(1,'#07070f');
   ctx.fillStyle=bg; ctx.fillRect(0,0,width,height);
 
-  // Subtle stars
   for(let i=0;i<60;i++){
     ctx.beginPath();
     ctx.arc((Math.sin(i*137.508)*0.5+0.5)*width,(Math.cos(i*97.311)*0.5+0.5)*height,0.4+(i%3)*0.25,0,Math.PI*2);
     ctx.fillStyle=`rgba(180,180,255,${0.02+(i%5)*0.01})`; ctx.fill();
   }
 
-  // Lines behind bubbles
   const groups: Record<number,Holder[]> = {};
   bubbles.forEach(b => { if(b.cluster!==undefined){if(!groups[b.cluster])groups[b.cluster]=[];groups[b.cluster].push(b);}});
   Object.entries(groups).forEach(([id,group]) => {
@@ -154,7 +164,6 @@ export function drawBubbles(
     });
   });
 
-  // Bubbles
   bubbles.forEach((b,i) => {
     const x=b.x||0, y=b.y||0, r=b.radius||10;
     const isHovered=i===hoveredIndex, isSelected=i===selectedIndex;
@@ -170,11 +179,9 @@ export function drawBubbles(
     ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2);
     const fill=ctx.createRadialGradient(x-r*0.15,y-r*0.15,0,x,y,r);
     if(hasCluster){
-      fill.addColorStop(0,color+'22');
-      fill.addColorStop(1,color+'08');
+      fill.addColorStop(0,color+'22'); fill.addColorStop(1,color+'08');
     } else {
-      fill.addColorStop(0,'rgba(30,35,60,0.8)');
-      fill.addColorStop(1,'rgba(15,18,35,0.6)');
+      fill.addColorStop(0,'rgba(30,35,60,0.8)'); fill.addColorStop(1,'rgba(15,18,35,0.6)');
     }
     ctx.fillStyle=fill; ctx.fill();
     ctx.strokeStyle=isHovered||isSelected?(hasCluster?color:'rgba(200,210,255,1)'):(hasCluster?color+'cc':'rgba(120,130,180,0.45)');
