@@ -198,6 +198,6 @@ export function drawBubbles(
   // Soft vignette to hide canvas edges
   const vig = ctx.createRadialGradient(width/2,height/2,Math.min(width,height)*0.38,width/2,height/2,Math.max(width,height)*0.72);
   vig.addColorStop(0,"transparent");
-  vig.addColorStop(1,"rgba(7,7,15,0.94)");
+  vig.addColorStop(1,"rgba(14,14,28,0.96)");
   ctx.fillStyle=vig; ctx.fillRect(0,0,width,height);
 }
