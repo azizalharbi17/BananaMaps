@@ -28,10 +28,10 @@ export default function Home() {
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         padding: '18px 40px', borderBottom: '1px solid var(--border)', flexShrink: 0,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontFamily: "'Bricolage Grotesque', sans-serif", fontWeight: 800, fontSize: 19, cursor: 'default' }}>
+        <a href="/" style={{ display: 'flex', alignItems: 'center', gap: 8, fontFamily: "'Bricolage Grotesque', sans-serif", fontWeight: 800, fontSize: 19, cursor: 'pointer', textDecoration: 'none', color: 'inherit' }}>
           <span style={{ fontSize: 22, display: 'inline-block', animation: 'wobble 4s ease-in-out infinite' }}>🍌</span>
           <span style={{ color: 'var(--text)' }}>Banana<span style={{ color: 'var(--banana)' }}>Maps</span></span>
-        </div>
+        </a>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <span className="nav-link-home">Watchlist</span>
           <span className="nav-link-home">Docs</span>
