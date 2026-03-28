@@ -26,7 +26,7 @@ export default function Home() {
       {/* Nav */}
       <nav style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '14px 16px', borderBottom: '1px solid var(--border)', flexShrink: 0,
+        padding: '18px 40px', borderBottom: '1px solid var(--border)', flexShrink: 0,
       }}>
         <a href="/" style={{ display: 'flex', alignItems: 'center', gap: 8, fontFamily: "'Bricolage Grotesque', sans-serif", fontWeight: 800, fontSize: 19, cursor: 'pointer', textDecoration: 'none', color: 'inherit' }}>
           <span style={{ fontSize: 22, display: 'inline-block', animation: 'wobble 4s ease-in-out infinite' }}>🍌</span>
