@@ -1,6 +1,8 @@
 export interface Holder {
   address: string;
   balance: number;
+  balanceFormatted?: number;
+  usdValue?: number;
   pct: number;
   rank: number;
   cluster?: number;
@@ -54,70 +56,45 @@ export function detectClusters(holders: Holder[]): Holder[] {
 export function applyForces(bubbles: Holder[], width: number, height: number): Holder[] {
   const arr = bubbles.map(b => ({ ...b }));
   const cx = width / 2, cy = height / 2;
-
   for (let i = 0; i < arr.length; i++) {
     let fx = 0, fy = 0;
     const a = arr[i];
     const ax = a.x || 0, ay = a.y || 0;
-
-    // Weak center gravity
     fx += (cx - ax) * 0.0002;
     fy += (cy - ay) * 0.0002;
-
-    // Strong cluster attraction — pull same cluster tightly together
     if (a.cluster !== undefined) {
       for (let j = 0; j < arr.length; j++) {
         if (i === j) continue;
         const b = arr[j];
         if (b.cluster !== a.cluster) continue;
-        const dx = (b.x || 0) - ax;
-        const dy = (b.y || 0) - ay;
+        const dx = (b.x || 0) - ax, dy = (b.y || 0) - ay;
         const dist = Math.sqrt(dx*dx + dy*dy) || 1;
         const targetDist = (a.radius || 10) + (b.radius || 10) + 20;
-        if (dist > targetDist) {
-          fx += (dx / dist) * 0.012;
-          fy += (dy / dist) * 0.012;
-        }
+        if (dist > targetDist) { fx += (dx/dist)*0.012; fy += (dy/dist)*0.012; }
       }
     }
-
-    // Strong repulsion between ALL bubbles (keep space)
     for (let j = 0; j < arr.length; j++) {
       if (i === j) continue;
       const b = arr[j];
-      const dx = ax - (b.x || 0);
-      const dy = ay - (b.y || 0);
+      const dx = ax - (b.x || 0), dy = ay - (b.y || 0);
       const dist = Math.sqrt(dx*dx + dy*dy) || 1;
       const minDist = (a.radius || 10) + (b.radius || 10) + 60;
-      if (dist < minDist) {
-        const force = (minDist - dist) / minDist;
-        fx += (dx / dist) * force * 0.5;
-        fy += (dy / dist) * force * 0.5;
-      }
+      if (dist < minDist) { const f = (minDist-dist)/minDist; fx += (dx/dist)*f*0.5; fy += (dy/dist)*f*0.5; }
     }
-
-    // Extra repulsion between DIFFERENT clusters — push cluster islands apart
     if (a.cluster !== undefined) {
       for (let j = 0; j < arr.length; j++) {
         if (i === j) continue;
         const b = arr[j];
         if (b.cluster === a.cluster) continue;
-        const dx = ax - (b.x || 0);
-        const dy = ay - (b.y || 0);
+        const dx = ax - (b.x || 0), dy = ay - (b.y || 0);
         const dist = Math.sqrt(dx*dx + dy*dy) || 1;
         const repelDist = 200;
-        if (dist < repelDist) {
-          const force = (repelDist - dist) / repelDist;
-          fx += (dx / dist) * force * 0.3;
-          fy += (dy / dist) * force * 0.3;
-        }
+        if (dist < repelDist) { const f = (repelDist-dist)/repelDist; fx += (dx/dist)*f*0.3; fy += (dy/dist)*f*0.3; }
       }
     }
-
     let vx = ((a.vx || 0) + fx) * 0.85;
     let vy = ((a.vy || 0) + fy) * 0.85;
-    let x = ax + vx;
-    let y = ay + vy;
+    let x = ax + vx, y = ay + vy;
     const pad = (a.radius || 10) + 40;
     if (x < pad) { x = pad; vx *= -0.3; }
     if (x > width - pad) { x = width - pad; vx *= -0.3; }
@@ -128,34 +105,23 @@ export function applyForces(bubbles: Holder[], width: number, height: number): H
   return arr;
 }
 
-// Keep these for compatibility
 export function applyClusterAttraction(bubbles: Holder[]): Holder[] { return bubbles; }
-export function stepPhysics(bubbles: Holder[], width: number, height: number): Holder[] { return bubbles; }
+export function stepPhysics(bubbles: Holder[], w: number, h: number): Holder[] { return bubbles; }
 export function resolveCollisions(bubbles: Holder[]): Holder[] { return bubbles; }
 
-export const CLUSTER_COLORS = [
-  '#a855f7','#14b8a6','#f97316','#ec4899',
-  '#3b82f6','#84cc16','#f43f5e','#06b6d4',
-];
+export const CLUSTER_COLORS = ['#a855f7','#14b8a6','#f97316','#ec4899','#3b82f6','#84cc16','#f43f5e','#06b6d4'];
 
 function drawArrow(ctx: CanvasRenderingContext2D, x1: number, y1: number, x2: number, y2: number, color: string) {
-  const dx = x2 - x1, dy = y2 - y1;
-  const dist = Math.sqrt(dx*dx + dy*dy) || 1;
+  const dx = x2-x1, dy = y2-y1;
+  const dist = Math.sqrt(dx*dx+dy*dy) || 1;
   const nx = dx/dist, ny = dy/dist;
-  ctx.beginPath();
-  ctx.moveTo(x1, y1);
-  ctx.lineTo(x2, y2);
-  ctx.strokeStyle = color + '55';
-  ctx.lineWidth = 1;
-  ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2);
+  ctx.strokeStyle = color+'55'; ctx.lineWidth = 1; ctx.stroke();
   const as = 5;
-  ctx.beginPath();
-  ctx.moveTo(x2, y2);
-  ctx.lineTo(x2 - nx*as - ny*as*0.5, y2 - ny*as + nx*as*0.5);
-  ctx.lineTo(x2 - nx*as + ny*as*0.5, y2 - ny*as - nx*as*0.5);
-  ctx.closePath();
-  ctx.fillStyle = color + '88';
-  ctx.fill();
+  ctx.beginPath(); ctx.moveTo(x2,y2);
+  ctx.lineTo(x2-nx*as-ny*as*0.5, y2-ny*as+nx*as*0.5);
+  ctx.lineTo(x2-nx*as+ny*as*0.5, y2-ny*as-nx*as*0.5);
+  ctx.closePath(); ctx.fillStyle = color+'88'; ctx.fill();
 }
 
 export function drawBubbles(
@@ -166,95 +132,54 @@ export function drawBubbles(
   hoveredIndex: number,
   selectedIndex: number
 ) {
-  ctx.clearRect(0, 0, width, height);
-
-  const bg = ctx.createRadialGradient(width/2, height/2, 0, width/2, height/2, Math.max(width, height));
-  bg.addColorStop(0, '#0f0b00');
-  bg.addColorStop(1, '#060400');
-  ctx.fillStyle = bg;
-  ctx.fillRect(0, 0, width, height);
-
-  for (let i = 0; i < 80; i++) {
-    const sx = (Math.sin(i * 137.508) * 0.5 + 0.5) * width;
-    const sy = (Math.cos(i * 97.311) * 0.5 + 0.5) * height;
-    ctx.beginPath();
-    ctx.arc(sx, sy, 0.5 + (i % 3) * 0.3, 0, Math.PI * 2);
-    ctx.fillStyle = `rgba(245,200,66,${0.03 + (i % 4) * 0.015})`;
-    ctx.fill();
+  ctx.clearRect(0,0,width,height);
+  const bg = ctx.createRadialGradient(width/2,height/2,0,width/2,height/2,Math.max(width,height));
+  bg.addColorStop(0,'#0f0b00'); bg.addColorStop(1,'#060400');
+  ctx.fillStyle = bg; ctx.fillRect(0,0,width,height);
+  for (let i=0;i<80;i++) {
+    const sx=(Math.sin(i*137.508)*0.5+0.5)*width, sy=(Math.cos(i*97.311)*0.5+0.5)*height;
+    ctx.beginPath(); ctx.arc(sx,sy,0.5+(i%3)*0.3,0,Math.PI*2);
+    ctx.fillStyle=`rgba(245,200,66,${0.03+(i%4)*0.015})`; ctx.fill();
   }
-
-  // Draw lines FIRST
-  const clusterGroups: Record<number, Holder[]> = {};
-  bubbles.forEach(b => {
-    if (b.cluster !== undefined) {
-      if (!clusterGroups[b.cluster]) clusterGroups[b.cluster] = [];
-      clusterGroups[b.cluster].push(b);
-    }
-  });
-
-  Object.entries(clusterGroups).forEach(([clusterId, group]) => {
-    const color = CLUSTER_COLORS[Number(clusterId) % CLUSTER_COLORS.length];
-    const hub = group.reduce((a, b) => (a.balance > b.balance ? a : b));
+  const clusterGroups: Record<number,Holder[]> = {};
+  bubbles.forEach(b => { if (b.cluster!==undefined) { if(!clusterGroups[b.cluster])clusterGroups[b.cluster]=[]; clusterGroups[b.cluster].push(b); }});
+  Object.entries(clusterGroups).forEach(([clusterId,group]) => {
+    const color = CLUSTER_COLORS[Number(clusterId)%CLUSTER_COLORS.length];
+    const hub = group.reduce((a,b)=>a.balance>b.balance?a:b);
     group.forEach(member => {
-      if (member === hub) return;
-      const x1 = hub.x || 0, y1 = hub.y || 0;
-      const x2 = member.x || 0, y2 = member.y || 0;
-      const dx = x2 - x1, dy = y2 - y1;
-      const dist = Math.sqrt(dx*dx + dy*dy) || 1;
-      const nx = dx/dist, ny = dy/dist;
-      const r1 = (hub.radius || 10) + 2, r2 = (member.radius || 10) + 2;
-      drawArrow(ctx, x1 + nx*r1, y1 + ny*r1, x2 - nx*r2, y2 - ny*r2, color);
+      if(member===hub)return;
+      const x1=hub.x||0,y1=hub.y||0,x2=member.x||0,y2=member.y||0;
+      const dx=x2-x1,dy=y2-y1,dist=Math.sqrt(dx*dx+dy*dy)||1;
+      const nx=dx/dist,ny=dy/dist,r1=(hub.radius||10)+2,r2=(member.radius||10)+2;
+      drawArrow(ctx,x1+nx*r1,y1+ny*r1,x2-nx*r2,y2-ny*r2,color);
     });
   });
-
-  // Draw bubbles SECOND
-  bubbles.forEach((b, i) => {
-    const x = b.x || 0, y = b.y || 0, r = b.radius || 10;
-    const isHovered = i === hoveredIndex;
-    const isSelected = i === selectedIndex;
-    const hasCluster = b.cluster !== undefined;
-    const color = hasCluster ? CLUSTER_COLORS[b.cluster! % CLUSTER_COLORS.length] : '#F5C842';
-
-    if (isHovered || isSelected) {
-      const glow = ctx.createRadialGradient(x, y, r*0.3, x, y, r*2.5);
-      glow.addColorStop(0, color + '33');
-      glow.addColorStop(1, 'transparent');
-      ctx.beginPath();
-      ctx.arc(x, y, r*2.5, 0, Math.PI*2);
-      ctx.fillStyle = glow;
-      ctx.fill();
+  bubbles.forEach((b,i) => {
+    const x=b.x||0,y=b.y||0,r=b.radius||10;
+    const isHovered=i===hoveredIndex, isSelected=i===selectedIndex;
+    const hasCluster=b.cluster!==undefined;
+    const color=hasCluster?CLUSTER_COLORS[b.cluster!%CLUSTER_COLORS.length]:'#F5C842';
+    if(isHovered||isSelected){
+      const glow=ctx.createRadialGradient(x,y,r*0.3,x,y,r*2.5);
+      glow.addColorStop(0,color+'33'); glow.addColorStop(1,'transparent');
+      ctx.beginPath(); ctx.arc(x,y,r*2.5,0,Math.PI*2); ctx.fillStyle=glow; ctx.fill();
     }
-
-    ctx.beginPath();
-    ctx.arc(x, y, r, 0, Math.PI*2);
-    if (hasCluster) {
-      const grad = ctx.createRadialGradient(x - r*0.2, y - r*0.2, 0, x, y, r);
-      grad.addColorStop(0, color + '50');
-      grad.addColorStop(1, color + '15');
-      ctx.fillStyle = grad;
+    ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2);
+    if(hasCluster){
+      const grad=ctx.createRadialGradient(x-r*0.2,y-r*0.2,0,x,y,r);
+      grad.addColorStop(0,color+'50'); grad.addColorStop(1,color+'15'); ctx.fillStyle=grad;
     } else {
-      const grad = ctx.createRadialGradient(x - r*0.2, y - r*0.2, 0, x, y, r);
-      grad.addColorStop(0, 'rgba(245,200,66,0.10)');
-      grad.addColorStop(1, 'rgba(245,200,66,0.02)');
-      ctx.fillStyle = grad;
+      const grad=ctx.createRadialGradient(x-r*0.2,y-r*0.2,0,x,y,r);
+      grad.addColorStop(0,'rgba(245,200,66,0.10)'); grad.addColorStop(1,'rgba(245,200,66,0.02)'); ctx.fillStyle=grad;
     }
     ctx.fill();
-
-    ctx.strokeStyle = isHovered || isSelected ? color : (hasCluster ? color + 'bb' : 'rgba(245,200,66,0.25)');
-    ctx.lineWidth = isHovered || isSelected ? 2.5 : 1.5;
-    ctx.stroke();
-
-    if (r > 22) {
-      ctx.beginPath();
-      ctx.arc(x, y, r * 0.7, 0, Math.PI*2);
-      ctx.strokeStyle = hasCluster ? color + '20' : 'rgba(245,200,66,0.06)';
-      ctx.lineWidth = 1;
-      ctx.stroke();
+    ctx.strokeStyle=isHovered||isSelected?color:(hasCluster?color+'bb':'rgba(245,200,66,0.25)');
+    ctx.lineWidth=isHovered||isSelected?2.5:1.5; ctx.stroke();
+    if(r>22){
+      ctx.beginPath(); ctx.arc(x,y,r*0.7,0,Math.PI*2);
+      ctx.strokeStyle=hasCluster?color+'20':'rgba(245,200,66,0.06)'; ctx.lineWidth=1; ctx.stroke();
     }
-
-    ctx.beginPath();
-    ctx.arc(x - r*0.25, y - r*0.28, r*0.14, 0, Math.PI*2);
-    ctx.fillStyle = 'rgba(255,255,255,0.10)';
-    ctx.fill();
+    ctx.beginPath(); ctx.arc(x-r*0.25,y-r*0.28,r*0.14,0,Math.PI*2);
+    ctx.fillStyle='rgba(255,255,255,0.10)'; ctx.fill();
   });
 }
