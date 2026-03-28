@@ -18,7 +18,8 @@ export function initBubbles(holders: Holder[], width: number, height: number): H
   const minR = 8, maxR = 55;
   const total = holders.length;
   const cx = width / 2, cy = height / 2;
-  const maxSpread = Math.min(width, height) * 0.44;
+  // Use the smaller dimension for spread so it fits both portrait and landscape
+  const maxSpread = Math.min(width, height) * 0.42;
   return holders.map((h, i) => {
     const angle = i * 2.399963;
     const r = maxSpread * Math.sqrt((i + 0.5) / total);
@@ -54,6 +55,8 @@ export function detectClusters(holders: Holder[]): Holder[] {
 export function applyForces(bubbles: Holder[], width: number, height: number): Holder[] {
   const arr = bubbles.map(b => ({ ...b }));
   const cx = width / 2, cy = height / 2;
+  // Keep boundary circular based on smaller dimension
+  const boundaryR = Math.min(width, height) * 0.44;
   for (let i = 0; i < arr.length; i++) {
     let fx = 0, fy = 0;
     const a = arr[i], ax = a.x || 0, ay = a.y || 0;
@@ -83,10 +86,13 @@ export function applyForces(bubbles: Holder[], width: number, height: number): H
         if (dist < 180) { const f=(180-dist)/180; fx+=(dx/dist)*f*0.25; fy+=(dy/dist)*f*0.25; }
       }
     }
-    // Circular boundary
+    // Circular boundary using min(width,height) so it works on all screens
     const dc = Math.sqrt((ax-cx)**2+(ay-cy)**2);
-    const maxR2 = Math.min(width,height)*0.45;
-    if (dc > maxR2) { const f=(dc-maxR2)/maxR2; fx+=(cx-ax)/dc*f*0.6; fy+=(cy-ay)/dc*f*0.6; }
+    if (dc > boundaryR) {
+      const f = (dc - boundaryR) / boundaryR;
+      fx += (cx-ax)/dc*f*0.6;
+      fy += (cy-ay)/dc*f*0.6;
+    }
     let vx = ((a.vx||0)+fx)*0.86, vy = ((a.vy||0)+fy)*0.86;
     let x = ax+vx, y = ay+vy;
     const pad = (a.radius||10)+15;
@@ -123,21 +129,21 @@ export function drawBubbles(
 ) {
   ctx.clearRect(0,0,width,height);
 
-  // Dark background with subtle warm center
+  // Dark background
   const bg = ctx.createRadialGradient(width/2,height/2,0,width/2,height/2,Math.max(width,height)*0.7);
   bg.addColorStop(0,'#0d0d1a');
   bg.addColorStop(0.5,'#080810');
   bg.addColorStop(1,'#050508');
   ctx.fillStyle=bg; ctx.fillRect(0,0,width,height);
 
-  // Subtle stars
+  // Stars
   for(let i=0;i<60;i++){
     ctx.beginPath();
     ctx.arc((Math.sin(i*137.508)*0.5+0.5)*width,(Math.cos(i*97.311)*0.5+0.5)*height,0.4+(i%3)*0.25,0,Math.PI*2);
     ctx.fillStyle=`rgba(180,180,255,${0.02+(i%5)*0.01})`; ctx.fill();
   }
 
-  // Lines first (behind bubbles)
+  // Lines behind bubbles
   const groups: Record<number,Holder[]> = {};
   bubbles.forEach(b => { if(b.cluster!==undefined){if(!groups[b.cluster])groups[b.cluster]=[];groups[b.cluster].push(b);}});
   Object.entries(groups).forEach(([id,group]) => {
@@ -152,14 +158,12 @@ export function drawBubbles(
     });
   });
 
-  // Bubbles — BubbleMaps style: dark fill + bright colored ring
+  // Bubbles
   bubbles.forEach((b,i) => {
     const x=b.x||0, y=b.y||0, r=b.radius||10;
     const isHovered=i===hoveredIndex, isSelected=i===selectedIndex;
     const hasCluster=b.cluster!==undefined;
     const color=hasCluster?CLUSTER_COLORS[b.cluster!%CLUSTER_COLORS.length]:'rgba(160,170,200,0.9)';
-
-    // Subtle outer glow for hovered/selected/large
     if(isHovered||isSelected||(b.pct>3)){
       const glow=ctx.createRadialGradient(x,y,r*0.5,x,y,r*2);
       glow.addColorStop(0,hasCluster?color+'28':'rgba(160,170,200,0.1)');
@@ -167,8 +171,6 @@ export function drawBubbles(
       ctx.beginPath(); ctx.arc(x,y,r*2,0,Math.PI*2);
       ctx.fillStyle=glow; ctx.fill();
     }
-
-    // Dark bubble fill
     ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2);
     const fill=ctx.createRadialGradient(x-r*0.15,y-r*0.15,0,x,y,r);
     if(hasCluster){
@@ -179,30 +181,21 @@ export function drawBubbles(
       fill.addColorStop(1,'rgba(15,18,35,0.6)');
     }
     ctx.fillStyle=fill; ctx.fill();
-
-    // Colored ring — this is the key BubbleMaps look
-    ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2);
-    ctx.strokeStyle=isHovered||isSelected
-      ?(hasCluster?color:'rgba(200,210,255,1)')
-      :(hasCluster?color+'cc':'rgba(120,130,180,0.45)');
-    ctx.lineWidth=isHovered||isSelected?2:1.2;
-    ctx.stroke();
-
-    // Inner decorative ring for larger bubbles
+    ctx.strokeStyle=isHovered||isSelected?(hasCluster?color:'rgba(200,210,255,1)'):(hasCluster?color+'cc':'rgba(120,130,180,0.45)');
+    ctx.lineWidth=isHovered||isSelected?2:1.2; ctx.stroke();
     if(r>18){
       ctx.beginPath(); ctx.arc(x,y,r*0.65,0,Math.PI*2);
       ctx.strokeStyle=hasCluster?color+'15':'rgba(100,110,160,0.1)';
       ctx.lineWidth=0.8; ctx.stroke();
     }
-
-    // Small shine dot
     ctx.beginPath(); ctx.arc(x-r*0.28,y-r*0.28,r*0.1,0,Math.PI*2);
     ctx.fillStyle='rgba(255,255,255,0.08)'; ctx.fill();
   });
 
-  // Circular vignette to blend edges softly
-  const vig=ctx.createRadialGradient(width/2,height/2,Math.min(width,height)*0.3,width/2,height/2,Math.min(width,height)*0.58);
+  // Vignette — use min(width,height) so it's circular on ALL screen sizes
+  const vigR = Math.min(width, height);
+  const vig = ctx.createRadialGradient(width/2, height/2, vigR*0.32, width/2, height/2, vigR*0.56);
   vig.addColorStop(0,'transparent');
-  vig.addColorStop(1,'rgba(5,5,8,0.88)');
+  vig.addColorStop(1,'rgba(5,5,8,0.9)');
   ctx.fillStyle=vig; ctx.fillRect(0,0,width,height);
 }
