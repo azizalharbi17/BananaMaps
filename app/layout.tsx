@@ -4,6 +4,19 @@ import './globals.css';
 export const metadata: Metadata = {
   title: 'BananaMaps — Crypto Holder Intelligence',
   description: 'Visualize token holder distribution across Ethereum, BSC, Solana and Base. Expose clusters, whales, and suspicious wallet behaviour in seconds.',
+  openGraph: {
+    title: 'BananaMaps — Crypto Holder Intelligence',
+    description: 'Visualize who really holds the bag.',
+    url: 'https://bananamaps.io',
+    siteName: 'BananaMaps',
+    images: [
+      {
+        url: 'https://bananamaps.io/og-image.png',
+        width: 1200,
+        height: 630,
+      }
+    ],
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
