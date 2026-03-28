@@ -1,5 +1,4 @@
 'use client';
-import Link from 'next/link';
 import { useEffect, useRef, useState, Suspense, useCallback } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Holder, initBubbles, detectClusters, applyForces, drawBubbles, CLUSTER_COLORS } from '@/lib/bubbleEngine';
@@ -279,9 +278,9 @@ function AppContent() {
   return (
     <div style={{ height:'100dvh',background:'#07070f',display:'flex',flexDirection:'column',overflow:'hidden' }}>
       <nav style={{ display:'flex',alignItems:'center',padding:'0 12px',borderBottom:'1px solid rgba(100,120,200,0.12)',height:50,gap:8,flexShrink:0,background:'rgba(6,6,14,0.98)' }}>
-        <Link href="/" style={{ display:'flex',alignItems:'center',gap:6,fontWeight:800,fontSize:16,textDecoration:'none',color:'#f0ede6',flexShrink:0 }}>
+        <a href="/" style={{ display:'flex',alignItems:'center',gap:6,fontWeight:800,fontSize:16,textDecoration:'none',color:'#f0ede6',flexShrink:0 }}>
           <span>🍌</span><span>Banana<span style={{color:'#F5C842'}}>Maps</span></span>
-        </Link>
+        </a>
         {!isMobile&&(
           <div style={{ display:'flex',gap:4 }}>
             {(['eth','bsc','sol','base'] as const).map(c=>(
