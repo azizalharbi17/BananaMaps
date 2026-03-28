@@ -194,4 +194,10 @@ export function drawBubbles(
     ctx.beginPath(); ctx.arc(x-r*0.28,y-r*0.28,r*0.1,0,Math.PI*2);
     ctx.fillStyle='rgba(255,255,255,0.08)'; ctx.fill();
   });
+
+  // Soft vignette to hide canvas edges
+  const vig = ctx.createRadialGradient(width/2,height/2,Math.min(width,height)*0.38,width/2,height/2,Math.max(width,height)*0.72);
+  vig.addColorStop(0,"transparent");
+  vig.addColorStop(1,"rgba(7,7,15,0.94)");
+  ctx.fillStyle=vig; ctx.fillRect(0,0,width,height);
 }
