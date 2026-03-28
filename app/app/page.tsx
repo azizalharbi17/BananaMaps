@@ -133,9 +133,9 @@ function AppContent() {
       if (e.touches.length === 2) {
         const dx = e.touches[0].clientX-e.touches[1].clientX, dy = e.touches[0].clientY-e.touches[1].clientY;
         const dist = Math.sqrt(dx*dx+dy*dy);
-        const cx = (e.touches[0].clientX+e.touches[1].clientX)/2, cy = (e.touches[0].clientY+e.touches[1].clientY)/2;
+        const cx2 = (e.touches[0].clientX+e.touches[1].clientX)/2, cy2 = (e.touches[0].clientY+e.touches[1].clientY)/2;
         const rect = canvas.getBoundingClientRect();
-        const mx = cx-rect.left, my = cy-rect.top;
+        const mx = cx2-rect.left, my = cy2-rect.top;
         const ns = Math.min(Math.max(scaleRef.current*(dist/lastDist),0.15),6);
         offsetRef.current.x = mx-(mx-offsetRef.current.x)*(ns/scaleRef.current);
         offsetRef.current.y = my-(my-offsetRef.current.y)*(ns/scaleRef.current);
@@ -151,14 +151,21 @@ function AppContent() {
         const wx = (e.changedTouches[0].clientX-rect.left-offsetRef.current.x)/scaleRef.current;
         const wy = (e.changedTouches[0].clientY-rect.top-offsetRef.current.y)/scaleRef.current;
         const found = findBubbleAt(wx, wy);
-        if (found >= 0) { selectedRef.current=found; setSelected(bubblesRef.current[found]); setSelectedPos({x:e.changedTouches[0].clientX,y:e.changedTouches[0].clientY}); }
-        else { selectedRef.current=-1; setSelected(null); }
+        if (found >= 0) {
+          selectedRef.current = found;
+          setSelected(bubblesRef.current[found]);
+          setSelectedPos({ x: e.changedTouches[0].clientX, y: e.changedTouches[0].clientY });
+        } else { selectedRef.current = -1; setSelected(null); }
       }
     };
     canvas.addEventListener('touchstart', onTouchStart, { passive: false });
     canvas.addEventListener('touchmove', onTouchMove, { passive: false });
     canvas.addEventListener('touchend', onTouchEnd);
-    return () => { canvas.removeEventListener('touchstart',onTouchStart); canvas.removeEventListener('touchmove',onTouchMove); canvas.removeEventListener('touchend',onTouchEnd); };
+    return () => {
+      canvas.removeEventListener('touchstart', onTouchStart);
+      canvas.removeEventListener('touchmove', onTouchMove);
+      canvas.removeEventListener('touchend', onTouchEnd);
+    };
   }, []);
 
   useEffect(() => () => cancelAnimationFrame(animRef.current), []);
@@ -172,103 +179,114 @@ function AppContent() {
 
   function findBubbleAt(wx: number, wy: number): number {
     let found = -1;
-    bubblesRef.current.forEach((b,i) => { const dx=(b.x||0)-wx,dy=(b.y||0)-wy; if(Math.sqrt(dx*dx+dy*dy)<(b.radius||10))found=i; });
+    bubblesRef.current.forEach((b,i) => {
+      const dx=(b.x||0)-wx, dy=(b.y||0)-wy;
+      if (Math.sqrt(dx*dx+dy*dy) < (b.radius||10)) found = i;
+    });
     return found;
   }
 
   function sw(sx: number, sy: number) {
-    return { x:(sx-offsetRef.current.x)/scaleRef.current, y:(sy-offsetRef.current.y)/scaleRef.current };
+    return { x: (sx-offsetRef.current.x)/scaleRef.current, y: (sy-offsetRef.current.y)/scaleRef.current };
   }
 
   function handleMouseDown(e: React.MouseEvent<HTMLCanvasElement>) {
-    isDraggingRef.current=true; hasDraggedRef.current=false;
-    dragStartRef.current={x:e.clientX-offsetRef.current.x,y:e.clientY-offsetRef.current.y};
+    isDraggingRef.current = true; hasDraggedRef.current = false;
+    dragStartRef.current = { x: e.clientX-offsetRef.current.x, y: e.clientY-offsetRef.current.y };
   }
+
   function handleMouseMove(e: React.MouseEvent<HTMLCanvasElement>) {
     if (isDraggingRef.current) {
-      const dx=Math.abs(e.clientX-dragStartRef.current.x-offsetRef.current.x);
-      const dy=Math.abs(e.clientY-dragStartRef.current.y-offsetRef.current.y);
-      if(dx>3||dy>3)hasDraggedRef.current=true;
-      offsetRef.current={x:e.clientX-dragStartRef.current.x,y:e.clientY-dragStartRef.current.y};
+      const dx = Math.abs(e.clientX-dragStartRef.current.x-offsetRef.current.x);
+      const dy = Math.abs(e.clientY-dragStartRef.current.y-offsetRef.current.y);
+      if (dx > 3 || dy > 3) hasDraggedRef.current = true;
+      offsetRef.current = { x: e.clientX-dragStartRef.current.x, y: e.clientY-dragStartRef.current.y };
       return;
     }
-    const canvas=canvasRef.current; if(!canvas)return;
-    const rect=canvas.getBoundingClientRect();
-    const {x:wx,y:wy}=sw(e.clientX-rect.left,e.clientY-rect.top);
-    hoveredRef.current=findBubbleAt(wx,wy);
+    const canvas = canvasRef.current; if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const { x: wx, y: wy } = sw(e.clientX-rect.left, e.clientY-rect.top);
+    hoveredRef.current = findBubbleAt(wx, wy);
   }
+
   function handleMouseUp(e: React.MouseEvent<HTMLCanvasElement>) {
-    isDraggingRef.current=false;
-    if(!hasDraggedRef.current){
-      const canvas=canvasRef.current; if(!canvas)return;
-      const rect=canvas.getBoundingClientRect();
-      const {x:wx,y:wy}=sw(e.clientX-rect.left,e.clientY-rect.top);
-      const found=findBubbleAt(wx,wy);
-      if(found>=0){selectedRef.current=found;setSelected(bubblesRef.current[found]);setSelectedPos({x:e.clientX,y:e.clientY});}
-      else{selectedRef.current=-1;setSelected(null);}
+    isDraggingRef.current = false;
+    if (!hasDraggedRef.current) {
+      const canvas = canvasRef.current; if (!canvas) return;
+      const rect = canvas.getBoundingClientRect();
+      const { x: wx, y: wy } = sw(e.clientX-rect.left, e.clientY-rect.top);
+      const found = findBubbleAt(wx, wy);
+      if (found >= 0) {
+        selectedRef.current = found;
+        setSelected(bubblesRef.current[found]);
+        setSelectedPos({ x: e.clientX, y: e.clientY });
+      } else { selectedRef.current = -1; setSelected(null); }
     }
   }
 
   function fUSD(n: number): string {
-    if(n>=1e9)return'$'+(n/1e9).toFixed(2)+'B';
-    if(n>=1e6)return'$'+(n/1e6).toFixed(2)+'M';
-    if(n>=1e3)return'$'+(n/1e3).toFixed(2)+'K';
-    return'$'+n.toFixed(2);
+    if (n>=1e9) return '$'+(n/1e9).toFixed(2)+'B';
+    if (n>=1e6) return '$'+(n/1e6).toFixed(2)+'M';
+    if (n>=1e3) return '$'+(n/1e3).toFixed(2)+'K';
+    return '$'+n.toFixed(2);
   }
   function fAmt(n: number): string {
-    if(n>=1e12)return(n/1e12).toFixed(2)+'T';
-    if(n>=1e9)return(n/1e9).toFixed(2)+'B';
-    if(n>=1e6)return(n/1e6).toFixed(2)+'M';
-    if(n>=1e3)return(n/1e3).toFixed(2)+'K';
+    if (n>=1e12) return (n/1e12).toFixed(2)+'T';
+    if (n>=1e9) return (n/1e9).toFixed(2)+'B';
+    if (n>=1e6) return (n/1e6).toFixed(2)+'M';
+    if (n>=1e3) return (n/1e3).toFixed(2)+'K';
     return n.toFixed(2);
   }
 
-  const CC: Record<string,string> = { eth:'#627EEA',bsc:'#F3BA2F',sol:'#9945FF',base:'#0052FF' };
-  const CL: Record<string,string> = { eth:'Ethereum',bsc:'BSC',sol:'Solana',base:'Base' };
+  const CC: Record<string,string> = { eth:'#627EEA', bsc:'#F3BA2F', sol:'#9945FF', base:'#0052FF' };
+  const CL: Record<string,string> = { eth:'Ethereum', bsc:'BSC', sol:'Solana', base:'Base' };
 
-  // Popup position
-  const popupStyle = isMobile ? {
-    position:'fixed' as const, bottom:0, left:0, right:0,
-    background:'rgba(12,9,0,0.98)',
-    borderTop:`1px solid ${selected?.cluster!==undefined?CLUSTER_COLORS[selected.cluster%CLUSTER_COLORS.length]+'88':'rgba(245,200,66,0.3)'}`,
-    borderRadius:'14px 14px 0 0', padding:'12px 16px 24px', zIndex:200,
-  } : {
-    position:'fixed' as const,
-    top: Math.min(selectedPos.y-10, window.innerHeight-180),
-    left: Math.min(selectedPos.x+16, window.innerWidth-230),
-    background:'rgba(12,9,0,0.97)',
-    border:`1px solid ${selected?.cluster!==undefined?CLUSTER_COLORS[selected.cluster%CLUSTER_COLORS.length]+'66':'rgba(245,200,66,0.25)'}`,
-    borderRadius:10, padding:'10px 12px', width:220, zIndex:200,
-    boxShadow:'0 4px 24px rgba(0,0,0,0.7)',
-  };
+  // Smart popup position — always fits on screen, small card
+  function getPopupStyle(): React.CSSProperties {
+    const W = 210, H = 170;
+    const vw = typeof window !== 'undefined' ? window.innerWidth : 800;
+    const vh = typeof window !== 'undefined' ? window.innerHeight : 600;
+    let left = selectedPos.x + 16;
+    let top = selectedPos.y - H / 2;
+    if (left + W > vw - 10) left = selectedPos.x - W - 16;
+    if (top < 60) top = 60;
+    if (top + H > vh - 20) top = vh - H - 20;
+    return {
+      position: 'fixed', top, left, width: W,
+      background: 'rgba(10,10,18,0.96)',
+      border: `1px solid ${selected?.cluster !== undefined ? CLUSTER_COLORS[selected.cluster % CLUSTER_COLORS.length] + '66' : 'rgba(120,130,180,0.3)'}`,
+      borderRadius: 10, padding: '10px 12px', zIndex: 200,
+      boxShadow: '0 4px 20px rgba(0,0,0,0.8)',
+    };
+  }
 
   return (
-    <div style={{ height:'100dvh', background:'#060400', display:'flex', flexDirection:'column', overflow:'hidden' }}>
+    <div style={{ height:'100dvh', background:'#05050a', display:'flex', flexDirection:'column', overflow:'hidden' }}>
       {/* Nav */}
-      <nav style={{ display:'flex', alignItems:'center', padding:'0 12px', borderBottom:'1px solid rgba(245,200,66,0.1)', height:52, gap:8, flexShrink:0, background:'rgba(10,8,0,0.97)' }}>
+      <nav style={{ display:'flex', alignItems:'center', padding:'0 12px', borderBottom:'1px solid rgba(100,120,200,0.12)', height:50, gap:8, flexShrink:0, background:'rgba(6,6,14,0.98)' }}>
         <Link href="/" style={{ display:'flex', alignItems:'center', gap:6, fontWeight:800, fontSize:16, textDecoration:'none', color:'#f0ede6', flexShrink:0 }}>
           <span>🍌</span><span>Banana<span style={{color:'#F5C842'}}>Maps</span></span>
         </Link>
         {!isMobile && (
           <div style={{ display:'flex', gap:4 }}>
             {(['eth','bsc','sol','base'] as const).map(c => (
-              <button key={c} onClick={()=>setChain(c)} style={{ background:chain===c?'rgba(245,200,66,0.1)':'transparent', border:`1px solid ${chain===c?CC[c]:'rgba(255,255,255,0.1)'}`, color:chain===c?CC[c]:'rgba(255,255,255,0.4)', borderRadius:6, padding:'4px 8px', fontSize:10, cursor:'pointer', fontFamily:'inherit' }}>
+              <button key={c} onClick={()=>setChain(c)} style={{ background:chain===c?'rgba(245,200,66,0.08)':'transparent', border:`1px solid ${chain===c?CC[c]:'rgba(255,255,255,0.08)'}`, color:chain===c?CC[c]:'rgba(255,255,255,0.35)', borderRadius:6, padding:'4px 8px', fontSize:10, cursor:'pointer', fontFamily:'inherit' }}>
                 <span style={{ display:'inline-block', width:5, height:5, borderRadius:'50%', background:CC[c], marginRight:4 }}/>{c.toUpperCase()}
               </button>
             ))}
           </div>
         )}
-        <div style={{ flex:1, display:'flex', alignItems:'center', background:'rgba(255,255,255,0.04)', border:'1px solid rgba(245,200,66,0.15)', borderRadius:8, padding:'0 10px', gap:6 }}>
+        <div style={{ flex:1, display:'flex', alignItems:'center', background:'rgba(255,255,255,0.03)', border:'1px solid rgba(100,120,200,0.15)', borderRadius:8, padding:'0 10px', gap:6 }}>
           {isMobile && (
             <select value={chain} onChange={e=>setChain(e.target.value)} style={{ background:'transparent', border:'none', outline:'none', color:CC[chain], fontSize:11, cursor:'pointer' }}>
-              {['eth','bsc','sol','base'].map(c=><option key={c} value={c} style={{background:'#0a0800'}}>{c.toUpperCase()}</option>)}
+              {['eth','bsc','sol','base'].map(c=><option key={c} value={c} style={{background:'#0a0a18'}}>{c.toUpperCase()}</option>)}
             </select>
           )}
-          <input value={search} onChange={e=>setSearch(e.target.value)} onKeyDown={e=>e.key==='Enter'&&doSearch()} placeholder="Token name or address..." style={{ flex:1, background:'none', border:'none', outline:'none', color:'#f0ede6', fontSize:13, padding:'10px 0', minWidth:0 }}/>
+          <input value={search} onChange={e=>setSearch(e.target.value)} onKeyDown={e=>e.key==='Enter'&&doSearch()} placeholder="Token name or address..." style={{ flex:1, background:'none', border:'none', outline:'none', color:'#e8e8f0', fontSize:13, padding:'10px 0', minWidth:0 }}/>
           <button onClick={doSearch} style={{ background:'#F5C842', color:'#000', border:'none', borderRadius:6, padding:'5px 12px', fontWeight:700, fontSize:12, cursor:'pointer', flexShrink:0 }}>{loading?'...':'Go'}</button>
         </div>
         {tokenName && isMobile && (
-          <button onClick={()=>setShowList(true)} style={{ background:'rgba(245,200,66,0.1)', border:'1px solid rgba(245,200,66,0.2)', borderRadius:6, padding:'6px 10px', color:'#F5C842', fontSize:11, cursor:'pointer', flexShrink:0, fontWeight:600 }}>List</button>
+          <button onClick={()=>setShowList(true)} style={{ background:'rgba(100,120,200,0.1)', border:'1px solid rgba(100,120,200,0.2)', borderRadius:6, padding:'6px 10px', color:'rgba(180,190,255,0.8)', fontSize:11, cursor:'pointer', flexShrink:0 }}>List</button>
         )}
       </nav>
 
@@ -284,12 +302,12 @@ function AppContent() {
             <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center', flexDirection:'column', gap:12, pointerEvents:'none' }}>
               <div style={{ fontSize:48 }}>🍌</div>
               <div style={{ fontSize:14, color:'rgba(245,200,66,0.6)', fontWeight:600, textAlign:'center', padding:'0 20px' }}>Search a token to get started</div>
-              <div style={{ fontSize:11, color:'rgba(255,255,255,0.2)', textAlign:'center' }}>{isMobile?'Pinch to zoom · Drag to pan':'Scroll to zoom · Drag to pan · Click bubble for details'}</div>
+              <div style={{ fontSize:11, color:'rgba(180,180,255,0.2)', textAlign:'center' }}>{isMobile?'Pinch to zoom · Drag to pan':'Scroll to zoom · Drag to pan · Click bubble for details'}</div>
             </div>
           )}
 
           {loading && (
-            <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center', flexDirection:'column', gap:16, background:'rgba(6,4,0,0.9)' }}>
+            <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center', flexDirection:'column', gap:16, background:'rgba(5,5,10,0.9)' }}>
               <div style={{ fontSize:44, animation:'spin 1s linear infinite' }}>🍌</div>
               <div style={{ fontSize:13, color:'rgba(245,200,66,0.7)' }}>Mapping holders...</div>
             </div>
@@ -299,15 +317,15 @@ function AppContent() {
             <div style={{ position:'absolute', top:10, left:10, display:'flex', flexDirection:'column', gap:6 }}>
               <div style={{ display:'flex', gap:6 }}>
                 <div style={{ background:'rgba(0,0,0,0.75)', border:`1px solid ${CC[chain]}44`, borderRadius:16, padding:'4px 10px', fontSize:10, color:CC[chain], display:'flex', alignItems:'center', gap:5 }}>
-                  <span style={{ width:6, height:6, borderRadius:'50%', background:CC[chain], display:'inline-block' }}/>{CL[chain]}
+                  <span style={{ width:6,height:6,borderRadius:'50%',background:CC[chain],display:'inline-block' }}/>{CL[chain]}
                 </div>
-                <div style={{ background:'rgba(0,0,0,0.75)', border:'1px solid rgba(245,200,66,0.3)', borderRadius:16, padding:'4px 12px', fontSize:11, color:'#F5C842', fontWeight:600 }}>{tokenName}{tokenSymbol?` (${tokenSymbol})`:''}</div>
+                <div style={{ background:'rgba(0,0,0,0.75)', border:'1px solid rgba(245,200,66,0.25)', borderRadius:16, padding:'4px 12px', fontSize:11, color:'#F5C842', fontWeight:600 }}>{tokenName}{tokenSymbol?` (${tokenSymbol})`:''}</div>
               </div>
-              <div style={{ display:'flex', gap:6 }}>
+              <div style={{ display:'flex', gap:5 }}>
                 {[['Mapped',stats.mapped],['Top 10',stats.top10+'%'],['Clusters',stats.clusters]].map(([l,v])=>(
-                  <div key={l as string} style={{ background:'rgba(0,0,0,0.7)', border:'1px solid rgba(245,200,66,0.1)', borderRadius:6, padding:'4px 8px' }}>
-                    <div style={{ fontSize:8, color:'rgba(255,255,255,0.3)', textTransform:'uppercase', letterSpacing:'1px', marginBottom:1 }}>{l}</div>
-                    <div style={{ fontSize:12, color:'#F5C842', fontWeight:700 }}>{v}</div>
+                  <div key={l as string} style={{ background:'rgba(0,0,0,0.65)', border:'1px solid rgba(100,120,200,0.12)', borderRadius:6, padding:'4px 8px' }}>
+                    <div style={{ fontSize:8, color:'rgba(180,180,255,0.3)', textTransform:'uppercase', letterSpacing:'1px', marginBottom:1 }}>{l}</div>
+                    <div style={{ fontSize:12, color:'rgba(220,220,255,0.9)', fontWeight:700 }}>{v}</div>
                   </div>
                 ))}
               </div>
@@ -315,9 +333,9 @@ function AppContent() {
           )}
 
           {!isMobile && stats.clusters>0 && (
-            <div style={{ position:'absolute', bottom:56, left:16, display:'flex', gap:5, flexWrap:'wrap', maxWidth:500 }}>
+            <div style={{ position:'absolute', bottom:52, left:12, display:'flex', gap:5, flexWrap:'wrap', maxWidth:500 }}>
               {Array.from({length:Math.min(stats.clusters,8)},(_,i)=>(
-                <div key={i} style={{ display:'flex', alignItems:'center', gap:4, background:'rgba(0,0,0,0.7)', border:`1px solid ${CLUSTER_COLORS[i]}44`, borderRadius:10, padding:'2px 8px', fontSize:9, color:CLUSTER_COLORS[i] }}>
+                <div key={i} style={{ display:'flex', alignItems:'center', gap:4, background:'rgba(0,0,0,0.65)', border:`1px solid ${CLUSTER_COLORS[i]}44`, borderRadius:10, padding:'2px 8px', fontSize:9, color:CLUSTER_COLORS[i] }}>
                   <span style={{ width:5,height:5,borderRadius:'50%',background:CLUSTER_COLORS[i],display:'inline-block' }}/>Cluster {i+1}
                 </div>
               ))}
@@ -325,42 +343,46 @@ function AppContent() {
           )}
 
           {tokenName && (
-            <div style={{ position:'absolute', bottom:16, right:16, display:'flex', flexDirection:'column', gap:4 }}>
+            <div style={{ position:'absolute', bottom:12, right:12, display:'flex', flexDirection:'column', gap:4 }}>
               {[['＋',1.2],['－',0.8],['⊙',0]].map(([l,f])=>(
-                <button key={l as string} onClick={()=>{if(f===0){scaleRef.current=1;offsetRef.current={x:0,y:0};}else scaleRef.current=Math.min(Math.max(scaleRef.current*(f as number),0.15),6);}} style={{ width:32,height:32,background:'rgba(0,0,0,0.75)',border:'1px solid rgba(245,200,66,0.2)',borderRadius:7,color:'rgba(245,200,66,0.6)',fontSize:15,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center' }}>
+                <button key={l as string} onClick={()=>{if(f===0){scaleRef.current=1;offsetRef.current={x:0,y:0};}else scaleRef.current=Math.min(Math.max(scaleRef.current*(f as number),0.15),6);}}
+                  style={{ width:30,height:30,background:'rgba(0,0,0,0.7)',border:'1px solid rgba(100,120,200,0.2)',borderRadius:7,color:'rgba(180,190,255,0.5)',fontSize:15,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center' }}>
                   {l}
                 </button>
               ))}
             </div>
           )}
 
-          {/* Compact popup */}
+          {/* Small floating popup — same size on mobile and desktop */}
           {selected && (
-            <div style={popupStyle}>
+            <div style={getPopupStyle()}>
               <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
                 <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-                  <div style={{ width:7,height:7,borderRadius:'50%',background:selected.cluster!==undefined?CLUSTER_COLORS[selected.cluster%CLUSTER_COLORS.length]:'#F5C842' }}/>
-                  <span style={{ fontSize:10,color:'rgba(255,255,255,0.4)',fontFamily:'DM Mono,monospace' }}>#{selected.rank}</span>
-                  {selected.cluster!==undefined&&<span style={{ fontSize:9,color:CLUSTER_COLORS[selected.cluster%CLUSTER_COLORS.length],background:CLUSTER_COLORS[selected.cluster%CLUSTER_COLORS.length]+'18',padding:'1px 6px',borderRadius:8 }}>Cluster {selected.cluster+1}</span>}
+                  <div style={{ width:7,height:7,borderRadius:'50%',background:selected.cluster!==undefined?CLUSTER_COLORS[selected.cluster%CLUSTER_COLORS.length]:'rgba(160,170,220,0.9)' }}/>
+                  <span style={{ fontSize:10,color:'rgba(180,180,220,0.5)',fontFamily:'DM Mono,monospace' }}>#{selected.rank}</span>
+                  {selected.cluster!==undefined&&(
+                    <span style={{ fontSize:9,color:CLUSTER_COLORS[selected.cluster%CLUSTER_COLORS.length],background:CLUSTER_COLORS[selected.cluster%CLUSTER_COLORS.length]+'15',padding:'1px 6px',borderRadius:8,border:`1px solid ${CLUSTER_COLORS[selected.cluster%CLUSTER_COLORS.length]}33` }}>
+                      C{selected.cluster+1}
+                    </span>
+                  )}
                 </div>
-                <button onClick={()=>{setSelected(null);selectedRef.current=-1;}} style={{ background:'none',border:'none',color:'rgba(255,255,255,0.3)',cursor:'pointer',fontSize:18,lineHeight:1,padding:0 }}>×</button>
+                <button onClick={()=>{setSelected(null);selectedRef.current=-1;}} style={{ background:'none',border:'none',color:'rgba(180,180,220,0.3)',cursor:'pointer',fontSize:16,lineHeight:1,padding:0 }}>×</button>
               </div>
-              <div style={{ fontFamily:'DM Mono,monospace',fontSize:10,color:'rgba(245,200,66,0.7)',marginBottom:10,wordBreak:'break-all' }}>{selected.address.slice(0,10)}...{selected.address.slice(-8)}</div>
-              <div style={{ display:'flex', gap:6, marginBottom:10 }}>
-                <div style={{ flex:1,background:'rgba(255,255,255,0.04)',borderRadius:7,padding:'7px 8px' }}>
-                  <div style={{ fontSize:8,color:'rgba(255,255,255,0.3)',textTransform:'uppercase',letterSpacing:'1px',marginBottom:3 }}>Supply</div>
-                  <div style={{ fontSize:15,color:'#fff',fontWeight:700 }}>{selected.pct.toFixed(2)}%</div>
-                </div>
-                <div style={{ flex:1,background:'rgba(255,255,255,0.04)',borderRadius:7,padding:'7px 8px' }}>
-                  <div style={{ fontSize:8,color:'rgba(255,255,255,0.3)',textTransform:'uppercase',letterSpacing:'1px',marginBottom:3 }}>Amount</div>
-                  <div style={{ fontSize:15,color:'#fff',fontWeight:700 }}>{selected.balanceFormatted?fAmt(selected.balanceFormatted):'—'}</div>
-                </div>
-                <div style={{ flex:1,background:'rgba(255,255,255,0.04)',borderRadius:7,padding:'7px 8px' }}>
-                  <div style={{ fontSize:8,color:'rgba(255,255,255,0.3)',textTransform:'uppercase',letterSpacing:'1px',marginBottom:3 }}>USD</div>
-                  <div style={{ fontSize:15,color:'#2EE89A',fontWeight:700 }}>{selected.usdValue?fUSD(selected.usdValue):'—'}</div>
-                </div>
+              <div style={{ fontFamily:'DM Mono,monospace',fontSize:9,color:'rgba(245,200,66,0.6)',marginBottom:8,wordBreak:'break-all' }}>{selected.address.slice(0,10)}...{selected.address.slice(-8)}</div>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:5, marginBottom:8 }}>
+                {[
+                  ['Supply', selected.pct.toFixed(2)+'%', 'rgba(220,220,255,0.9)'],
+                  ['Amount', selected.balanceFormatted?fAmt(selected.balanceFormatted):'—', 'rgba(220,220,255,0.9)'],
+                  ['USD', selected.usdValue?fUSD(selected.usdValue):'—', '#2EE89A'],
+                ].map(([l,v,c])=>(
+                  <div key={l as string} style={{ background:'rgba(255,255,255,0.03)',borderRadius:6,padding:'5px 6px' }}>
+                    <div style={{ fontSize:7,color:'rgba(180,180,220,0.3)',textTransform:'uppercase',letterSpacing:'1px',marginBottom:3 }}>{l}</div>
+                    <div style={{ fontSize:12,color:c as string,fontWeight:700 }}>{v}</div>
+                  </div>
+                ))}
               </div>
-              <button onClick={()=>window.open(`https://etherscan.io/address/${selected.address}`,'_blank')} style={{ width:'100%',background:'rgba(245,200,66,0.07)',border:'1px solid rgba(245,200,66,0.15)',borderRadius:7,padding:'7px',color:'rgba(245,200,66,0.7)',fontSize:11,cursor:'pointer',fontWeight:600 }}>
+              <button onClick={()=>window.open(`https://etherscan.io/address/${selected.address}`,'_blank')}
+                style={{ width:'100%',background:'rgba(255,255,255,0.03)',border:'1px solid rgba(100,120,200,0.15)',borderRadius:6,padding:'5px',color:'rgba(180,190,255,0.5)',fontSize:10,cursor:'pointer',fontWeight:500 }}>
                 View on Explorer ↗
               </button>
             </div>
@@ -369,22 +391,22 @@ function AppContent() {
 
         {/* Desktop sidebar */}
         {!isMobile && (
-          <div style={{ width:260,borderLeft:'1px solid rgba(245,200,66,0.08)',background:'rgba(8,6,0,0.95)',display:'flex',flexDirection:'column',flexShrink:0 }}>
-            <div style={{ padding:'10px 14px',borderBottom:'1px solid rgba(245,200,66,0.08)',fontSize:9,letterSpacing:'1.5px',textTransform:'uppercase',color:'rgba(245,200,66,0.35)' }}>Holders</div>
+          <div style={{ width:250,borderLeft:'1px solid rgba(100,120,200,0.08)',background:'rgba(6,6,14,0.95)',display:'flex',flexDirection:'column',flexShrink:0 }}>
+            <div style={{ padding:'10px 14px',borderBottom:'1px solid rgba(100,120,200,0.08)',fontSize:9,letterSpacing:'1.5px',textTransform:'uppercase',color:'rgba(180,180,255,0.25)' }}>Holders</div>
             <div style={{ flex:1,overflowY:'auto' }}>
               {bubblesRef.current.length===0?(
-                <div style={{ display:'flex',alignItems:'center',justifyContent:'center',flexDirection:'column',gap:8,height:'100%',color:'rgba(255,255,255,0.15)' }}>
+                <div style={{ display:'flex',alignItems:'center',justifyContent:'center',flexDirection:'column',gap:8,height:'100%',color:'rgba(255,255,255,0.1)' }}>
                   <div style={{ fontSize:28 }}>🍌</div><div style={{ fontSize:11 }}>Select a token</div>
                 </div>
               ):bubblesRef.current.map((h,i)=>(
                 <div key={h.address} onClick={()=>{selectedRef.current=i;setSelected(h);}} onMouseEnter={()=>{hoveredRef.current=i;}} onMouseLeave={()=>{hoveredRef.current=-1;}}
-                  style={{ padding:'8px 14px',borderBottom:'1px solid rgba(245,200,66,0.04)',display:'flex',alignItems:'center',gap:8,cursor:'pointer',background:selectedRef.current===i?'rgba(245,200,66,0.04)':'transparent' }}>
-                  <div style={{ width:20,height:20,borderRadius:'50%',background:h.cluster!==undefined?CLUSTER_COLORS[h.cluster%CLUSTER_COLORS.length]+'18':'rgba(245,200,66,0.08)',border:`1.5px solid ${h.cluster!==undefined?CLUSTER_COLORS[h.cluster%CLUSTER_COLORS.length]:'rgba(245,200,66,0.3)'}`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:8,fontWeight:700,color:h.cluster!==undefined?CLUSTER_COLORS[h.cluster%CLUSTER_COLORS.length]:'#F5C842',flexShrink:0 }}>{h.rank}</div>
+                  style={{ padding:'8px 14px',borderBottom:'1px solid rgba(100,120,200,0.05)',display:'flex',alignItems:'center',gap:8,cursor:'pointer',background:selectedRef.current===i?'rgba(100,120,200,0.06)':'transparent' }}>
+                  <div style={{ width:20,height:20,borderRadius:'50%',background:h.cluster!==undefined?CLUSTER_COLORS[h.cluster%CLUSTER_COLORS.length]+'15':'rgba(120,130,180,0.08)',border:`1.5px solid ${h.cluster!==undefined?CLUSTER_COLORS[h.cluster%CLUSTER_COLORS.length]:'rgba(100,110,160,0.3)'}`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:8,fontWeight:700,color:h.cluster!==undefined?CLUSTER_COLORS[h.cluster%CLUSTER_COLORS.length]:'rgba(150,160,200,0.6)',flexShrink:0 }}>{h.rank}</div>
                   <div style={{ flex:1,minWidth:0 }}>
-                    <div style={{ fontSize:10,color:'rgba(255,255,255,0.65)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontFamily:'DM Mono,monospace' }}>{h.address.slice(0,8)}...{h.address.slice(-6)}</div>
-                    <div style={{ fontSize:9,color:'rgba(255,255,255,0.25)',marginTop:1,display:'flex',gap:6 }}>
+                    <div style={{ fontSize:10,color:'rgba(200,200,230,0.6)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontFamily:'DM Mono,monospace' }}>{h.address.slice(0,8)}...{h.address.slice(-6)}</div>
+                    <div style={{ fontSize:9,color:'rgba(180,180,220,0.25)',marginTop:1,display:'flex',gap:6 }}>
                       <span>{h.pct.toFixed(3)}%</span>
-                      {h.usdValue?<span style={{color:'rgba(46,232,154,0.5)'}}>{fUSD(h.usdValue)}</span>:null}
+                      {h.usdValue?<span style={{color:'rgba(46,232,154,0.4)'}}>{fUSD(h.usdValue)}</span>:null}
                     </div>
                   </div>
                 </div>
@@ -397,21 +419,21 @@ function AppContent() {
         {isMobile && showList && (
           <div style={{ position:'fixed',inset:0,zIndex:300,display:'flex',flexDirection:'column' }}>
             <div style={{ flex:1,background:'rgba(0,0,0,0.5)' }} onClick={()=>setShowList(false)}/>
-            <div style={{ background:'rgba(10,8,0,0.98)',borderRadius:'18px 18px 0 0',borderTop:'1px solid rgba(245,200,66,0.12)',maxHeight:'70vh',display:'flex',flexDirection:'column' }}>
-              <div style={{ padding:'10px 16px',display:'flex',justifyContent:'space-between',alignItems:'center',borderBottom:'1px solid rgba(245,200,66,0.06)' }}>
-                <span style={{ fontSize:10,letterSpacing:'1.5px',textTransform:'uppercase',color:'rgba(245,200,66,0.4)' }}>Holders</span>
-                <button onClick={()=>setShowList(false)} style={{ background:'rgba(255,255,255,0.06)',border:'none',borderRadius:'50%',width:26,height:26,color:'rgba(255,255,255,0.4)',cursor:'pointer',fontSize:16,display:'flex',alignItems:'center',justifyContent:'center' }}>×</button>
+            <div style={{ background:'rgba(8,8,18,0.99)',borderRadius:'18px 18px 0 0',borderTop:'1px solid rgba(100,120,200,0.15)',maxHeight:'70vh',display:'flex',flexDirection:'column' }}>
+              <div style={{ padding:'10px 16px',display:'flex',justifyContent:'space-between',alignItems:'center',borderBottom:'1px solid rgba(100,120,200,0.06)' }}>
+                <span style={{ fontSize:10,letterSpacing:'1.5px',textTransform:'uppercase',color:'rgba(180,180,255,0.3)' }}>Holders</span>
+                <button onClick={()=>setShowList(false)} style={{ background:'rgba(255,255,255,0.05)',border:'none',borderRadius:'50%',width:26,height:26,color:'rgba(255,255,255,0.3)',cursor:'pointer',fontSize:16,display:'flex',alignItems:'center',justifyContent:'center' }}>×</button>
               </div>
               <div style={{ overflowY:'auto',flex:1 }}>
                 {bubblesRef.current.map((h,i)=>(
                   <div key={h.address} onClick={()=>{selectedRef.current=i;setSelected(h);setShowList(false);setSelectedPos({x:window.innerWidth/2,y:window.innerHeight/2});}}
-                    style={{ padding:'10px 16px',borderBottom:'1px solid rgba(245,200,66,0.04)',display:'flex',alignItems:'center',gap:10 }}>
-                    <div style={{ width:22,height:22,borderRadius:'50%',background:h.cluster!==undefined?CLUSTER_COLORS[h.cluster%CLUSTER_COLORS.length]+'18':'rgba(245,200,66,0.08)',border:`1.5px solid ${h.cluster!==undefined?CLUSTER_COLORS[h.cluster%CLUSTER_COLORS.length]:'rgba(245,200,66,0.3)'}`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:9,fontWeight:700,color:h.cluster!==undefined?CLUSTER_COLORS[h.cluster%CLUSTER_COLORS.length]:'#F5C842',flexShrink:0 }}>{h.rank}</div>
+                    style={{ padding:'10px 16px',borderBottom:'1px solid rgba(100,120,200,0.05)',display:'flex',alignItems:'center',gap:10 }}>
+                    <div style={{ width:22,height:22,borderRadius:'50%',background:h.cluster!==undefined?CLUSTER_COLORS[h.cluster%CLUSTER_COLORS.length]+'15':'rgba(120,130,180,0.08)',border:`1.5px solid ${h.cluster!==undefined?CLUSTER_COLORS[h.cluster%CLUSTER_COLORS.length]:'rgba(100,110,160,0.3)'}`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:9,fontWeight:700,color:h.cluster!==undefined?CLUSTER_COLORS[h.cluster%CLUSTER_COLORS.length]:'rgba(150,160,200,0.6)',flexShrink:0 }}>{h.rank}</div>
                     <div style={{ flex:1,minWidth:0 }}>
-                      <div style={{ fontSize:11,color:'rgba(255,255,255,0.65)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontFamily:'DM Mono,monospace' }}>{h.address.slice(0,10)}...{h.address.slice(-6)}</div>
-                      <div style={{ fontSize:10,color:'rgba(255,255,255,0.3)',marginTop:2,display:'flex',gap:8 }}>
+                      <div style={{ fontSize:11,color:'rgba(200,200,230,0.6)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontFamily:'DM Mono,monospace' }}>{h.address.slice(0,10)}...{h.address.slice(-6)}</div>
+                      <div style={{ fontSize:10,color:'rgba(180,180,220,0.25)',marginTop:2,display:'flex',gap:8 }}>
                         <span>{h.pct.toFixed(3)}%</span>
-                        {h.usdValue?<span style={{color:'rgba(46,232,154,0.5)'}}>{fUSD(h.usdValue)}</span>:null}
+                        {h.usdValue?<span style={{color:'rgba(46,232,154,0.4)'}}>{fUSD(h.usdValue)}</span>:null}
                       </div>
                     </div>
                   </div>
