@@ -36,6 +36,29 @@ function AppContent() {
     return () => window.removeEventListener('resize', check);
   }, []);
 
+  // Auto-fit: calculate scale so all bubbles are visible
+  function autoFit(bubbles: Holder[], canvasW: number, canvasH: number) {
+    if (!bubbles.length) return;
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    bubbles.forEach(b => {
+      const r = b.radius || 10;
+      minX = Math.min(minX, (b.x||0) - r);
+      maxX = Math.max(maxX, (b.x||0) + r);
+      minY = Math.min(minY, (b.y||0) - r);
+      maxY = Math.max(maxY, (b.y||0) + r);
+    });
+    const contentW = maxX - minX + 40;
+    const contentH = maxY - minY + 40;
+    const scale = Math.min(canvasW / contentW, canvasH / contentH, 1);
+    const cx = (minX + maxX) / 2;
+    const cy = (minY + maxY) / 2;
+    scaleRef.current = scale;
+    offsetRef.current = {
+      x: canvasW / 2 - cx * scale,
+      y: canvasH / 2 - cy * scale,
+    };
+  }
+
   const startAnimation = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -74,14 +97,17 @@ function AppContent() {
       if (!canvas) return;
       canvas.width = canvas.offsetWidth;
       canvas.height = canvas.offsetHeight;
-      worldSizeRef.current = { w: canvas.offsetWidth, h: canvas.offsetHeight };
-      offsetRef.current = { x: 0, y: 0 }; scaleRef.current = 1;
-      bubblesRef.current = detectClusters(initBubbles(holders, canvas.offsetWidth, canvas.offsetHeight));
+      const w = canvas.offsetWidth, h = canvas.offsetHeight;
+      worldSizeRef.current = { w, h };
+      const clustered = detectClusters(initBubbles(holders, w, h));
+      bubblesRef.current = clustered;
+      // Auto-fit so all bubbles visible on load
+      autoFit(clustered, w, h);
       setChain(detectedChain);
       setTokenName(data.name || known?.name || input);
       setTokenSymbol(data.symbol || '');
       const top10pct = holders.slice(0,10).reduce((s: number, h: Holder) => s + h.pct, 0);
-      const clusterCount = new Set(bubblesRef.current.map(b => b.cluster).filter(c => c !== undefined)).size;
+      const clusterCount = new Set(clustered.map(b => b.cluster).filter(c => c !== undefined)).size;
       setStats({ mapped: holders.length, top10: Math.round(top10pct), clusters: clusterCount });
       startAnimation();
     } catch {}
@@ -106,7 +132,7 @@ function AppContent() {
       const rect = canvas.getBoundingClientRect();
       const mx = e.clientX-rect.left, my = e.clientY-rect.top;
       const zf = e.deltaY > 0 ? 0.92 : 1.08;
-      const ns = Math.min(Math.max(scaleRef.current*zf, 0.15), 6);
+      const ns = Math.min(Math.max(scaleRef.current*zf, 0.1), 6);
       offsetRef.current.x = mx-(mx-offsetRef.current.x)*(ns/scaleRef.current);
       offsetRef.current.y = my-(my-offsetRef.current.y)*(ns/scaleRef.current);
       scaleRef.current = ns;
@@ -136,7 +162,7 @@ function AppContent() {
         const cx2 = (e.touches[0].clientX+e.touches[1].clientX)/2, cy2 = (e.touches[0].clientY+e.touches[1].clientY)/2;
         const rect = canvas.getBoundingClientRect();
         const mx = cx2-rect.left, my = cy2-rect.top;
-        const ns = Math.min(Math.max(scaleRef.current*(dist/lastDist),0.15),6);
+        const ns = Math.min(Math.max(scaleRef.current*(dist/lastDist),0.1),6);
         offsetRef.current.x = mx-(mx-offsetRef.current.x)*(ns/scaleRef.current);
         offsetRef.current.y = my-(my-offsetRef.current.y)*(ns/scaleRef.current);
         scaleRef.current = ns; lastDist = dist;
@@ -194,7 +220,6 @@ function AppContent() {
     isDraggingRef.current = true; hasDraggedRef.current = false;
     dragStartRef.current = { x: e.clientX-offsetRef.current.x, y: e.clientY-offsetRef.current.y };
   }
-
   function handleMouseMove(e: React.MouseEvent<HTMLCanvasElement>) {
     if (isDraggingRef.current) {
       const dx = Math.abs(e.clientX-dragStartRef.current.x-offsetRef.current.x);
@@ -208,7 +233,6 @@ function AppContent() {
     const { x: wx, y: wy } = sw(e.clientX-rect.left, e.clientY-rect.top);
     hoveredRef.current = findBubbleAt(wx, wy);
   }
-
   function handleMouseUp(e: React.MouseEvent<HTMLCanvasElement>) {
     isDraggingRef.current = false;
     if (!hasDraggedRef.current) {
@@ -225,172 +249,150 @@ function AppContent() {
   }
 
   function fUSD(n: number): string {
-    if (n>=1e9) return '$'+(n/1e9).toFixed(2)+'B';
-    if (n>=1e6) return '$'+(n/1e6).toFixed(2)+'M';
-    if (n>=1e3) return '$'+(n/1e3).toFixed(2)+'K';
-    return '$'+n.toFixed(2);
+    if(n>=1e9)return'$'+(n/1e9).toFixed(2)+'B';
+    if(n>=1e6)return'$'+(n/1e6).toFixed(2)+'M';
+    if(n>=1e3)return'$'+(n/1e3).toFixed(2)+'K';
+    return'$'+n.toFixed(2);
   }
   function fAmt(n: number): string {
-    if (n>=1e12) return (n/1e12).toFixed(2)+'T';
-    if (n>=1e9) return (n/1e9).toFixed(2)+'B';
-    if (n>=1e6) return (n/1e6).toFixed(2)+'M';
-    if (n>=1e3) return (n/1e3).toFixed(2)+'K';
+    if(n>=1e12)return(n/1e12).toFixed(2)+'T';
+    if(n>=1e9)return(n/1e9).toFixed(2)+'B';
+    if(n>=1e6)return(n/1e6).toFixed(2)+'M';
+    if(n>=1e3)return(n/1e3).toFixed(2)+'K';
     return n.toFixed(2);
   }
 
-  const CC: Record<string,string> = { eth:'#627EEA', bsc:'#F3BA2F', sol:'#9945FF', base:'#0052FF' };
-  const CL: Record<string,string> = { eth:'Ethereum', bsc:'BSC', sol:'Solana', base:'Base' };
+  const CC: Record<string,string> = { eth:'#627EEA',bsc:'#F3BA2F',sol:'#9945FF',base:'#0052FF' };
+  const CL: Record<string,string> = { eth:'Ethereum',bsc:'BSC',sol:'Solana',base:'Base' };
 
-  // Smart popup position — always fits on screen, small card
   function getPopupStyle(): React.CSSProperties {
-    const W = 210, H = 170;
-    const vw = typeof window !== 'undefined' ? window.innerWidth : 800;
-    const vh = typeof window !== 'undefined' ? window.innerHeight : 600;
-    let left = selectedPos.x + 16;
-    let top = selectedPos.y - H / 2;
-    if (left + W > vw - 10) left = selectedPos.x - W - 16;
-    if (top < 60) top = 60;
-    if (top + H > vh - 20) top = vh - H - 20;
-    return {
-      position: 'fixed', top, left, width: W,
-      background: 'rgba(10,10,18,0.96)',
-      border: `1px solid ${selected?.cluster !== undefined ? CLUSTER_COLORS[selected.cluster % CLUSTER_COLORS.length] + '66' : 'rgba(120,130,180,0.3)'}`,
-      borderRadius: 10, padding: '10px 12px', zIndex: 200,
-      boxShadow: '0 4px 20px rgba(0,0,0,0.8)',
-    };
+    const W = 210, H = 165;
+    const vw = typeof window!=='undefined'?window.innerWidth:800;
+    const vh = typeof window!=='undefined'?window.innerHeight:600;
+    let left = selectedPos.x+16, top = selectedPos.y-H/2;
+    if(left+W>vw-10)left=selectedPos.x-W-16;
+    if(top<60)top=60;
+    if(top+H>vh-20)top=vh-H-20;
+    return { position:'fixed',top,left,width:W,background:'rgba(10,10,18,0.96)',border:`1px solid ${selected?.cluster!==undefined?CLUSTER_COLORS[selected.cluster%CLUSTER_COLORS.length]+'66':'rgba(120,130,180,0.3)'}`,borderRadius:10,padding:'10px 12px',zIndex:200,boxShadow:'0 4px 20px rgba(0,0,0,0.8)' };
   }
 
   return (
-    <div style={{ height:'100dvh', background:'#05050a', display:'flex', flexDirection:'column', overflow:'hidden' }}>
-      {/* Nav */}
-      <nav style={{ display:'flex', alignItems:'center', padding:'0 12px', borderBottom:'1px solid rgba(100,120,200,0.12)', height:50, gap:8, flexShrink:0, background:'rgba(6,6,14,0.98)' }}>
-        <Link href="/" style={{ display:'flex', alignItems:'center', gap:6, fontWeight:800, fontSize:16, textDecoration:'none', color:'#f0ede6', flexShrink:0 }}>
+    <div style={{ height:'100dvh',background:'#07070f',display:'flex',flexDirection:'column',overflow:'hidden' }}>
+      <nav style={{ display:'flex',alignItems:'center',padding:'0 12px',borderBottom:'1px solid rgba(100,120,200,0.12)',height:50,gap:8,flexShrink:0,background:'rgba(6,6,14,0.98)' }}>
+        <Link href="/" style={{ display:'flex',alignItems:'center',gap:6,fontWeight:800,fontSize:16,textDecoration:'none',color:'#f0ede6',flexShrink:0 }}>
           <span>🍌</span><span>Banana<span style={{color:'#F5C842'}}>Maps</span></span>
         </Link>
-        {!isMobile && (
-          <div style={{ display:'flex', gap:4 }}>
-            {(['eth','bsc','sol','base'] as const).map(c => (
-              <button key={c} onClick={()=>setChain(c)} style={{ background:chain===c?'rgba(245,200,66,0.08)':'transparent', border:`1px solid ${chain===c?CC[c]:'rgba(255,255,255,0.08)'}`, color:chain===c?CC[c]:'rgba(255,255,255,0.35)', borderRadius:6, padding:'4px 8px', fontSize:10, cursor:'pointer', fontFamily:'inherit' }}>
-                <span style={{ display:'inline-block', width:5, height:5, borderRadius:'50%', background:CC[c], marginRight:4 }}/>{c.toUpperCase()}
+        {!isMobile&&(
+          <div style={{ display:'flex',gap:4 }}>
+            {(['eth','bsc','sol','base'] as const).map(c=>(
+              <button key={c} onClick={()=>setChain(c)} style={{ background:chain===c?'rgba(245,200,66,0.08)':'transparent',border:`1px solid ${chain===c?CC[c]:'rgba(255,255,255,0.08)'}`,color:chain===c?CC[c]:'rgba(255,255,255,0.35)',borderRadius:6,padding:'4px 8px',fontSize:10,cursor:'pointer',fontFamily:'inherit' }}>
+                <span style={{ display:'inline-block',width:5,height:5,borderRadius:'50%',background:CC[c],marginRight:4 }}/>{c.toUpperCase()}
               </button>
             ))}
           </div>
         )}
-        <div style={{ flex:1, display:'flex', alignItems:'center', background:'rgba(255,255,255,0.03)', border:'1px solid rgba(100,120,200,0.15)', borderRadius:8, padding:'0 10px', gap:6 }}>
-          {isMobile && (
-            <select value={chain} onChange={e=>setChain(e.target.value)} style={{ background:'transparent', border:'none', outline:'none', color:CC[chain], fontSize:11, cursor:'pointer' }}>
+        <div style={{ flex:1,display:'flex',alignItems:'center',background:'rgba(255,255,255,0.03)',border:'1px solid rgba(100,120,200,0.15)',borderRadius:8,padding:'0 10px',gap:6 }}>
+          {isMobile&&(
+            <select value={chain} onChange={e=>setChain(e.target.value)} style={{ background:'transparent',border:'none',outline:'none',color:CC[chain],fontSize:11,cursor:'pointer' }}>
               {['eth','bsc','sol','base'].map(c=><option key={c} value={c} style={{background:'#0a0a18'}}>{c.toUpperCase()}</option>)}
             </select>
           )}
-          <input value={search} onChange={e=>setSearch(e.target.value)} onKeyDown={e=>e.key==='Enter'&&doSearch()} placeholder="Token name or address..." style={{ flex:1, background:'none', border:'none', outline:'none', color:'#e8e8f0', fontSize:13, padding:'10px 0', minWidth:0 }}/>
-          <button onClick={doSearch} style={{ background:'#F5C842', color:'#000', border:'none', borderRadius:6, padding:'5px 12px', fontWeight:700, fontSize:12, cursor:'pointer', flexShrink:0 }}>{loading?'...':'Go'}</button>
+          <input value={search} onChange={e=>setSearch(e.target.value)} onKeyDown={e=>e.key==='Enter'&&doSearch()} placeholder="Token name or address..." style={{ flex:1,background:'none',border:'none',outline:'none',color:'#e8e8f0',fontSize:13,padding:'10px 0',minWidth:0 }}/>
+          <button onClick={doSearch} style={{ background:'#F5C842',color:'#000',border:'none',borderRadius:6,padding:'5px 12px',fontWeight:700,fontSize:12,cursor:'pointer',flexShrink:0 }}>{loading?'...':'Go'}</button>
         </div>
-        {tokenName && isMobile && (
-          <button onClick={()=>setShowList(true)} style={{ background:'rgba(100,120,200,0.1)', border:'1px solid rgba(100,120,200,0.2)', borderRadius:6, padding:'6px 10px', color:'rgba(180,190,255,0.8)', fontSize:11, cursor:'pointer', flexShrink:0 }}>List</button>
+        {tokenName&&isMobile&&(
+          <button onClick={()=>setShowList(true)} style={{ background:'rgba(100,120,200,0.1)',border:'1px solid rgba(100,120,200,0.2)',borderRadius:6,padding:'6px 10px',color:'rgba(180,190,255,0.8)',fontSize:11,cursor:'pointer',flexShrink:0 }}>List</button>
         )}
       </nav>
 
-      <div style={{ flex:1, display:'flex', overflow:'hidden', position:'relative' }}>
-        <div style={{ flex:1, position:'relative' }}>
+      <div style={{ flex:1,display:'flex',overflow:'hidden',position:'relative' }}>
+        <div style={{ flex:1,position:'relative' }}>
           <canvas ref={canvasRef}
             onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp}
             onMouseLeave={()=>{isDraggingRef.current=false;hoveredRef.current=-1;}}
-            style={{ width:'100%', height:'100%', display:'block', cursor:'grab', touchAction:'none' }}
+            style={{ width:'100%',height:'100%',display:'block',cursor:'grab',touchAction:'none' }}
           />
-
-          {!loading && !tokenName && (
-            <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center', flexDirection:'column', gap:12, pointerEvents:'none' }}>
+          {!loading&&!tokenName&&(
+            <div style={{ position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',flexDirection:'column',gap:12,pointerEvents:'none' }}>
               <div style={{ fontSize:48 }}>🍌</div>
-              <div style={{ fontSize:14, color:'rgba(245,200,66,0.6)', fontWeight:600, textAlign:'center', padding:'0 20px' }}>Search a token to get started</div>
-              <div style={{ fontSize:11, color:'rgba(180,180,255,0.2)', textAlign:'center' }}>{isMobile?'Pinch to zoom · Drag to pan':'Scroll to zoom · Drag to pan · Click bubble for details'}</div>
+              <div style={{ fontSize:14,color:'rgba(245,200,66,0.6)',fontWeight:600,textAlign:'center',padding:'0 20px' }}>Search a token to get started</div>
+              <div style={{ fontSize:11,color:'rgba(180,180,255,0.2)',textAlign:'center' }}>{isMobile?'Pinch to zoom · Drag to pan':'Scroll to zoom · Drag to pan · Click bubble for details'}</div>
             </div>
           )}
-
-          {loading && (
-            <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center', flexDirection:'column', gap:16, background:'rgba(5,5,10,0.9)' }}>
-              <div style={{ fontSize:44, animation:'spin 1s linear infinite' }}>🍌</div>
-              <div style={{ fontSize:13, color:'rgba(245,200,66,0.7)' }}>Mapping holders...</div>
+          {loading&&(
+            <div style={{ position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',flexDirection:'column',gap:16,background:'rgba(5,5,10,0.9)' }}>
+              <div style={{ fontSize:44,animation:'spin 1s linear infinite' }}>🍌</div>
+              <div style={{ fontSize:13,color:'rgba(245,200,66,0.7)' }}>Mapping holders...</div>
             </div>
           )}
-
-          {tokenName && (
-            <div style={{ position:'absolute', top:10, left:10, display:'flex', flexDirection:'column', gap:6 }}>
-              <div style={{ display:'flex', gap:6 }}>
-                <div style={{ background:'rgba(0,0,0,0.75)', border:`1px solid ${CC[chain]}44`, borderRadius:16, padding:'4px 10px', fontSize:10, color:CC[chain], display:'flex', alignItems:'center', gap:5 }}>
+          {tokenName&&(
+            <div style={{ position:'absolute',top:10,left:10,display:'flex',flexDirection:'column',gap:6 }}>
+              <div style={{ display:'flex',gap:6 }}>
+                <div style={{ background:'rgba(0,0,0,0.75)',border:`1px solid ${CC[chain]}44`,borderRadius:16,padding:'4px 10px',fontSize:10,color:CC[chain],display:'flex',alignItems:'center',gap:5 }}>
                   <span style={{ width:6,height:6,borderRadius:'50%',background:CC[chain],display:'inline-block' }}/>{CL[chain]}
                 </div>
-                <div style={{ background:'rgba(0,0,0,0.75)', border:'1px solid rgba(245,200,66,0.25)', borderRadius:16, padding:'4px 12px', fontSize:11, color:'#F5C842', fontWeight:600 }}>{tokenName}{tokenSymbol?` (${tokenSymbol})`:''}</div>
+                <div style={{ background:'rgba(0,0,0,0.75)',border:'1px solid rgba(245,200,66,0.25)',borderRadius:16,padding:'4px 12px',fontSize:11,color:'#F5C842',fontWeight:600 }}>{tokenName}{tokenSymbol?` (${tokenSymbol})`:''}</div>
               </div>
-              <div style={{ display:'flex', gap:5 }}>
+              <div style={{ display:'flex',gap:5 }}>
                 {[['Mapped',stats.mapped],['Top 10',stats.top10+'%'],['Clusters',stats.clusters]].map(([l,v])=>(
-                  <div key={l as string} style={{ background:'rgba(0,0,0,0.65)', border:'1px solid rgba(100,120,200,0.12)', borderRadius:6, padding:'4px 8px' }}>
-                    <div style={{ fontSize:8, color:'rgba(180,180,255,0.3)', textTransform:'uppercase', letterSpacing:'1px', marginBottom:1 }}>{l}</div>
-                    <div style={{ fontSize:12, color:'rgba(220,220,255,0.9)', fontWeight:700 }}>{v}</div>
+                  <div key={l as string} style={{ background:'rgba(0,0,0,0.65)',border:'1px solid rgba(100,120,200,0.12)',borderRadius:6,padding:'4px 8px' }}>
+                    <div style={{ fontSize:8,color:'rgba(180,180,255,0.3)',textTransform:'uppercase',letterSpacing:'1px',marginBottom:1 }}>{l}</div>
+                    <div style={{ fontSize:12,color:'rgba(220,220,255,0.9)',fontWeight:700 }}>{v}</div>
                   </div>
                 ))}
               </div>
             </div>
           )}
-
-          {!isMobile && stats.clusters>0 && (
-            <div style={{ position:'absolute', bottom:52, left:12, display:'flex', gap:5, flexWrap:'wrap', maxWidth:500 }}>
+          {!isMobile&&stats.clusters>0&&(
+            <div style={{ position:'absolute',bottom:52,left:12,display:'flex',gap:5,flexWrap:'wrap',maxWidth:500 }}>
               {Array.from({length:Math.min(stats.clusters,8)},(_,i)=>(
-                <div key={i} style={{ display:'flex', alignItems:'center', gap:4, background:'rgba(0,0,0,0.65)', border:`1px solid ${CLUSTER_COLORS[i]}44`, borderRadius:10, padding:'2px 8px', fontSize:9, color:CLUSTER_COLORS[i] }}>
+                <div key={i} style={{ display:'flex',alignItems:'center',gap:4,background:'rgba(0,0,0,0.65)',border:`1px solid ${CLUSTER_COLORS[i]}44`,borderRadius:10,padding:'2px 8px',fontSize:9,color:CLUSTER_COLORS[i] }}>
                   <span style={{ width:5,height:5,borderRadius:'50%',background:CLUSTER_COLORS[i],display:'inline-block' }}/>Cluster {i+1}
                 </div>
               ))}
             </div>
           )}
-
-          {tokenName && (
-            <div style={{ position:'absolute', bottom:12, right:12, display:'flex', flexDirection:'column', gap:4 }}>
+          {tokenName&&(
+            <div style={{ position:'absolute',bottom:12,right:12,display:'flex',flexDirection:'column',gap:4 }}>
               {[['＋',1.2],['－',0.8],['⊙',0]].map(([l,f])=>(
-                <button key={l as string} onClick={()=>{if(f===0){scaleRef.current=1;offsetRef.current={x:0,y:0};}else scaleRef.current=Math.min(Math.max(scaleRef.current*(f as number),0.15),6);}}
-                  style={{ width:30,height:30,background:'rgba(0,0,0,0.7)',border:'1px solid rgba(100,120,200,0.2)',borderRadius:7,color:'rgba(180,190,255,0.5)',fontSize:15,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center' }}>
+                <button key={l as string} onClick={()=>{
+                  if(f===0)autoFit(bubblesRef.current,canvasRef.current?.offsetWidth||800,canvasRef.current?.offsetHeight||600);
+                  else scaleRef.current=Math.min(Math.max(scaleRef.current*(f as number),0.1),6);
+                }} style={{ width:30,height:30,background:'rgba(0,0,0,0.7)',border:'1px solid rgba(100,120,200,0.2)',borderRadius:7,color:'rgba(180,190,255,0.5)',fontSize:15,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center' }}>
                   {l}
                 </button>
               ))}
             </div>
           )}
-
-          {/* Small floating popup — same size on mobile and desktop */}
-          {selected && (
+          {selected&&(
             <div style={getPopupStyle()}>
-              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
-                <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+              <div style={{ display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8 }}>
+                <div style={{ display:'flex',alignItems:'center',gap:6 }}>
                   <div style={{ width:7,height:7,borderRadius:'50%',background:selected.cluster!==undefined?CLUSTER_COLORS[selected.cluster%CLUSTER_COLORS.length]:'rgba(160,170,220,0.9)' }}/>
                   <span style={{ fontSize:10,color:'rgba(180,180,220,0.5)',fontFamily:'DM Mono,monospace' }}>#{selected.rank}</span>
                   {selected.cluster!==undefined&&(
-                    <span style={{ fontSize:9,color:CLUSTER_COLORS[selected.cluster%CLUSTER_COLORS.length],background:CLUSTER_COLORS[selected.cluster%CLUSTER_COLORS.length]+'15',padding:'1px 6px',borderRadius:8,border:`1px solid ${CLUSTER_COLORS[selected.cluster%CLUSTER_COLORS.length]}33` }}>
-                      C{selected.cluster+1}
-                    </span>
+                    <span style={{ fontSize:9,color:CLUSTER_COLORS[selected.cluster%CLUSTER_COLORS.length],background:CLUSTER_COLORS[selected.cluster%CLUSTER_COLORS.length]+'15',padding:'1px 6px',borderRadius:8,border:`1px solid ${CLUSTER_COLORS[selected.cluster%CLUSTER_COLORS.length]}33` }}>C{selected.cluster+1}</span>
                   )}
                 </div>
                 <button onClick={()=>{setSelected(null);selectedRef.current=-1;}} style={{ background:'none',border:'none',color:'rgba(180,180,220,0.3)',cursor:'pointer',fontSize:16,lineHeight:1,padding:0 }}>×</button>
               </div>
               <div style={{ fontFamily:'DM Mono,monospace',fontSize:9,color:'rgba(245,200,66,0.6)',marginBottom:8,wordBreak:'break-all' }}>{selected.address.slice(0,10)}...{selected.address.slice(-8)}</div>
-              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:5, marginBottom:8 }}>
-                {[
-                  ['Supply', selected.pct.toFixed(2)+'%', 'rgba(220,220,255,0.9)'],
-                  ['Amount', selected.balanceFormatted?fAmt(selected.balanceFormatted):'—', 'rgba(220,220,255,0.9)'],
-                  ['USD', selected.usdValue?fUSD(selected.usdValue):'—', '#2EE89A'],
-                ].map(([l,v,c])=>(
+              <div style={{ display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:5,marginBottom:8 }}>
+                {[['Supply',selected.pct.toFixed(2)+'%','rgba(220,220,255,0.9)'],['Amount',selected.balanceFormatted?fAmt(selected.balanceFormatted):'—','rgba(220,220,255,0.9)'],['USD',selected.usdValue?fUSD(selected.usdValue):'—','#2EE89A']].map(([l,v,c])=>(
                   <div key={l as string} style={{ background:'rgba(255,255,255,0.03)',borderRadius:6,padding:'5px 6px' }}>
                     <div style={{ fontSize:7,color:'rgba(180,180,220,0.3)',textTransform:'uppercase',letterSpacing:'1px',marginBottom:3 }}>{l}</div>
                     <div style={{ fontSize:12,color:c as string,fontWeight:700 }}>{v}</div>
                   </div>
                 ))}
               </div>
-              <button onClick={()=>window.open(`https://etherscan.io/address/${selected.address}`,'_blank')}
-                style={{ width:'100%',background:'rgba(255,255,255,0.03)',border:'1px solid rgba(100,120,200,0.15)',borderRadius:6,padding:'5px',color:'rgba(180,190,255,0.5)',fontSize:10,cursor:'pointer',fontWeight:500 }}>
+              <button onClick={()=>window.open(`https://etherscan.io/address/${selected.address}`,'_blank')} style={{ width:'100%',background:'rgba(255,255,255,0.03)',border:'1px solid rgba(100,120,200,0.15)',borderRadius:6,padding:'5px',color:'rgba(180,190,255,0.5)',fontSize:10,cursor:'pointer',fontWeight:500 }}>
                 View on Explorer ↗
               </button>
             </div>
           )}
         </div>
 
-        {/* Desktop sidebar */}
-        {!isMobile && (
+        {!isMobile&&(
           <div style={{ width:250,borderLeft:'1px solid rgba(100,120,200,0.08)',background:'rgba(6,6,14,0.95)',display:'flex',flexDirection:'column',flexShrink:0 }}>
             <div style={{ padding:'10px 14px',borderBottom:'1px solid rgba(100,120,200,0.08)',fontSize:9,letterSpacing:'1.5px',textTransform:'uppercase',color:'rgba(180,180,255,0.25)' }}>Holders</div>
             <div style={{ flex:1,overflowY:'auto' }}>
@@ -415,8 +417,7 @@ function AppContent() {
           </div>
         )}
 
-        {/* Mobile slide-up list */}
-        {isMobile && showList && (
+        {isMobile&&showList&&(
           <div style={{ position:'fixed',inset:0,zIndex:300,display:'flex',flexDirection:'column' }}>
             <div style={{ flex:1,background:'rgba(0,0,0,0.5)' }} onClick={()=>setShowList(false)}/>
             <div style={{ background:'rgba(8,8,18,0.99)',borderRadius:'18px 18px 0 0',borderTop:'1px solid rgba(100,120,200,0.15)',maxHeight:'70vh',display:'flex',flexDirection:'column' }}>
