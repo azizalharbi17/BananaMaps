@@ -23,7 +23,7 @@ async function getTokenPrice(address: string, chain: string): Promise<{ price: n
       const logo = content?.files?.[0]?.cdn_uri || content?.links?.image || '';
       const meta = content?.metadata || {};
       return {
-        price: Number(priceData.data?.[address]?.price || 0),
+        price: Number(priceData.data?.[address]?.price || assetData.result?.token_info?.price_info?.price_per_token || 0),
         symbol: meta.symbol || '',
         name: meta.name || '',
         logo,
