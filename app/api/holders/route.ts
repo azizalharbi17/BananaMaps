@@ -6,53 +6,42 @@ const HELIUS_URL = `https://mainnet.helius-rpc.com/?api-key=${HELIUS_KEY}`;
 
 const MORALIS_CHAIN: Record<string, string> = { eth: '0x1', bsc: '0x38', base: '0x2105' };
 
-async function getSolanaTokenInfo(address: string): Promise<{ price: number; symbol: string; name: string; logo: string; decimals: number }> {
+async function getTokenPrice(address: string, chain: string): Promise<{ price: number; symbol: string; name: string; logo: string }> {
   try {
-    const res = await fetch(HELIUS_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'getAsset', params: { id: address } })
-    });
-    const data = await res.json();
-    const result = data.result;
-    const content = result?.content;
-    const meta = content?.metadata || {};
-    const tokenInfo = result?.token_info || {};
-    
-    // Fix double slash in CDN URL
-    const rawLogo = content?.files?.[0]?.cdn_uri || content?.files?.[0]?.uri || content?.links?.image || '';
-    const logo = rawLogo.replace('/cdn-cgi/image//', '/cdn-cgi/image/');
-    
-    // Use Helius price if available
-    const price = tokenInfo?.price_info?.price_per_token || 0;
-    const decimals = tokenInfo?.decimals || 6;
-
-    return {
-      price: Number(price),
-      symbol: meta.symbol || tokenInfo.symbol || '',
-      name: meta.name || '',
-      logo,
-      decimals,
-    };
-  } catch {
-    return { price: 0, symbol: '', name: '', logo: '', decimals: 6 };
-  }
-}
-
-async function getEVMTokenInfo(address: string, chain: string): Promise<{ price: number; symbol: string; name: string; logo: string }> {
-  try {
-    const chainId = MORALIS_CHAIN[chain] || '0x1';
-    const res = await fetch(
-      `https://deep-index.moralis.io/api/v2.2/erc20/${address}/price?chain=${chainId}`,
-      { headers: { 'X-API-Key': MORALIS_KEY } }
-    );
-    const data = await res.json();
-    return {
-      price: data.usdPrice || 0,
-      symbol: data.tokenSymbol || '',
-      name: data.tokenName || '',
-      logo: data.tokenLogo || '',
-    };
+    if (chain === 'sol') {
+      const [priceRes, assetRes] = await Promise.all([
+        fetch(`https://api.jup.ag/price/v2?ids=${address}`),
+        fetch(HELIUS_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'getAsset', params: { id: address } })
+        }),
+      ]);
+      const priceData = await priceRes.json();
+      const assetData = await assetRes.json();
+      const content = assetData.result?.content;
+      const logo = content?.files?.[0]?.cdn_uri || content?.links?.image || '';
+      const meta = content?.metadata || {};
+      return {
+        price: Number(priceData.data?.[address]?.price || 0),
+        symbol: meta.symbol || '',
+        name: meta.name || '',
+        logo,
+      };
+    } else {
+      const chainId = MORALIS_CHAIN[chain] || '0x1';
+      const res = await fetch(
+        `https://deep-index.moralis.io/api/v2.2/erc20/${address}/price?chain=${chainId}`,
+        { headers: { 'X-API-Key': MORALIS_KEY } }
+      );
+      const data = await res.json();
+      return {
+        price: data.usdPrice || 0,
+        symbol: data.tokenSymbol || '',
+        name: data.tokenName || '',
+        logo: data.tokenLogo || '',
+      };
+    }
   } catch {
     return { price: 0, symbol: '', name: '', logo: '' };
   }
@@ -64,39 +53,41 @@ export async function GET(req: NextRequest) {
   const chain = searchParams.get('chain') || 'eth';
 
   try {
+    const pricePromise = getTokenPrice(address, chain);
+
     if (chain === 'sol') {
-      const [rpcRes, tokenInfo] = await Promise.all([
+      const [rpcRes, priceData] = await Promise.all([
         fetch(HELIUS_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'getTokenLargestAccounts', params: [address] })
         }),
-        getSolanaTokenInfo(address),
+        pricePromise,
       ]);
       const data = await rpcRes.json();
       const accounts = data.result?.value || [];
       const total = accounts.reduce((s: number, a: any) => s + Number(a.amount), 0) || 1;
       const holders = accounts.slice(0, 50).map((a: any, i: number) => {
         const rawBalance = Number(a.amount);
-        const balance = rawBalance / Math.pow(10, tokenInfo.decimals);
+        const balance = rawBalance / Math.pow(10, a.decimals || 6);
         return {
           address: a.address,
           balance: rawBalance,
           balanceFormatted: balance,
-          usdValue: balance * tokenInfo.price,
+          usdValue: balance * priceData.price,
           pct: (rawBalance / total) * 100,
           rank: i + 1,
         };
       });
-      return NextResponse.json({ holders, price: tokenInfo.price, symbol: tokenInfo.symbol, name: tokenInfo.name, logo: tokenInfo.logo });
+      return NextResponse.json({ holders, price: priceData.price, symbol: priceData.symbol, name: priceData.name, logo: priceData.logo });
     } else {
       const moralisChain = MORALIS_CHAIN[chain] || '0x1';
-      const [holdersRes, tokenInfo] = await Promise.all([
+      const [holdersRes, priceData] = await Promise.all([
         fetch(
           `https://deep-index.moralis.io/api/v2.2/erc20/${address}/owners?chain=${moralisChain}&order=DESC&limit=50`,
           { headers: { 'X-API-Key': MORALIS_KEY } }
         ),
-        getEVMTokenInfo(address, chain),
+        pricePromise,
       ]);
       const data = await holdersRes.json();
       if (!data.result || !Array.isArray(data.result)) return NextResponse.json({ holders: [], debug: JSON.stringify(data).slice(0, 200) });
@@ -107,12 +98,12 @@ export async function GET(req: NextRequest) {
           address: h.owner_address,
           balance: Number(h.balance),
           balanceFormatted: balance,
-          usdValue: balance * tokenInfo.price,
+          usdValue: balance * priceData.price,
           pct: (balance / total) * 100,
           rank: i + 1,
         };
       });
-      return NextResponse.json({ holders, price: tokenInfo.price, symbol: tokenInfo.symbol, name: tokenInfo.name, logo: tokenInfo.logo });
+      return NextResponse.json({ holders, price: priceData.price, symbol: priceData.symbol, name: priceData.name, logo: priceData.logo });
     }
   } catch (e) {
     return NextResponse.json({ holders: [], error: String(e) });
