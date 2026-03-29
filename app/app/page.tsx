@@ -386,7 +386,7 @@ function AppContent() {
                   </div>
                 ))}
               </div>
-              <button onClick={()=>window.open(`https://etherscan.io/address/${selected.address}`,'_blank')} style={{ width:'100%',background:'rgba(255,255,255,0.03)',border:'1px solid rgba(100,120,200,0.15)',borderRadius:6,padding:'5px',color:'rgba(180,190,255,0.5)',fontSize:10,cursor:'pointer',fontWeight:500 }}>
+              <button onClick={()=>window.open(`${chain==='sol'?'https://solscan.io/account':chain==='bsc'?'https://bscscan.com/address':chain==='base'?'https://basescan.org/address':'https://etherscan.io/address'}/${selected.address}`,'_blank')} style={{ width:'100%',background:'rgba(255,255,255,0.03)',border:'1px solid rgba(100,120,200,0.15)',borderRadius:6,padding:'5px',color:'rgba(180,190,255,0.5)',fontSize:10,cursor:'pointer',fontWeight:500 }}>
                 View on Explorer ↗
               </button>
             </div>
