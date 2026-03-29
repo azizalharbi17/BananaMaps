@@ -2,23 +2,31 @@ import { NextRequest, NextResponse } from 'next/server';
 
 const MORALIS_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJub25jZSI6IjViZDYwYzFmLTZiM2YtNGRjMi05MmI5LTRhMmM3ZDhjODZkZCIsIm9yZ0lkIjoiNTA0OTU3IiwidXNlcklkIjoiNTE5NTc2IiwidHlwZUlkIjoiMzFkZThkMTgtY2Y2My00NzEyLWI1MjYtNzhjY2E1ZDU1ZGViIiwidHlwZSI6IlBST0pFQ1QiLCJpYXQiOjE3NzMyODg3NjIsImV4cCI6NDkyOTA0ODc2Mn0.RfKSauIp7N0FUQWpLBJ0L_Q7Qu7T6lle7i_VpiAtzpM';
 const HELIUS_KEY = '47457a62-fd41-4fe7-991d-9ec8ed4fb6e0';
+const HELIUS_URL = `https://mainnet.helius-rpc.com/?api-key=${HELIUS_KEY}`;
 
 const MORALIS_CHAIN: Record<string, string> = { eth: '0x1', bsc: '0x38', base: '0x2105' };
 
 async function getTokenPrice(address: string, chain: string): Promise<{ price: number; symbol: string; name: string; logo: string }> {
   try {
     if (chain === 'sol') {
-      const [priceRes, metaRes] = await Promise.all([
+      const [priceRes, assetRes] = await Promise.all([
         fetch(`https://api.jup.ag/price/v2?ids=${address}`),
-        fetch(`https://tokens.jup.ag/token/${address}`),
+        fetch(HELIUS_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'getAsset', params: { id: address } })
+        }),
       ]);
       const priceData = await priceRes.json();
-      const meta = await metaRes.json().catch(() => ({}));
+      const assetData = await assetRes.json();
+      const content = assetData.result?.content;
+      const logo = content?.files?.[0]?.cdn_uri || content?.links?.image || '';
+      const meta = content?.metadata || {};
       return {
         price: Number(priceData.data?.[address]?.price || 0),
         symbol: meta.symbol || '',
         name: meta.name || '',
-        logo: meta.logoURI || '',
+        logo,
       };
     } else {
       const chainId = MORALIS_CHAIN[chain] || '0x1';
@@ -49,7 +57,7 @@ export async function GET(req: NextRequest) {
 
     if (chain === 'sol') {
       const [rpcRes, priceData] = await Promise.all([
-        fetch(`https://mainnet.helius-rpc.com/?api-key=${HELIUS_KEY}`, {
+        fetch(HELIUS_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'getTokenLargestAccounts', params: [address] })
