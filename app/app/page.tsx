@@ -16,6 +16,7 @@ function AppContent() {
   const [loading, setLoading] = useState(false);
   const [tokenName, setTokenName] = useState('');
   const [tokenSymbol, setTokenSymbol] = useState('');
+  const [tokenLogo, setTokenLogo] = useState('');
   const [stats, setStats] = useState({ mapped: 0, top10: 0, clusters: 0 });
   const [selected, setSelected] = useState<Holder | null>(null);
   const [selectedPos, setSelectedPos] = useState({ x: 0, y: 0 });
@@ -330,7 +331,7 @@ function AppContent() {
                 <div style={{ background:'rgba(0,0,0,0.75)',border:`1px solid ${CC[chain]}44`,borderRadius:16,padding:'4px 10px',fontSize:10,color:CC[chain],display:'flex',alignItems:'center',gap:5 }}>
                   <span style={{ width:6,height:6,borderRadius:'50%',background:CC[chain],display:'inline-block' }}/>{CL[chain]}
                 </div>
-                <div style={{ background:'rgba(0,0,0,0.75)',border:'1px solid rgba(245,200,66,0.25)',borderRadius:16,padding:'4px 12px',fontSize:11,color:'#F5C842',fontWeight:600 }}>{tokenName}{tokenSymbol?` (${tokenSymbol})`:''}</div>
+                <div style={{ background:'rgba(0,0,0,0.75)',border:'1px solid rgba(245,200,66,0.25)',borderRadius:16,padding:'4px 12px',fontSize:11,color:'#F5C842',fontWeight:600,display:'flex',alignItems:'center',gap:6 }}>{tokenLogo&&<img src={tokenLogo} style={{width:16,height:16,borderRadius:'50%'}} onError={e=>(e.currentTarget.style.display='none')}/>}{tokenName}{tokenSymbol?` (${tokenSymbol})`:''}</div>
               </div>
               <div style={{ display:'flex',gap:5 }}>
                 {[['Mapped',stats.mapped],['Top 10',stats.top10+'%'],['Clusters',stats.clusters]].map(([l,v])=>(
