@@ -105,6 +105,7 @@ function AppContent() {
       autoFit(clustered, w, h);
       setChain(detectedChain);
       setTokenName(data.name || known?.name || input);
+      setTokenLogo(data.logo || '');
       setTokenSymbol(data.symbol || '');
       const top10pct = holders.slice(0,10).reduce((s: number, h: Holder) => s + h.pct, 0);
       const clusterCount = new Set(clustered.map(b => b.cluster).filter(c => c !== undefined)).size;
