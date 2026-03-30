@@ -75,8 +75,8 @@ export default function SignUpPage() {
     <button type="button" onClick={toggle} style={{
       position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)",
       background: "none", border: "none", color: "rgba(234,179,8,0.4)", cursor: "pointer",
-      fontSize: 14, padding: 4, lineHeight: 1,
-    }}>{show ? "🙈" : "👁"}</button>
+      fontSize: 11, padding: 4, lineHeight: 1, fontWeight: 600, letterSpacing: "0.5px",
+    }}>{show ? "Hide" : "Show"}</button>
   );
 
   return (
