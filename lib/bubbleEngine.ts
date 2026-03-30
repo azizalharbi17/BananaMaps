@@ -140,14 +140,14 @@ export function drawBubbles(
   ctx.clearRect(0,0,width,height);
 
   const bg = ctx.createRadialGradient(width/2,height/2,0,width/2,height/2,Math.max(width,height)*0.8);
-  bg.addColorStop(0,'#0e0e1c');
-  bg.addColorStop(1,'#0e0e1c');
+  bg.addColorStop(0,'#0d0a00');
+  bg.addColorStop(1,'#0a0800');
   ctx.fillStyle=bg; ctx.fillRect(0,0,width,height);
 
   for(let i=0;i<60;i++){
     ctx.beginPath();
     ctx.arc((Math.sin(i*137.508)*0.5+0.5)*width,(Math.cos(i*97.311)*0.5+0.5)*height,0.4+(i%3)*0.25,0,Math.PI*2);
-    ctx.fillStyle=`rgba(180,180,255,${0.02+(i%5)*0.01})`; ctx.fill();
+    ctx.fillStyle=`rgba(245,200,66,${0.015+(i%5)*0.008})`; ctx.fill();
   }
 
   const groups: Record<number,Holder[]> = {};
@@ -198,6 +198,6 @@ export function drawBubbles(
   // Soft vignette to hide canvas edges
   const vig = ctx.createRadialGradient(width/2,height/2,Math.min(width,height)*0.38,width/2,height/2,Math.max(width,height)*0.72);
   vig.addColorStop(0,"transparent");
-  vig.addColorStop(1,"rgba(14,14,28,0.96)");
+  vig.addColorStop(1,"rgba(10,8,0,0.96)");
   ctx.fillStyle=vig; ctx.fillRect(0,0,width,height);
 }

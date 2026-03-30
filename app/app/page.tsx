@@ -278,8 +278,8 @@ function AppContent() {
   }
 
   return (
-    <div style={{ height:'100dvh',background:'#0e0e1c',display:'flex',flexDirection:'column',overflow:'hidden' }}>
-      <nav style={{ display:'flex',alignItems:'center',padding:'0 12px',borderBottom:'1px solid rgba(100,120,200,0.12)',height:50,gap:8,flexShrink:0,background:'#0e0e1c' }}>
+    <div style={{ height:'100dvh',background:'#0a0800',display:'flex',flexDirection:'column',overflow:'hidden' }}>
+      <nav style={{ display:'flex',alignItems:'center',padding:'0 12px',borderBottom:'1px solid rgba(245,200,66,0.1)',height:50,gap:8,flexShrink:0,background:'#0a0800' }}>
         <a href="/" style={{ display:'flex',alignItems:'center',gap:6,fontWeight:800,fontSize:16,textDecoration:'none',color:'#f0ede6',flexShrink:0 }}>
           <span>🍌</span><span className="nav-hide-mobile">Banana<span style={{color:'#F5C842'}}>Maps</span></span>
         </a>
@@ -292,22 +292,22 @@ function AppContent() {
             ))}
           </div>
         )}
-        <div style={{ flex:1,display:'flex',alignItems:'center',background:'rgba(255,255,255,0.03)',border:'1px solid rgba(100,120,200,0.15)',borderRadius:8,padding:'0 10px',gap:6 }}>
+        <div style={{ flex:1,display:'flex',alignItems:'center',background:'rgba(255,255,255,0.03)',border:'1px solid rgba(245,200,66,0.12)',borderRadius:8,padding:'0 10px',gap:6 }}>
           {isMobile&&(
             <select value={chain} onChange={e=>setChain(e.target.value)} style={{ background:'transparent',border:'none',outline:'none',color:CC[chain],fontSize:11,cursor:'pointer' }}>
               {['eth','bsc','sol','base'].map(c=><option key={c} value={c} style={{background:'#0a0a18'}}>{c.toUpperCase()}</option>)}
             </select>
           )}
-          <input value={search} onChange={e=>setSearch(e.target.value)} onKeyDown={e=>e.key==='Enter'&&doSearch()} placeholder="Token name or address..." style={{ flex:1,background:'none',border:'none',outline:'none',color:'#e8e8f0',fontSize:13,padding:'10px 0',minWidth:0 }}/>
+          <input value={search} onChange={e=>setSearch(e.target.value)} onKeyDown={e=>e.key==='Enter'&&doSearch()} placeholder="Token name or address..." style={{ flex:1,background:'none',border:'none',outline:'none',color:'#f5f0e8',fontSize:13,padding:'10px 0',minWidth:0 }}/>
           <button onClick={doSearch} style={{ background:'#F5C842',color:'#000',border:'none',borderRadius:6,padding:'5px 8px',fontWeight:700,fontSize:11,cursor:'pointer',flexShrink:0 }}>{loading?'...':'Go'}</button>
         </div>
         {tokenName&&isMobile&&(
-          <button onClick={()=>setShowList(true)} style={{ background:'rgba(100,120,200,0.1)',border:'1px solid rgba(100,120,200,0.2)',borderRadius:6,padding:'6px 8px',color:'rgba(180,190,255,0.8)',fontSize:10,cursor:'pointer',flexShrink:0 }}>☰</button>
+          <button onClick={()=>setShowList(true)} style={{ background:'rgba(245,200,66,0.08)',border:'1px solid rgba(100,120,200,0.2)',borderRadius:6,padding:'6px 8px',color:'rgba(245,200,66,0.8)',fontSize:10,cursor:'pointer',flexShrink:0 }}>☰</button>
         )}
       </nav>
 
       <div style={{ flex:1,display:'flex',overflow:'hidden',position:'relative' }}>
-        <div style={{ flex:1,position:'relative',background:'#0e0e1c' }}>
+        <div style={{ flex:1,position:'relative',background:'#0a0800' }}>
           <canvas ref={canvasRef}
             onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp}
             onMouseLeave={()=>{isDraggingRef.current=false;hoveredRef.current=-1;}}
@@ -337,7 +337,7 @@ function AppContent() {
               <div style={{ display:'flex',gap:5 }}>
                 {[['Mapped',stats.mapped],['Top 10',stats.top10+'%'],['Clusters',stats.clusters]].map(([l,v])=>(
                   <div key={l as string} style={{ background:'rgba(0,0,0,0.65)',border:'1px solid rgba(100,120,200,0.12)',borderRadius:6,padding:'4px 8px' }}>
-                    <div style={{ fontSize:8,color:'rgba(180,180,255,0.3)',textTransform:'uppercase',letterSpacing:'1px',marginBottom:1 }}>{l}</div>
+                    <div style={{ fontSize:8,color:'rgba(245,200,66,0.35)',textTransform:'uppercase',letterSpacing:'1px',marginBottom:1 }}>{l}</div>
                     <div style={{ fontSize:12,color:'rgba(220,220,255,0.9)',fontWeight:700 }}>{v}</div>
                   </div>
                 ))}
@@ -359,7 +359,7 @@ function AppContent() {
                 <button key={l as string} onClick={()=>{
                   if(f===0)autoFit(bubblesRef.current,canvasRef.current?.offsetWidth||800,canvasRef.current?.offsetHeight||600);
                   else scaleRef.current=Math.min(Math.max(scaleRef.current*(f as number),0.1),6);
-                }} style={{ width:30,height:30,background:'rgba(0,0,0,0.7)',border:'1px solid rgba(100,120,200,0.2)',borderRadius:7,color:'rgba(180,190,255,0.5)',fontSize:15,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center' }}>
+                }} style={{ width:30,height:30,background:'rgba(0,0,0,0.7)',border:'1px solid rgba(100,120,200,0.2)',borderRadius:7,color:'rgba(245,200,66,0.5)',fontSize:15,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center' }}>
                   {l}
                 </button>
               ))}
@@ -386,7 +386,7 @@ function AppContent() {
                   </div>
                 ))}
               </div>
-              <button onClick={()=>window.open(`${chain==='sol'?'https://solscan.io/account':chain==='bsc'?'https://bscscan.com/address':chain==='base'?'https://basescan.org/address':'https://etherscan.io/address'}/${selected.address}`,'_blank')} style={{ width:'100%',background:'rgba(255,255,255,0.03)',border:'1px solid rgba(100,120,200,0.15)',borderRadius:6,padding:'5px',color:'rgba(180,190,255,0.5)',fontSize:10,cursor:'pointer',fontWeight:500 }}>
+              <button onClick={()=>window.open(`${chain==='sol'?'https://solscan.io/account':chain==='bsc'?'https://bscscan.com/address':chain==='base'?'https://basescan.org/address':'https://etherscan.io/address'}/${selected.address}`,'_blank')} style={{ width:'100%',background:'rgba(255,255,255,0.03)',border:'1px solid rgba(245,200,66,0.12)',borderRadius:6,padding:'5px',color:'rgba(245,200,66,0.5)',fontSize:10,cursor:'pointer',fontWeight:500 }}>
                 View on Explorer ↗
               </button>
             </div>
@@ -394,8 +394,8 @@ function AppContent() {
         </div>
 
         {!isMobile&&(
-          <div style={{ width:250,borderLeft:'1px solid rgba(100,120,200,0.08)',background:'#0e0e1c',display:'flex',flexDirection:'column',flexShrink:0 }}>
-            <div style={{ padding:'10px 14px',borderBottom:'1px solid rgba(100,120,200,0.08)',fontSize:9,letterSpacing:'1.5px',textTransform:'uppercase',color:'rgba(180,180,255,0.25)' }}>Holders</div>
+          <div style={{ width:250,borderLeft:'1px solid rgba(245,200,66,0.08)',background:'#0a0800',display:'flex',flexDirection:'column',flexShrink:0 }}>
+            <div style={{ padding:'10px 14px',borderBottom:'1px solid rgba(245,200,66,0.08)',fontSize:9,letterSpacing:'1.5px',textTransform:'uppercase',color:'rgba(245,200,66,0.35)' }}>Holders</div>
             <div style={{ flex:1,overflowY:'auto' }}>
               {bubblesRef.current.length===0?(
                 <div style={{ display:'flex',alignItems:'center',justifyContent:'center',flexDirection:'column',gap:8,height:'100%',color:'rgba(255,255,255,0.1)' }}>
@@ -403,11 +403,11 @@ function AppContent() {
                 </div>
               ):bubblesRef.current.map((h,i)=>(
                 <div key={h.address} onClick={()=>{selectedRef.current=i;setSelected(h);}} onMouseEnter={()=>{hoveredRef.current=i;}} onMouseLeave={()=>{hoveredRef.current=-1;}}
-                  style={{ padding:'8px 14px',borderBottom:'1px solid rgba(100,120,200,0.05)',display:'flex',alignItems:'center',gap:8,cursor:'pointer',background:selectedRef.current===i?'rgba(100,120,200,0.06)':'transparent' }}>
-                  <div style={{ width:20,height:20,borderRadius:'50%',background:h.cluster!==undefined?CLUSTER_COLORS[h.cluster%CLUSTER_COLORS.length]+'15':'rgba(120,130,180,0.08)',border:`1.5px solid ${h.cluster!==undefined?CLUSTER_COLORS[h.cluster%CLUSTER_COLORS.length]:'rgba(100,110,160,0.3)'}`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:8,fontWeight:700,color:h.cluster!==undefined?CLUSTER_COLORS[h.cluster%CLUSTER_COLORS.length]:'rgba(150,160,200,0.6)',flexShrink:0 }}>{h.rank}</div>
+                  style={{ padding:'8px 14px',borderBottom:'1px solid rgba(245,200,66,0.05)',display:'flex',alignItems:'center',gap:8,cursor:'pointer',background:selectedRef.current===i?'rgba(245,200,66,0.04)':'transparent' }}>
+                  <div style={{ width:20,height:20,borderRadius:'50%',background:h.cluster!==undefined?CLUSTER_COLORS[h.cluster%CLUSTER_COLORS.length]+'15':'rgba(245,200,66,0.06)',border:`1.5px solid ${h.cluster!==undefined?CLUSTER_COLORS[h.cluster%CLUSTER_COLORS.length]:'rgba(245,200,66,0.25)'}`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:8,fontWeight:700,color:h.cluster!==undefined?CLUSTER_COLORS[h.cluster%CLUSTER_COLORS.length]:'rgba(150,160,200,0.6)',flexShrink:0 }}>{h.rank}</div>
                   <div style={{ flex:1,minWidth:0 }}>
-                    <div style={{ fontSize:10,color:'rgba(200,200,230,0.6)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontFamily:'DM Mono,monospace' }}>{h.address.slice(0,8)}...{h.address.slice(-6)}</div>
-                    <div style={{ fontSize:9,color:'rgba(180,180,220,0.25)',marginTop:1,display:'flex',gap:6 }}>
+                    <div style={{ fontSize:10,color:'rgba(245,235,200,0.7)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontFamily:'DM Mono,monospace' }}>{h.address.slice(0,8)}...{h.address.slice(-6)}</div>
+                    <div style={{ fontSize:9,color:'rgba(200,180,100,0.3)',marginTop:1,display:'flex',gap:6 }}>
                       <span>{h.pct.toFixed(3)}%</span>
                       {h.usdValue?<span style={{color:'rgba(46,232,154,0.4)'}}>{fUSD(h.usdValue)}</span>:null}
                     </div>
@@ -421,19 +421,19 @@ function AppContent() {
         {isMobile&&showList&&(
           <div style={{ position:'fixed',inset:0,zIndex:300,display:'flex',flexDirection:'column' }}>
             <div style={{ flex:1,background:'rgba(0,0,0,0.5)' }} onClick={()=>setShowList(false)}/>
-            <div style={{ background:'rgba(8,8,18,0.99)',borderRadius:'18px 18px 0 0',borderTop:'1px solid rgba(100,120,200,0.15)',maxHeight:'70vh',display:'flex',flexDirection:'column' }}>
-              <div style={{ padding:'10px 16px',display:'flex',justifyContent:'space-between',alignItems:'center',borderBottom:'1px solid rgba(100,120,200,0.06)' }}>
-                <span style={{ fontSize:10,letterSpacing:'1.5px',textTransform:'uppercase',color:'rgba(180,180,255,0.3)' }}>Holders</span>
+            <div style={{ background:'rgba(12,10,0,0.99)',borderRadius:'18px 18px 0 0',borderTop:'1px solid rgba(245,200,66,0.12)',maxHeight:'70vh',display:'flex',flexDirection:'column' }}>
+              <div style={{ padding:'10px 16px',display:'flex',justifyContent:'space-between',alignItems:'center',borderBottom:'1px solid rgba(245,200,66,0.06)' }}>
+                <span style={{ fontSize:10,letterSpacing:'1.5px',textTransform:'uppercase',color:'rgba(245,200,66,0.35)' }}>Holders</span>
                 <button onClick={()=>setShowList(false)} style={{ background:'rgba(255,255,255,0.05)',border:'none',borderRadius:'50%',width:26,height:26,color:'rgba(255,255,255,0.3)',cursor:'pointer',fontSize:16,display:'flex',alignItems:'center',justifyContent:'center' }}>×</button>
               </div>
               <div style={{ overflowY:'auto',flex:1 }}>
                 {bubblesRef.current.map((h,i)=>(
                   <div key={h.address} onClick={()=>{selectedRef.current=i;setSelected(h);setShowList(false);setSelectedPos({x:window.innerWidth/2,y:window.innerHeight/2});}}
-                    style={{ padding:'10px 16px',borderBottom:'1px solid rgba(100,120,200,0.05)',display:'flex',alignItems:'center',gap:10 }}>
-                    <div style={{ width:22,height:22,borderRadius:'50%',background:h.cluster!==undefined?CLUSTER_COLORS[h.cluster%CLUSTER_COLORS.length]+'15':'rgba(120,130,180,0.08)',border:`1.5px solid ${h.cluster!==undefined?CLUSTER_COLORS[h.cluster%CLUSTER_COLORS.length]:'rgba(100,110,160,0.3)'}`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:9,fontWeight:700,color:h.cluster!==undefined?CLUSTER_COLORS[h.cluster%CLUSTER_COLORS.length]:'rgba(150,160,200,0.6)',flexShrink:0 }}>{h.rank}</div>
+                    style={{ padding:'10px 16px',borderBottom:'1px solid rgba(245,200,66,0.05)',display:'flex',alignItems:'center',gap:10 }}>
+                    <div style={{ width:22,height:22,borderRadius:'50%',background:h.cluster!==undefined?CLUSTER_COLORS[h.cluster%CLUSTER_COLORS.length]+'15':'rgba(245,200,66,0.06)',border:`1.5px solid ${h.cluster!==undefined?CLUSTER_COLORS[h.cluster%CLUSTER_COLORS.length]:'rgba(245,200,66,0.25)'}`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:9,fontWeight:700,color:h.cluster!==undefined?CLUSTER_COLORS[h.cluster%CLUSTER_COLORS.length]:'rgba(150,160,200,0.6)',flexShrink:0 }}>{h.rank}</div>
                     <div style={{ flex:1,minWidth:0 }}>
-                      <div style={{ fontSize:11,color:'rgba(200,200,230,0.6)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontFamily:'DM Mono,monospace' }}>{h.address.slice(0,10)}...{h.address.slice(-6)}</div>
-                      <div style={{ fontSize:10,color:'rgba(180,180,220,0.25)',marginTop:2,display:'flex',gap:8 }}>
+                      <div style={{ fontSize:11,color:'rgba(245,235,200,0.7)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontFamily:'DM Mono,monospace' }}>{h.address.slice(0,10)}...{h.address.slice(-6)}</div>
+                      <div style={{ fontSize:10,color:'rgba(200,180,100,0.3)',marginTop:2,display:'flex',gap:8 }}>
                         <span>{h.pct.toFixed(3)}%</span>
                         {h.usdValue?<span style={{color:'rgba(46,232,154,0.4)'}}>{fUSD(h.usdValue)}</span>:null}
                       </div>

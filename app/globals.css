@@ -1,43 +1,37 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Bricolage+Grotesque:wght@400;500;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700;12..96,800&family=DM+Mono:wght@400;500&display=swap');
 
 :root {
   --banana: #F5C842;
-  --banana-bright: #FFE135;
-  --banana-dark: #C49A10;
-  --banana-glow: rgba(245,200,66,0.15);
-  --banana-glow2: rgba(245,200,66,0.06);
-  --bg: #080807;
-  --bg2: #0e0e0c;
-  --bg3: #141410;
-  --surface: #1c1c17;
-  --surface2: #242420;
-  --border: #2a2a22;
-  --border2: #333328;
-  --text: #eeeadb;
-  --text2: #a8a48e;
-  --text3: #5a5848;
-  --green: #2EE89A;
-  --red: #FF4545;
-  --blue: #4DAAFF;
-  --purple: #C87BFF;
-  --orange: #FF8C42;
-  --eth: #627EEA;
-  --bsc: #F3BA2F;
-  --sol: #9945FF;
-  --base: #0052FF;
+  --banana-dim: #C49A10;
+  --bg: #0a0800;
+  --bg2: #0d0a00;
+  --bg3: #111000;
+  --surface: #181200;
+  --surface2: #201800;
+  --text: #f5f0e8;
+  --text2: #b8a878;
+  --text3: #6b5e38;
+  --border: #2a2000;
+  --border2: #3a2e00;
 }
 
-* { margin: 0; padding: 0; box-sizing: border-box; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
 
-html, body {
+body {
   background: var(--bg);
   color: var(--text);
   font-family: 'Bricolage Grotesque', sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 
+input, button, select {
+  font-family: 'Bricolage Grotesque', sans-serif;
+}
+
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
 @media (max-width: 768px) {
-  .nav-hide-mobile {
-    display: none !important;
-  }
+  .nav-hide-mobile { display: none !important; }
 }
