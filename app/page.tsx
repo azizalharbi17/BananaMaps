@@ -36,8 +36,8 @@ export default function Home() {
           <span className="nav-link-home nav-hide-mobile">Watchlist</span>
           
           <button className="pro-btn-home nav-hide-mobile" onClick={() => {}}>🍌 Go Pro</button>
-          <button className="login-btn-home nav-hide-mobile" onClick={() => {}}>Log in</button>
-          <button className="signup-btn-home nav-hide-mobile" onClick={() => {}}>Sign up</button>
+          <button className="login-btn-home nav-hide-mobile" onClick={() => router.push("/login")}>Log in</button>
+          <button className="signup-btn-home nav-hide-mobile" onClick={() => router.push("/signup")}>Sign up</button>
           <Link href="/app">
             <button className="launch-btn-home">Launch App →</button>
           </Link>
