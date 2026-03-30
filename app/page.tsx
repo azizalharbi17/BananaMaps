@@ -34,7 +34,7 @@ export default function Home() {
         </a>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <span className="nav-link-home nav-hide-mobile">Watchlist</span>
-          <span className="nav-link-home nav-hide-mobile">Docs</span>
+          
           <button className="pro-btn-home nav-hide-mobile" onClick={() => {}}>🍌 Go Pro</button>
           <button className="login-btn-home nav-hide-mobile" onClick={() => {}}>Log in</button>
           <button className="signup-btn-home nav-hide-mobile" onClick={() => {}}>Sign up</button>
@@ -133,7 +133,6 @@ export default function Home() {
         <div>© 2026 BananaMaps</div>
         <div style={{ display: 'flex', gap: 20 }}>
           <span style={{ cursor: 'pointer' }}>Docs</span>
-          <span style={{ cursor: 'pointer' }}>Pricing</span>
         </div>
       </footer>
 
@@ -147,7 +146,7 @@ export default function Home() {
         .nav-link-home { color: var(--text3); font-size: 13px; font-weight: 500; padding: 6px 10px; border-radius: 6px; cursor: pointer; transition: color 0.15s; }
         .nav-link-home:hover { color: var(--text2); }
         .pro-btn-home { background: var(--banana); color: #000; border: none; border-radius: 6px; padding: 7px 14px; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 13px; cursor: pointer; }
-        .login-btn-home { background: none; border: 1px solid var(--border2); color: var(--text2); border-radius: 7px; padding: 7px 16px; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 600; font-size: 13px; cursor: pointer; }
+        .login-btn-home { background: none; border: 1px solid var(--border2); color: var(--text); border-radius: 7px; padding: 7px 16px; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 600; font-size: 13px; cursor: pointer; }
         .signup-btn-home { background: var(--banana); border: none; color: #000; border-radius: 7px; padding: 7px 16px; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 13px; cursor: pointer; }
         .launch-btn-home { background: var(--surface); border: 1px solid var(--border2); color: var(--text); border-radius: 7px; padding: 7px 16px; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 13px; cursor: pointer; }
         .hero-search-wrap { display: flex; gap: 10px; width: 100%; max-width: 560px; margin-bottom: 14px; }
