@@ -292,7 +292,7 @@ function AppContent() {
             ))}
           </div>
         )}
-        <div style={{ flex:1,maxWidth:600,display:'flex',alignItems:'center',background:'rgba(245,200,66,0.04)',border:'1px solid rgba(245,200,66,0.12)',borderRadius:8,padding:'0 10px',gap:6 }}>
+        <div style={{ flex:1,maxWidth:800,display:'flex',alignItems:'center',background:'rgba(245,200,66,0.04)',border:'1px solid rgba(245,200,66,0.12)',borderRadius:8,padding:'0 10px',gap:6 }}>
           {isMobile&&(
             <select value={chain} onChange={e=>setChain(e.target.value)} style={{ background:'transparent',border:'none',outline:'none',color:CC[chain],fontSize:11,cursor:'pointer' }}>
               {['eth','bsc','sol','base'].map(c=><option key={c} value={c} style={{background:'#0a0a18'}}>{c.toUpperCase()}</option>)}
