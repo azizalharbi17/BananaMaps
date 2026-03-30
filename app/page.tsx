@@ -132,7 +132,6 @@ export default function Home() {
       }}>
         <div>© 2026 BananaMaps</div>
         <div style={{ display: 'flex', gap: 20 }}>
-          <span style={{ cursor: 'pointer' }}>Docs</span>
         </div>
       </footer>
 
