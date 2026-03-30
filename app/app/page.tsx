@@ -280,7 +280,7 @@ function AppContent() {
   return (
     <div style={{ height:'100dvh',background:'#0a0800',display:'flex',flexDirection:'column',overflow:'hidden' }}>
       <nav style={{ display:'flex',alignItems:'center',padding:'0 12px',borderBottom:'1px solid rgba(245,200,66,0.1)',height:50,gap:8,flexShrink:0,background:'#0a0800' }}>
-        <a href="/" style={{ display:'flex',alignItems:'center',gap:6,fontWeight:800,fontSize:16,textDecoration:'none',color:'#f0ede6',flexShrink:0 }}>
+        <a href="/" style={{ display:'flex',alignItems:'center',gap:6,fontWeight:800,fontSize:19,textDecoration:'none',color:'#f0ede6',flexShrink:0 }}>
           <span>🍌</span><span className="nav-hide-mobile">Banana<span style={{color:'#F5C842'}}>Maps</span></span>
         </a>
         {!isMobile&&(

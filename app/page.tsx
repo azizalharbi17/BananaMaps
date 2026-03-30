@@ -88,7 +88,7 @@ export default function Home() {
               }}
             />
           </div>
-          <button onClick={() => launch()} className="analyze-btn">Analyze 🍌</button>
+          <button onClick={() => launch()} className="analyze-btn">Search Token 🍌</button>
         </div>
 
         {/* Quick tokens */}
@@ -103,7 +103,7 @@ export default function Home() {
           {[
             { icon: '🐋', title: 'Whale Detection', desc: 'Instantly spot large holders and track their movements.' },
             { icon: '🔗', title: 'Cluster Analysis', desc: 'Identify wallets funded from the same source — classic rug setup.' },
-            { icon: '📡', title: 'Live On-Chain Data', desc: 'Real holder data from Etherscan and Helius APIs.' },
+            { icon: '📡', title: 'Live On-Chain Data', desc: 'Real-time on-chain data, always up to date.' },
             { icon: '⚡', title: 'Multi-Chain', desc: 'ETH, BSC, Solana and Base — all in one place.' },
           ].map(card => (
             <div key={card.title} className="feat-card">
