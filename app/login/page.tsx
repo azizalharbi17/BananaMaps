@@ -81,6 +81,7 @@ export default function LoginPage() {
           box-shadow: 0 6px 24px rgba(234, 179, 8, 0.3);
         }
         .auth-link:hover { text-decoration: underline; }
+        .home-logo:hover { opacity: 0.8; }
       `}</style>
 
       <div style={{
@@ -94,6 +95,20 @@ export default function LoginPage() {
         overflow: "hidden",
         fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
       }}>
+        {/* Golden haze */}
+        <div style={{
+          position: "fixed",
+          width: 700,
+          height: 700,
+          borderRadius: "50%",
+          background: "radial-gradient(circle, rgba(245,200,66,0.06) 0%, transparent 70%)",
+          top: "50%",
+          left: "50%",
+          transform: "translate(-50%, -50%)",
+          pointerEvents: "none",
+          zIndex: 0,
+        }} />
+
         {bananas.map((b) => (
           <div key={b.id} style={{
             position: "fixed",
@@ -120,7 +135,7 @@ export default function LoginPage() {
           zIndex: 1,
           animation: "fadeInUp 0.5s ease-out",
         }}>
-          <div style={{ textAlign: "center", marginBottom: "32px" }}>
+          <Link href="/" className="home-logo" style={{ textDecoration: "none", display: "block", textAlign: "center", marginBottom: "32px", transition: "opacity 0.2s" }}>
             <div style={{ fontSize: "2.5rem", marginBottom: "8px" }}>🍌</div>
             <h1 style={{
               fontSize: "1.6rem",
@@ -133,7 +148,7 @@ export default function LoginPage() {
             <p style={{ fontSize: "0.85rem", color: "rgba(255,255,255,0.4)", margin: 0 }}>
               Welcome back
             </p>
-          </div>
+          </Link>
 
           <form onSubmit={handleLogin} style={{ display: "flex", flexDirection: "column", gap: "18px" }}>
             {error && (
