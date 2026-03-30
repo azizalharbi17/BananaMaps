@@ -31,7 +31,7 @@ export default function SignUpPage() {
       size: 20 + Math.random() * 30,
       delay: Math.random() * 12,
       duration: 10 + Math.random() * 14,
-      opacity: 0.04 + Math.random() * 0.06,
+      opacity: 0.08 + Math.random() * 0.12,
     })));
   }, []);
 
