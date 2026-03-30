@@ -8,9 +8,11 @@ import { useRouter } from "next/navigation";
 interface Banana {
   id: number;
   left: number;
+  top: number;
   size: number;
   delay: number;
   duration: number;
+  rotate: number;
   opacity: number;
 }
 
@@ -25,13 +27,15 @@ export default function SignUpPage() {
   const [bananas, setBananas] = useState<Banana[]>([]);
 
   useEffect(() => {
-    setBananas(Array.from({ length: 18 }, (_, i) => ({
+    setBananas(Array.from({ length: 25 }, (_, i) => ({
       id: i,
       left: Math.random() * 100,
-      size: 20 + Math.random() * 30,
-      delay: Math.random() * 12,
-      duration: 10 + Math.random() * 14,
-      opacity: 0.08 + Math.random() * 0.12,
+      top: Math.random() * 100,
+      size: 18 + Math.random() * 32,
+      delay: Math.random() * 6,
+      duration: 4 + Math.random() * 5,
+      rotate: Math.random() * 360,
+      opacity: 0.06 + Math.random() * 0.1,
     })));
   }, []);
 
@@ -68,11 +72,13 @@ export default function SignUpPage() {
   return (
     <>
       <style>{`
-        @keyframes floatUp {
-          0% { transform: translateY(100vh) rotate(0deg); opacity: 0; }
-          10% { opacity: var(--banana-opacity); }
-          90% { opacity: var(--banana-opacity); }
-          100% { transform: translateY(-120px) rotate(360deg); opacity: 0; }
+        @keyframes bobble {
+          0%, 100% {
+            transform: translateY(0px) rotate(var(--rot)) scale(1);
+          }
+          50% {
+            transform: translateY(-20px) rotate(calc(var(--rot) + 15deg)) scale(1.15);
+          }
         }
         @keyframes fadeInUp {
           from { opacity: 0; transform: translateY(20px); }
@@ -105,12 +111,13 @@ export default function SignUpPage() {
           <div key={b.id} style={{
             position: "fixed",
             left: `${b.left}%`,
+            top: `${b.top}%`,
             fontSize: `${b.size}px`,
-            animation: `floatUp ${b.duration}s ${b.delay}s linear infinite`,
+            opacity: b.opacity,
+            animation: `bobble ${b.duration}s ${b.delay}s ease-in-out infinite`,
             pointerEvents: "none",
             zIndex: 0,
-            ["--banana-opacity" as string]: b.opacity,
-            opacity: 0,
+            ["--rot" as string]: `${b.rotate}deg`,
           }}>🍌</div>
         ))}
 
