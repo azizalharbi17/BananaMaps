@@ -1,11 +1,26 @@
 'use client';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
 export default function Home() {
   const [query, setQuery] = useState('');
   const router = useRouter();
+
+  const [bananas, setBananas] = useState<{id:number;left:number;top:number;size:number;delay:number;duration:number;rotate:number;opacity:number}[]>([]);
+
+  useEffect(() => {
+    setBananas(Array.from({ length: 25 }, (_, i) => ({
+      id: i,
+      left: Math.random() * 100,
+      top: Math.random() * 100,
+      size: 18 + Math.random() * 32,
+      delay: Math.random() * 6,
+      duration: 4 + Math.random() * 5,
+      rotate: Math.random() * 360,
+      opacity: 0.06 + Math.random() * 0.1,
+    })));
+  }, []);
 
   function launch(token?: string) {
     const q = token || query.trim();
@@ -22,6 +37,22 @@ export default function Home() {
         backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='1'/%3E%3C/svg%3E")`,
         opacity: 0.025,
       }} />
+
+      
+      {/* Floating bananas */}
+      {bananas.map((b) => (
+        <div key={b.id} style={{
+          position: 'fixed',
+          left: `${b.left}%`,
+          top: `${b.top}%`,
+          fontSize: `${b.size}px`,
+          opacity: b.opacity,
+          animation: `bobble ${b.duration}s ${b.delay}s ease-in-out infinite`,
+          pointerEvents: 'none',
+          zIndex: 0,
+          '--rot': `${b.rotate}deg`,
+        } as React.CSSProperties}>🍌</div>
+      ))}
 
       {/* Nav */}
       <nav style={{
@@ -136,6 +167,10 @@ export default function Home() {
       </footer>
 
       <style>{`
+        @keyframes bobble {
+          0%, 100% { transform: translateY(0px) rotate(var(--rot)) scale(1); }
+          50% { transform: translateY(-20px) rotate(calc(var(--rot) + 15deg)) scale(1.15); }
+        }
         @keyframes wobble {
           0%,100% { transform: rotate(-8deg) scale(1); }
           25% { transform: rotate(6deg) scale(1.1); }
