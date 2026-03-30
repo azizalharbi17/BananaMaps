@@ -135,7 +135,7 @@ export function drawBubbles(
   ctx: CanvasRenderingContext2D,
   bubbles: Holder[],
   width: number, height: number,
-  hoveredIndex: number, selectedIndex: number, isMobile: boolean
+  hoveredIndex: number, selectedIndex: number
 ) {
   ctx.clearRect(0,0,width,height);
 
@@ -196,13 +196,8 @@ export function drawBubbles(
   });
 
   // Soft vignette to hide canvas edges
-  const vigInner = isMobile ? Math.min(width,height)*0.38 : Math.min(width,height)*0.15;
-  const vigOuter = isMobile ? Math.max(width,height)*0.72 : Math.max(width,height)*0.45;
-  const vig = ctx.createRadialGradient(width/2,height/2,vigInner,width/2,height/2,vigOuter);
-  const vigOuter = isMobile ? Math.max(width,height)*0.72 : Math.max(width,height)*0.55;
-  const vig = ctx.createRadialGradient(width/2,height/2,vigInner,width/2,height/2,vigOuter);
+  const vig = ctx.createRadialGradient(width/2,height/2,Math.min(width,height)*0.38,width/2,height/2,Math.max(width,height)*0.72);
   vig.addColorStop(0,"transparent");
-  vig.addColorStop(0.5,"rgba(10,8,0,0.3)");
-  vig.addColorStop(1,"rgba(10,8,0,0.98)");
+  vig.addColorStop(1,"rgba(10,8,0,0.96)");
   ctx.fillStyle=vig; ctx.fillRect(0,0,width,height);
 }
