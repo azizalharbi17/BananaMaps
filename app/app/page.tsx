@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState, Suspense, useCallback } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Holder, initBubbles, detectClusters, applyForces, drawBubbles, CLUSTER_COLORS } from '@/lib/bubbleEngine';
+import { supabase } from '@/lib/supabase';
 
 function AppContent() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -22,12 +23,32 @@ function AppContent() {
   const [selectedPos, setSelectedPos] = useState({ x: 0, y: 0 });
   const [showList, setShowList] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [showUserMenu, setShowUserMenu] = useState(false);
   const offsetRef = useRef({ x: 0, y: 0 });
   const scaleRef = useRef(1);
   const isDraggingRef = useRef(false);
   const dragStartRef = useRef({ x: 0, y: 0 });
   const hasDraggedRef = useRef(false);
   const worldSizeRef = useRef({ w: 1200, h: 800 });
+
+  // Check auth state
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      setUserEmail(data.user?.email || null);
+    });
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUserEmail(session?.user?.email || null);
+    });
+    return () => { listener.subscription.unsubscribe(); };
+  }, []);
+
+  async function handleLogout() {
+    await supabase.auth.signOut();
+    setUserEmail(null);
+    setShowUserMenu(false);
+    router.push('/');
+  }
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768);
@@ -36,7 +57,6 @@ function AppContent() {
     return () => window.removeEventListener('resize', check);
   }, []);
 
-  // Auto-fit: calculate scale so all bubbles are visible
   function autoFit(bubbles: Holder[], canvasW: number, canvasH: number) {
     if (!bubbles.length) return;
     let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
@@ -101,7 +121,6 @@ function AppContent() {
       worldSizeRef.current = { w, h };
       const clustered = detectClusters(initBubbles(holders, w, h));
       bubblesRef.current = clustered;
-      // Auto-fit so all bubbles visible on load
       autoFit(clustered, w, h);
       setChain(detectedChain);
       setTokenName(data.name || known?.name || input);
@@ -301,6 +320,50 @@ function AppContent() {
           <input value={search} onChange={e=>setSearch(e.target.value)} onKeyDown={e=>e.key==='Enter'&&doSearch()} placeholder="Token name or address..." style={{ flex:1,background:'none',border:'none',outline:'none',color:'#f5f0e8',fontSize:13,padding:'10px 0',minWidth:0 }}/>
           <button onClick={doSearch} style={{ background:'#F5C842',color:'#000',border:'none',borderRadius:6,padding:'5px 8px',fontWeight:700,fontSize:11,cursor:'pointer',flexShrink:0 }}>{loading?'...':'Go'}</button>
         </div>
+
+        {/* Auth section */}
+        {userEmail ? (
+          <div style={{ position:'relative',flexShrink:0 }}>
+            <button onClick={()=>setShowUserMenu(!showUserMenu)} style={{
+              background:'rgba(245,200,66,0.08)',border:'1px solid rgba(245,200,66,0.2)',borderRadius:8,padding:'6px 12px',
+              color:'#F5C842',fontSize:11,cursor:'pointer',display:'flex',alignItems:'center',gap:6,fontWeight:600,
+            }}>
+              <span style={{ width:6,height:6,borderRadius:'50%',background:'#2EE89A',display:'inline-block' }}/>
+              <span className="nav-hide-mobile">{userEmail.length > 18 ? userEmail.slice(0,16)+'...' : userEmail}</span>
+              <span style={{ fontSize:8 }}>▼</span>
+            </button>
+            {showUserMenu && (
+              <div style={{
+                position:'absolute',top:'calc(100% + 6px)',right:0,background:'rgba(15,12,0,0.97)',
+                border:'1px solid rgba(245,200,66,0.15)',borderRadius:10,padding:'6px',minWidth:160,
+                boxShadow:'0 8px 30px rgba(0,0,0,0.6)',zIndex:500,
+              }}>
+                <div style={{ padding:'8px 12px',fontSize:10,color:'rgba(245,200,66,0.4)',borderBottom:'1px solid rgba(245,200,66,0.08)',marginBottom:4,wordBreak:'break-all' }}>
+                  {userEmail}
+                </div>
+                <button onClick={handleLogout} style={{
+                  width:'100%',background:'none',border:'none',padding:'8px 12px',color:'#f5f0e8',fontSize:12,
+                  cursor:'pointer',textAlign:'left',borderRadius:6,fontWeight:500,
+                }} onMouseEnter={e=>e.currentTarget.style.background='rgba(245,200,66,0.08)'}
+                   onMouseLeave={e=>e.currentTarget.style.background='none'}>
+                  Log out
+                </button>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div style={{ display:'flex',gap:6,flexShrink:0 }}>
+            <button onClick={()=>router.push('/login')} style={{
+              background:'none',border:'1px solid rgba(245,200,66,0.2)',borderRadius:7,padding:'6px 14px',
+              color:'#f5f0e8',fontSize:11,cursor:'pointer',fontWeight:600,
+            }}>Log in</button>
+            <button onClick={()=>router.push('/signup')} className="nav-hide-mobile" style={{
+              background:'#F5C842',border:'none',borderRadius:7,padding:'6px 14px',
+              color:'#000',fontSize:11,cursor:'pointer',fontWeight:700,
+            }}>Sign up</button>
+          </div>
+        )}
+
         {tokenName&&isMobile&&(
           <button onClick={()=>setShowList(true)} style={{ background:'rgba(245,200,66,0.08)',border:'1px solid rgba(100,120,200,0.2)',borderRadius:6,padding:'6px 8px',color:'rgba(245,200,66,0.8)',fontSize:10,cursor:'pointer',flexShrink:0 }}>☰</button>
         )}
