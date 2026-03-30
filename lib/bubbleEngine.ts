@@ -135,7 +135,7 @@ export function drawBubbles(
   ctx: CanvasRenderingContext2D,
   bubbles: Holder[],
   width: number, height: number,
-  hoveredIndex: number, selectedIndex: number
+  hoveredIndex: number, selectedIndex: number, isMobile: boolean
 ) {
   ctx.clearRect(0,0,width,height);
 

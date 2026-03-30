@@ -72,7 +72,7 @@ function AppContent() {
       ctx.save();
       ctx.translate(offsetRef.current.x, offsetRef.current.y);
       ctx.scale(scaleRef.current, scaleRef.current);
-      drawBubbles(ctx, bubblesRef.current, w, h, hoveredRef.current, selectedRef.current);
+      drawBubbles(ctx, bubblesRef.current, w, h, hoveredRef.current, selectedRef.current, isMobile);
       ctx.restore();
       animRef.current = requestAnimationFrame(loop);
     };
