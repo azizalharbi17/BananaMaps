@@ -274,7 +274,7 @@ function AppContent() {
     if(left+W>vw-10)left=selectedPos.x-W-16;
     if(top<60)top=60;
     if(top+H>vh-20)top=vh-H-20;
-    return { position:'fixed',top,left,width:W,background:'rgba(10,10,18,0.96)',border:`1px solid ${selected?.cluster!==undefined?CLUSTER_COLORS[selected.cluster%CLUSTER_COLORS.length]+'66':'rgba(120,130,180,0.3)'}`,borderRadius:10,padding:'10px 12px',zIndex:200,boxShadow:'0 4px 20px rgba(0,0,0,0.8)' };
+    return { position:'fixed',top,left,width:W,background:'rgba(15,12,0,0.97)',border:`1px solid ${selected?.cluster!==undefined?CLUSTER_COLORS[selected.cluster%CLUSTER_COLORS.length]+'66':'rgba(245,200,66,0.2)'}`,borderRadius:10,padding:'10px 12px',zIndex:200,boxShadow:'0 4px 20px rgba(0,0,0,0.8)' };
   }
 
   return (
@@ -292,7 +292,7 @@ function AppContent() {
             ))}
           </div>
         )}
-        <div style={{ flex:1,display:'flex',alignItems:'center',background:'rgba(255,255,255,0.03)',border:'1px solid rgba(245,200,66,0.12)',borderRadius:8,padding:'0 10px',gap:6 }}>
+        <div style={{ flex:1,display:'flex',alignItems:'center',background:'rgba(245,200,66,0.04)',border:'1px solid rgba(245,200,66,0.12)',borderRadius:8,padding:'0 10px',gap:6 }}>
           {isMobile&&(
             <select value={chain} onChange={e=>setChain(e.target.value)} style={{ background:'transparent',border:'none',outline:'none',color:CC[chain],fontSize:11,cursor:'pointer' }}>
               {['eth','bsc','sol','base'].map(c=><option key={c} value={c} style={{background:'#0a0a18'}}>{c.toUpperCase()}</option>)}
@@ -321,7 +321,7 @@ function AppContent() {
             </div>
           )}
           {loading&&(
-            <div style={{ position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',flexDirection:'column',gap:16,background:'rgba(5,5,10,0.9)' }}>
+            <div style={{ position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',flexDirection:'column',gap:16,background:'rgba(10,8,0,0.9)' }}>
               <div style={{ fontSize:44,animation:'spin 1s linear infinite' }}>🍌</div>
               <div style={{ fontSize:13,color:'rgba(245,200,66,0.7)' }}>Mapping holders...</div>
             </div>
@@ -375,18 +375,18 @@ function AppContent() {
                     <span style={{ fontSize:9,color:CLUSTER_COLORS[selected.cluster%CLUSTER_COLORS.length],background:CLUSTER_COLORS[selected.cluster%CLUSTER_COLORS.length]+'15',padding:'1px 6px',borderRadius:8,border:`1px solid ${CLUSTER_COLORS[selected.cluster%CLUSTER_COLORS.length]}33` }}>C{selected.cluster+1}</span>
                   )}
                 </div>
-                <button onClick={()=>{setSelected(null);selectedRef.current=-1;}} style={{ background:'none',border:'none',color:'rgba(180,180,220,0.3)',cursor:'pointer',fontSize:16,lineHeight:1,padding:0 }}>×</button>
+                <button onClick={()=>{setSelected(null);selectedRef.current=-1;}} style={{ background:'none',border:'none',color:'rgba(200,170,80,0.4)',cursor:'pointer',fontSize:16,lineHeight:1,padding:0 }}>×</button>
               </div>
               <div style={{ fontFamily:'DM Mono,monospace',fontSize:9,color:'rgba(245,200,66,0.6)',marginBottom:8,wordBreak:'break-all' }}>{selected.address.slice(0,10)}...{selected.address.slice(-8)}</div>
               <div style={{ display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:5,marginBottom:8 }}>
                 {[['Supply',selected.pct.toFixed(2)+'%','rgba(220,220,255,0.9)'],['Amount',selected.balanceFormatted?fAmt(selected.balanceFormatted):'—','rgba(220,220,255,0.9)'],['USD',selected.usdValue?fUSD(selected.usdValue):'—','#2EE89A']].map(([l,v,c])=>(
-                  <div key={l as string} style={{ background:'rgba(255,255,255,0.03)',borderRadius:6,padding:'5px 6px' }}>
-                    <div style={{ fontSize:7,color:'rgba(180,180,220,0.3)',textTransform:'uppercase',letterSpacing:'1px',marginBottom:3 }}>{l}</div>
+                  <div key={l as string} style={{ background:'rgba(245,200,66,0.04)',borderRadius:6,padding:'5px 6px' }}>
+                    <div style={{ fontSize:7,color:'rgba(200,170,80,0.4)',textTransform:'uppercase',letterSpacing:'1px',marginBottom:3 }}>{l}</div>
                     <div style={{ fontSize:12,color:c as string,fontWeight:700 }}>{v}</div>
                   </div>
                 ))}
               </div>
-              <button onClick={()=>window.open(`${chain==='sol'?'https://solscan.io/account':chain==='bsc'?'https://bscscan.com/address':chain==='base'?'https://basescan.org/address':'https://etherscan.io/address'}/${selected.address}`,'_blank')} style={{ width:'100%',background:'rgba(255,255,255,0.03)',border:'1px solid rgba(245,200,66,0.12)',borderRadius:6,padding:'5px',color:'rgba(245,200,66,0.5)',fontSize:10,cursor:'pointer',fontWeight:500 }}>
+              <button onClick={()=>window.open(`${chain==='sol'?'https://solscan.io/account':chain==='bsc'?'https://bscscan.com/address':chain==='base'?'https://basescan.org/address':'https://etherscan.io/address'}/${selected.address}`,'_blank')} style={{ width:'100%',background:'rgba(245,200,66,0.04)',border:'1px solid rgba(245,200,66,0.12)',borderRadius:6,padding:'5px',color:'rgba(245,200,66,0.5)',fontSize:10,cursor:'pointer',fontWeight:500 }}>
                 View on Explorer ↗
               </button>
             </div>
