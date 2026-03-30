@@ -335,7 +335,7 @@ function AppContent() {
             {showUserMenu && (
               <div style={{
                 position:'absolute',top:'calc(100% + 6px)',right:0,background:'rgba(15,12,0,0.97)',
-                border:'1px solid rgba(245,200,66,0.15)',borderRadius:10,padding:'6px',minWidth:160,
+                border:'1px solid rgba(245,200,66,0.15)',borderRadius:10,padding:'6px',minWidth:220,
                 boxShadow:'0 8px 30px rgba(0,0,0,0.6)',zIndex:500,
               }}>
                 <div style={{ padding:'8px 12px',fontSize:10,color:'rgba(245,200,66,0.4)',borderBottom:'1px solid rgba(245,200,66,0.08)',marginBottom:4,wordBreak:'break-all' }}>
