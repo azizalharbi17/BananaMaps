@@ -196,7 +196,9 @@ export function drawBubbles(
   });
 
   // Soft vignette to hide canvas edges
-  const vig = ctx.createRadialGradient(width/2,height/2,Math.min(width,height)*0.38,width/2,height/2,Math.max(width,height)*0.72);
+  const vigInner = isMobile ? Math.min(width,height)*0.38 : Math.min(width,height)*0.25;
+  const vigOuter = isMobile ? Math.max(width,height)*0.72 : Math.max(width,height)*0.55;
+  const vig = ctx.createRadialGradient(width/2,height/2,vigInner,width/2,height/2,vigOuter);
   vig.addColorStop(0,"transparent");
   vig.addColorStop(1,"rgba(10,8,0,0.96)");
   ctx.fillStyle=vig; ctx.fillRect(0,0,width,height);
