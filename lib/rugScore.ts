@@ -1,3 +1,5 @@
+import { isExchange } from "./exchanges";
+
 export interface RugScoreResult {
   score: number;
   label: string;
@@ -6,15 +8,20 @@ export interface RugScoreResult {
 }
 
 export function calculateRugScore(
-  holders: { pct: number; cluster?: number }[],
-  clusterCount: number
+  holders: { pct: number; cluster?: number; address?: string }[],
+  clusterCount: number,
+  chain: string = "eth"
 ): RugScoreResult {
   if (!holders.length) return { score: 0, label: "No Data", color: "#666", factors: [] };
 
+  // Filter out known exchanges and burn addresses
+  const realHolders = holders.filter(h => !h.address || !isExchange(h.address, chain));
+  const exchangeCount = holders.length - realHolders.length;
+
   const factors: { name: string; score: number; weight: number; detail: string }[] = [];
 
-  // 1. Top holder concentration (weight: 25)
-  const top1 = holders[0]?.pct || 0;
+  // 1. Top holder concentration excluding exchanges (weight: 25)
+  const top1 = realHolders[0]?.pct || 0;
   let top1Score: number;
   if (top1 > 50) top1Score = 5;
   else if (top1 > 30) top1Score = 20;
@@ -22,17 +29,17 @@ export function calculateRugScore(
   else if (top1 > 10) top1Score = 65;
   else if (top1 > 5) top1Score = 85;
   else top1Score = 100;
-  factors.push({ name: "Top Holder", score: top1Score, weight: 25, detail: `${top1.toFixed(1)}% held by #1 wallet` });
+  factors.push({ name: "Top Holder", score: top1Score, weight: 25, detail: `${top1.toFixed(1)}% held by #1 non-exchange wallet` });
 
-  // 2. Top 10 concentration (weight: 25)
-  const top10 = holders.slice(0, 10).reduce((s, h) => s + h.pct, 0);
+  // 2. Top 10 concentration excluding exchanges (weight: 25)
+  const top10 = realHolders.slice(0, 10).reduce((s, h) => s + h.pct, 0);
   let top10Score: number;
   if (top10 > 80) top10Score = 5;
   else if (top10 > 60) top10Score = 25;
   else if (top10 > 40) top10Score = 50;
   else if (top10 > 25) top10Score = 75;
   else top10Score = 95;
-  factors.push({ name: "Top 10 Concentration", score: top10Score, weight: 25, detail: `${top10.toFixed(1)}% held by top 10` });
+  factors.push({ name: "Top 10 Concentration", score: top10Score, weight: 25, detail: `${top10.toFixed(1)}% held by top 10 (excl. exchanges)` });
 
   // 3. Cluster suspicion (weight: 25)
   let clusterScore: number;
@@ -45,18 +52,19 @@ export function calculateRugScore(
   factors.push({ name: "Cluster Activity", score: clusterScore, weight: 25, detail: `${clusterCount} cluster${clusterCount !== 1 ? "s" : ""} detected` });
 
   // 4. Holder distribution (weight: 15)
-  const holderCount = holders.length;
+  const holderCount = realHolders.length;
   let distScore: number;
   if (holderCount < 20) distScore = 15;
   else if (holderCount < 50) distScore = 35;
   else if (holderCount < 100) distScore = 55;
   else if (holderCount < 200) distScore = 75;
   else distScore = 95;
-  factors.push({ name: "Holder Count", score: distScore, weight: 15, detail: `${holderCount} holders mapped` });
+  const exchangeNote = exchangeCount > 0 ? ` (${exchangeCount} exchange${exchangeCount !== 1 ? "s" : ""} excluded)` : "";
+  factors.push({ name: "Holder Count", score: distScore, weight: 15, detail: `${holderCount} holders mapped${exchangeNote}` });
 
   // 5. Distribution evenness (weight: 10)
-  const top5 = holders.slice(0, 5).reduce((s, h) => s + h.pct, 0);
-  const bottom50pct = holders.slice(Math.floor(holders.length / 2)).reduce((s, h) => s + h.pct, 0);
+  const top5 = realHolders.slice(0, 5).reduce((s, h) => s + h.pct, 0);
+  const bottom50pct = realHolders.slice(Math.floor(realHolders.length / 2)).reduce((s, h) => s + h.pct, 0);
   const ratio = bottom50pct > 0 ? top5 / Math.max(bottom50pct, 0.01) : 100;
   let evenScore: number;
   if (ratio > 50) evenScore = 10;

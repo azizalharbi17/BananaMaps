@@ -132,6 +132,7 @@ function AppContent() {
       const top10pct = holders.slice(0,10).reduce((s: number, h: Holder) => s + h.pct, 0);
       const clusterCount = new Set(clustered.map(b => b.cluster).filter(c => c !== undefined)).size;
       setStats({ mapped: holders.length, top10: Math.round(top10pct), clusters: clusterCount });
+      setRugScore(calculateRugScore(clustered, clusterCount, detectedChain));
       const rs = calculateRugScore(clustered, clusterCount);
       setRugScore(rs);
       startAnimation();
@@ -505,8 +506,9 @@ function AppContent() {
                   style={{ padding:'8px 14px',borderBottom:'1px solid rgba(245,200,66,0.05)',display:'flex',alignItems:'center',gap:8,cursor:'pointer',background:selectedRef.current===i?'rgba(245,200,66,0.04)':'transparent' }}>
                   <div style={{ width:20,height:20,borderRadius:'50%',background:h.cluster!==undefined?CLUSTER_COLORS[h.cluster%CLUSTER_COLORS.length]+'15':'rgba(245,200,66,0.06)',border:`1.5px solid ${h.cluster!==undefined?CLUSTER_COLORS[h.cluster%CLUSTER_COLORS.length]:'rgba(245,200,66,0.25)'}`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:8,fontWeight:700,color:h.cluster!==undefined?CLUSTER_COLORS[h.cluster%CLUSTER_COLORS.length]:'rgba(150,160,200,0.6)',flexShrink:0 }}>{h.rank}</div>
                   <div style={{ flex:1,minWidth:0 }}>
-                    <div style={{ fontSize:10,color:'rgba(245,235,200,0.7)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontFamily:'DM Mono,monospace' }}>{h.address.slice(0,8)}...{h.address.slice(-6)}</div>
+                    <div style={{ fontSize:10,color:'rgba(245,235,200,0.7)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontFamily:'DM Mono,monospace' }}>{(() => { const ex = getExchangeInfo(h.address, chain); return ex ? ex.name : `${h.address.slice(0,8)}...${h.address.slice(-6)}`; })()}</div>
                     <div style={{ fontSize:9,color:'rgba(200,180,100,0.3)',marginTop:1,display:'flex',gap:6 }}>
+                      {getExchangeInfo(h.address, chain) && <span style={{ color:'#627EEA',fontSize:8,background:'rgba(98,126,234,0.1)',padding:'0 4px',borderRadius:3 }}>Exchange</span>}
                       <span>{h.pct.toFixed(3)}%</span>
                       {h.usdValue?<span style={{color:'rgba(46,232,154,0.4)'}}>{fUSD(h.usdValue)}</span>:null}
                     </div>
