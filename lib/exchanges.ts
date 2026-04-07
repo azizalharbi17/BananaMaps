@@ -40,7 +40,6 @@ const EVM_EXCHANGES: Record<string, ExchangeInfo> = {
   "0xa7efae728d2936e78bda97dc267687568dd593f3": { name: "OKX" },
   // KuCoin
   "0xd6216fc19db775df9774a6e33526131da7d19a2c": { name: "KuCoin" },
-  "0xeb2629a2734e272bcc07bda959863f316f4bd4cf": { name: "KuCoin" },
   "0xf3f094484ec6901ffc9681bcb808b96bafd0b8a8": { name: "KuCoin" },
   // Bybit
   "0xf89d7b9c864f589bbf53a82105107622b35eaa40": { name: "Bybit" },
