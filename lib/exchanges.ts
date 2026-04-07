@@ -167,7 +167,6 @@ const SOL_EXCHANGES: Record<string, ExchangeInfo> = {
   "5VCwKtCXgCJ6kit5FybXjvriW3xELsFDhYrPSqtJNmcD": { name: "OKX", type: "cex" },
   "4sJSojVxCjBBBi5sJj8uVj5d5AQ1VQoi5hcxB4GSA1A6": { name: "OKX", type: "cex" },
   // Bybit
-  "AC5RDfQFmDS1deWZos921JfqscXdByf8BKHs5ACWt1Pi": { name: "Bybit", type: "cex" },
   "Dd1k91cWpXNrVFi2tJkYqfYJzBnYsC3cMmw8Rp3eUiF": { name: "Bybit", type: "cex" },
   // KuCoin
   "BmFdpraQhkiDQE6SnfG5PkRHMuAu4KQ5kSm25mFv3Dk4": { name: "KuCoin", type: "cex" },
