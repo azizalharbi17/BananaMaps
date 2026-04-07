@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState, Suspense, useCallback } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Holder, initBubbles, detectClusters, applyForces, drawBubbles, CLUSTER_COLORS } from '@/lib/bubbleEngine';
+import { calculateRugScore, RugScoreResult } from '@/lib/rugScore';
 import { supabase } from '@/lib/supabase';
 
 function AppContent() {
@@ -20,6 +21,8 @@ function AppContent() {
   const [tokenLogo, setTokenLogo] = useState('');
   const [stats, setStats] = useState({ mapped: 0, top10: 0, clusters: 0 });
   const [selected, setSelected] = useState<Holder | null>(null);
+  const [rugScore, setRugScore] = useState<RugScoreResult | null>(null);
+  const [showRugDetails, setShowRugDetails] = useState(false);
   const [selectedPos, setSelectedPos] = useState({ x: 0, y: 0 });
   const [showList, setShowList] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
@@ -129,6 +132,8 @@ function AppContent() {
       const top10pct = holders.slice(0,10).reduce((s: number, h: Holder) => s + h.pct, 0);
       const clusterCount = new Set(clustered.map(b => b.cluster).filter(c => c !== undefined)).size;
       setStats({ mapped: holders.length, top10: Math.round(top10pct), clusters: clusterCount });
+      const rs = calculateRugScore(clustered, clusterCount);
+      setRugScore(rs);
       startAnimation();
     } catch {}
     setLoading(false);
@@ -397,14 +402,45 @@ function AppContent() {
                 </div>
                 <div style={{ background:'rgba(0,0,0,0.75)',border:'1px solid rgba(245,200,66,0.25)',borderRadius:16,padding:'4px 12px',fontSize:11,color:'#F5C842',fontWeight:600,display:'flex',alignItems:'center',gap:6 }}>{tokenLogo&&<img src={tokenLogo} style={{width:16,height:16,borderRadius:'50%'}} onError={e=>(e.currentTarget.style.display='none')}/>}{tokenName}{tokenSymbol?` (${tokenSymbol})`:''}</div>
               </div>
-              <div style={{ display:'flex',gap:5 }}>
+              <div style={{ display:'flex',gap:5,flexWrap:'wrap' }}>
                 {[['Mapped',stats.mapped],['Top 10',stats.top10+'%'],['Clusters',stats.clusters]].map(([l,v])=>(
                   <div key={l as string} style={{ background:'rgba(0,0,0,0.65)',border:'1px solid rgba(100,120,200,0.12)',borderRadius:6,padding:'4px 8px' }}>
                     <div style={{ fontSize:8,color:'rgba(245,200,66,0.35)',textTransform:'uppercase',letterSpacing:'1px',marginBottom:1 }}>{l}</div>
                     <div style={{ fontSize:12,color:'rgba(220,220,255,0.9)',fontWeight:700 }}>{v}</div>
                   </div>
                 ))}
+                {rugScore&&(
+                  <div onClick={()=>setShowRugDetails(!showRugDetails)} style={{ background:'rgba(0,0,0,0.65)',border:`1px solid ${rugScore.color}44`,borderRadius:6,padding:'4px 8px',cursor:'pointer',position:'relative' }}>
+                    <div style={{ fontSize:8,color:'rgba(245,200,66,0.35)',textTransform:'uppercase',letterSpacing:'1px',marginBottom:1 }}>Risk Score</div>
+                    <div style={{ display:'flex',alignItems:'center',gap:4 }}>
+                      <span style={{ width:6,height:6,borderRadius:'50%',background:rugScore.color,display:'inline-block' }}/>
+                      <span style={{ fontSize:12,color:rugScore.color,fontWeight:700 }}>{rugScore.score}</span>
+                      <span style={{ fontSize:9,color:rugScore.color,opacity:0.7 }}>{rugScore.label}</span>
+                    </div>
+                  </div>
+                )}
               </div>
+              {rugScore&&showRugDetails&&(
+                <div style={{ background:'rgba(0,0,0,0.85)',border:`1px solid ${rugScore.color}33`,borderRadius:10,padding:'12px',marginTop:6,maxWidth:320 }}>
+                  <div style={{ display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10 }}>
+                    <div style={{ fontSize:11,fontWeight:700,color:rugScore.color }}>Risk Analysis — {rugScore.score}/100</div>
+                    <button onClick={()=>setShowRugDetails(false)} style={{ background:'none',border:'none',color:'rgba(255,255,255,0.3)',cursor:'pointer',fontSize:14,padding:0,lineHeight:1 }}>×</button>
+                  </div>
+                  {rugScore.factors.map(f=>(
+                    <div key={f.name} style={{ marginBottom:8 }}>
+                      <div style={{ display:'flex',justifyContent:'space-between',marginBottom:3 }}>
+                        <span style={{ fontSize:9,color:'rgba(255,255,255,0.5)' }}>{f.name}</span>
+                        <span style={{ fontSize:9,color:f.score>=70?'#2EE89A':f.score>=40?'#EAB308':'#EF4444',fontWeight:600 }}>{f.score}/100</span>
+                      </div>
+                      <div style={{ height:3,background:'rgba(255,255,255,0.06)',borderRadius:2,overflow:'hidden' }}>
+                        <div style={{ height:'100%',width:`${f.score}%`,background:f.score>=70?'#2EE89A':f.score>=40?'#EAB308':'#EF4444',borderRadius:2,transition:'width 0.5s' }}/>
+                      </div>
+                      <div style={{ fontSize:8,color:'rgba(255,255,255,0.25)',marginTop:2 }}>{f.detail}</div>
+                    </div>
+                  ))}
+                  <div style={{ fontSize:7,color:'rgba(255,255,255,0.15)',marginTop:6,lineHeight:1.4 }}>This score is for informational purposes only and does not constitute financial advice. Always do your own research.</div>
+                </div>
+              )}
             </div>
           )}
           {!isMobile&&stats.clusters>0&&(
