@@ -6,6 +6,8 @@ const HELIUS_URL = `https://mainnet.helius-rpc.com/?api-key=${HELIUS_KEY}`;
 
 const MORALIS_CHAIN: Record<string, string> = { eth: '0x1', bsc: '0x38', base: '0x2105' };
 const HOLDER_LIMIT = 150;
+const FETCH_LIMIT = 500;
+const MIN_PCT = 0.001; // Filter out holders below 0.001% of supply
 
 async function getTokenPrice(address: string, chain: string): Promise<{ price: number; symbol: string; name: string; logo: string }> {
   try {
@@ -119,7 +121,7 @@ async function getSolanaHolders(mintAddress: string): Promise<any[]> {
         jsonrpc: '2.0',
         id: 1,
         method: 'getTokenAccounts',
-        params: { mint: mintAddress, limit: HOLDER_LIMIT },
+        params: { mint: mintAddress, limit: FETCH_LIMIT },
       }),
     });
     const data = await res.json();
@@ -186,7 +188,7 @@ export async function GET(req: NextRequest) {
       const ownerAddresses = [...new Set(accounts.map((a: any) => a.owner || ownerMap[a.address] || a.address))];
       const identities = await getSolanaIdentities(ownerAddresses);
 
-      const holders = accounts.map((a: any, i: number) => {
+      const allHoldersMapped = accounts.map((a: any) => {
         const rawBalance = Number(a.amount);
         const decimals = a.decimals || 6;
         const balance = rawBalance / Math.pow(10, decimals);
@@ -199,11 +201,22 @@ export async function GET(req: NextRequest) {
           balanceFormatted: balance,
           usdValue: balance * priceData.price,
           pct: (rawBalance / total) * 100,
-          rank: i + 1,
+          rank: 0,
           label: identity?.name || null,
           labelType: identity?.category || null,
         };
       });
+      // Filter dust, dedupe by owner, take top HOLDER_LIMIT
+      const seen = new Set<string>();
+      const holders = allHoldersMapped
+        .filter(h => {
+          if (h.pct < MIN_PCT) return false;
+          if (seen.has(h.address)) return false;
+          seen.add(h.address);
+          return true;
+        })
+        .slice(0, HOLDER_LIMIT)
+        .map((h, i) => ({ ...h, rank: i + 1 }));
       return NextResponse.json({ holders, price: priceData.price, symbol: priceData.symbol, name: priceData.name, logo: priceData.logo });
 
     } else {
@@ -214,7 +227,7 @@ export async function GET(req: NextRequest) {
       let allHolders: any[] = [];
       let cursor: string | null = null;
       const perPage = 100;
-      const maxPages = Math.ceil(HOLDER_LIMIT / perPage);
+      const maxPages = Math.ceil(FETCH_LIMIT / perPage);
 
       for (let page = 0; page < maxPages; page++) {
         const fetchUrl: string = `https://deep-index.moralis.io/api/v2.2/erc20/${address}/owners?chain=${moralisChain}&order=DESC&limit=${perPage}${cursor ? `&cursor=${cursor}` : ''}`;
@@ -223,15 +236,14 @@ export async function GET(req: NextRequest) {
         if (!data.result || !Array.isArray(data.result)) break;
         allHolders = allHolders.concat(data.result);
         cursor = data.cursor || null;
-        if (!cursor || allHolders.length >= HOLDER_LIMIT) break;
+        if (!cursor || allHolders.length >= FETCH_LIMIT) break;
       }
 
       if (!allHolders.length) return NextResponse.json({ holders: [], price: 0 });
 
-      const holdersSlice = allHolders.slice(0, HOLDER_LIMIT);
-      const total = holdersSlice.reduce((s: number, h: any) => s + Number(h.balance_formatted || h.balance), 0) || 1;
+      const total = allHolders.reduce((s: number, h: any) => s + Number(h.balance_formatted || h.balance), 0) || 1;
 
-      const holders = holdersSlice.map((h: any, i: number) => {
+      const allMapped = allHolders.map((h: any) => {
         const balance = Number(h.balance_formatted || h.balance);
         const addr = h.owner_address;
         const moralisLabel = h.owner_address_label || null;
@@ -241,11 +253,17 @@ export async function GET(req: NextRequest) {
           balanceFormatted: balance,
           usdValue: balance * priceData.price,
           pct: (balance / total) * 100,
-          rank: i + 1,
+          rank: 0,
           label: moralisLabel || null,
           labelType: moralisLabel ? 'entity' : null,
         };
       });
+
+      // Filter dust and take top HOLDER_LIMIT
+      const holders = allMapped
+        .filter(h => h.pct >= MIN_PCT)
+        .slice(0, HOLDER_LIMIT)
+        .map((h, i) => ({ ...h, rank: i + 1 }));
       return NextResponse.json({ holders, price: priceData.price, symbol: priceData.symbol, name: priceData.name, logo: priceData.logo });
     }
   } catch (e) {
