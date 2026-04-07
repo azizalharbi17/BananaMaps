@@ -1,4 +1,6 @@
 export interface Holder {
+  label?: string | null;
+  labelType?: string | null;
   address: string;
   balance: number;
   balanceFormatted?: number;
