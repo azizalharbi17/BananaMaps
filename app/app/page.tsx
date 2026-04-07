@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, Suspense, useCallback } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Holder, initBubbles, detectClusters, applyForces, drawBubbles, CLUSTER_COLORS } from '@/lib/bubbleEngine';
 import { calculateRugScore, RugScoreResult } from '@/lib/rugScore';
+import { getExchangeInfo } from '@/lib/exchanges';
 import { supabase } from '@/lib/supabase';
 
 function AppContent() {
