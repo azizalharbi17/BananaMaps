@@ -134,8 +134,6 @@ function AppContent() {
       const clusterCount = new Set(clustered.map(b => b.cluster).filter(c => c !== undefined)).size;
       setStats({ mapped: holders.length, top10: Math.round(top10pct), clusters: clusterCount });
       setRugScore(calculateRugScore(clustered.map(h => ({ ...h, isLabeledExchange: !!(h as any).label })), clusterCount, detectedChain));
-      const rs = calculateRugScore(clustered, clusterCount);
-      setRugScore(rs);
       startAnimation();
     } catch {}
     setLoading(false);
