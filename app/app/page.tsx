@@ -133,7 +133,7 @@ function AppContent() {
       const top10pct = holders.slice(0,10).reduce((s: number, h: Holder) => s + h.pct, 0);
       const clusterCount = new Set(clustered.map(b => b.cluster).filter(c => c !== undefined)).size;
       setStats({ mapped: holders.length, top10: Math.round(top10pct), clusters: clusterCount });
-      setRugScore(calculateRugScore(clustered.map(h => ({ ...h, isLabeledExchange: !!(h as any).label && ((h as any).labelType === 'Centralized Exchange' || (h as any).labelType === 'Decentralized Exchange') })), clusterCount, detectedChain));
+      setRugScore(calculateRugScore(clustered.map(h => ({ ...h, isLabeledExchange: !!(h as any).label })), clusterCount, detectedChain));
       const rs = calculateRugScore(clustered, clusterCount);
       setRugScore(rs);
       startAnimation();
