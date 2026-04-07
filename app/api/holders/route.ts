@@ -47,6 +47,65 @@ async function getTokenPrice(address: string, chain: string): Promise<{ price: n
   }
 }
 
+// Helius batch identity lookup for Solana
+async function getSolanaIdentities(addresses: string[]): Promise<Record<string, { name: string; type: string; category: string }>> {
+  const labels: Record<string, { name: string; type: string; category: string }> = {};
+  try {
+    const res = await fetch(`https://api.helius.xyz/v1/wallet/batch-identity?api-key=${HELIUS_KEY}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ addresses }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        for (const item of data) {
+          if (item.address && item.name) {
+            labels[item.address] = {
+              name: item.name,
+              type: item.type || '',
+              category: item.category || '',
+            };
+          }
+        }
+      }
+    }
+  } catch {}
+  return labels;
+}
+
+// Moralis wallet labels for EVM chains
+async function getEVMIdentities(addresses: string[], chain: string): Promise<Record<string, { name: string; type: string; category: string }>> {
+  const labels: Record<string, { name: string; type: string; category: string }> = {};
+  const chainId = MORALIS_CHAIN[chain] || '0x1';
+  try {
+    // Use the wallet history endpoint for the first address to check labels
+    // Moralis doesn't have a dedicated batch label endpoint, so we check resolve/address
+    const batchSize = 25;
+    const batch = addresses.slice(0, batchSize);
+    const promises = batch.map(async (addr) => {
+      try {
+        const res = await fetch(
+          `https://deep-index.moralis.io/api/v2.2/resolve/${addr}?chain=${chainId}`,
+          { headers: { 'X-API-Key': MORALIS_KEY } }
+        );
+        if (res.ok) {
+          const data = await res.json();
+          if (data.name) {
+            labels[addr.toLowerCase()] = {
+              name: data.name,
+              type: 'entity',
+              category: data.category || '',
+            };
+          }
+        }
+      } catch {}
+    });
+    await Promise.all(promises);
+  } catch {}
+  return labels;
+}
+
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const address = searchParams.get('address') || '';
@@ -67,9 +126,15 @@ export async function GET(req: NextRequest) {
       const data = await rpcRes.json();
       const accounts = data.result?.value || [];
       const total = accounts.reduce((s: number, a: any) => s + Number(a.amount), 0) || 1;
+      const holderAddresses = accounts.slice(0, 50).map((a: any) => a.address);
+
+      // Fetch Helius identity labels in parallel
+      const identities = await getSolanaIdentities(holderAddresses);
+
       const holders = accounts.slice(0, 50).map((a: any, i: number) => {
         const rawBalance = Number(a.amount);
         const balance = rawBalance / Math.pow(10, a.decimals || 6);
+        const identity = identities[a.address];
         return {
           address: a.address,
           balance: rawBalance,
@@ -77,6 +142,8 @@ export async function GET(req: NextRequest) {
           usdValue: balance * priceData.price,
           pct: (rawBalance / total) * 100,
           rank: i + 1,
+          label: identity?.name || null,
+          labelType: identity?.category || null,
         };
       });
       return NextResponse.json({ holders, price: priceData.price, symbol: priceData.symbol, name: priceData.name, logo: priceData.logo });
@@ -92,15 +159,27 @@ export async function GET(req: NextRequest) {
       const data = await holdersRes.json();
       if (!data.result || !Array.isArray(data.result)) return NextResponse.json({ holders: [], debug: JSON.stringify(data).slice(0, 200) });
       const total = data.result.reduce((s: number, h: any) => s + Number(h.balance_formatted || h.balance), 0) || 1;
+
+      const holderAddresses = data.result.slice(0, 50).map((h: any) => h.owner_address);
+
+      // Fetch Moralis entity labels
+      const identities = await getEVMIdentities(holderAddresses, chain);
+
       const holders = data.result.slice(0, 50).map((h: any, i: number) => {
         const balance = Number(h.balance_formatted || h.balance);
+        const addr = h.owner_address;
+        const identity = identities[addr.toLowerCase()];
+        // Moralis also provides address_label in some endpoints
+        const moralisLabel = h.owner_address_label || null;
         return {
-          address: h.owner_address,
+          address: addr,
           balance: Number(h.balance),
           balanceFormatted: balance,
           usdValue: balance * priceData.price,
           pct: (balance / total) * 100,
           rank: i + 1,
+          label: identity?.name || moralisLabel || null,
+          labelType: identity?.category || null,
         };
       });
       return NextResponse.json({ holders, price: priceData.price, symbol: priceData.symbol, name: priceData.name, logo: priceData.logo });

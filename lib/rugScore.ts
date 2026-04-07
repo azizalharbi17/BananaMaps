@@ -8,14 +8,18 @@ export interface RugScoreResult {
 }
 
 export function calculateRugScore(
-  holders: { pct: number; cluster?: number; address?: string }[],
+  holders: { pct: number; cluster?: number; address?: string; isLabeledExchange?: boolean }[],
   clusterCount: number,
   chain: string = "eth"
 ): RugScoreResult {
   if (!holders.length) return { score: 0, label: "No Data", color: "#666", factors: [] };
 
-  // Filter out known exchanges and burn addresses
-  const realHolders = holders.filter(h => !h.address || !isExchange(h.address, chain));
+  // Filter out known exchanges (hardcoded + API-labeled)
+  const realHolders = holders.filter(h => {
+    if (h.isLabeledExchange) return false;
+    if (h.address && isExchange(h.address, chain)) return false;
+    return true;
+  });
   const exchangeCount = holders.length - realHolders.length;
 
   const factors: { name: string; score: number; weight: number; detail: string }[] = [];
@@ -39,7 +43,7 @@ export function calculateRugScore(
   else if (top10 > 40) top10Score = 50;
   else if (top10 > 25) top10Score = 75;
   else top10Score = 95;
-  factors.push({ name: "Top 10 Concentration", score: top10Score, weight: 25, detail: `${top10.toFixed(1)}% held by top 10 (excl. exchanges)` });
+  factors.push({ name: "Top 10 Concentration", score: top10Score, weight: 25, detail: `${top10.toFixed(1)}% held by top 10 (excl. ${exchangeCount} exchange${exchangeCount !== 1 ? 's' : ''})` });
 
   // 3. Cluster suspicion (weight: 25)
   let clusterScore: number;
@@ -59,8 +63,7 @@ export function calculateRugScore(
   else if (holderCount < 100) distScore = 55;
   else if (holderCount < 200) distScore = 75;
   else distScore = 95;
-  const exchangeNote = exchangeCount > 0 ? ` (${exchangeCount} exchange${exchangeCount !== 1 ? "s" : ""} excluded)` : "";
-  factors.push({ name: "Holder Count", score: distScore, weight: 15, detail: `${holderCount} holders mapped${exchangeNote}` });
+  factors.push({ name: "Holder Count", score: distScore, weight: 15, detail: `${holderCount} holders mapped` });
 
   // 5. Distribution evenness (weight: 10)
   const top5 = realHolders.slice(0, 5).reduce((s, h) => s + h.pct, 0);
@@ -74,16 +77,15 @@ export function calculateRugScore(
   else evenScore = 90;
   factors.push({ name: "Distribution", score: evenScore, weight: 10, detail: `Top 5 hold ${top5.toFixed(1)}%` });
 
-  // Weighted average
   const totalWeight = factors.reduce((s, f) => s + f.weight, 0);
   const score = Math.round(factors.reduce((s, f) => s + f.score * f.weight, 0) / totalWeight);
 
-  let label: string;
+  let labelText: string;
   let color: string;
-  if (score >= 80) { label = "Low Risk"; color = "#2EE89A"; }
-  else if (score >= 50) { label = "Medium Risk"; color = "#EAB308"; }
-  else if (score >= 25) { label = "High Risk"; color = "#F97316"; }
-  else { label = "Very High Risk"; color = "#EF4444"; }
+  if (score >= 80) { labelText = "Low Risk"; color = "#2EE89A"; }
+  else if (score >= 50) { labelText = "Medium Risk"; color = "#EAB308"; }
+  else if (score >= 25) { labelText = "High Risk"; color = "#F97316"; }
+  else { labelText = "Very High Risk"; color = "#EF4444"; }
 
-  return { score, label, color, factors };
+  return { score, label: labelText, color, factors };
 }
