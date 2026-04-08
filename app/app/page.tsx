@@ -504,7 +504,7 @@ function AppContent() {
                   <div style={{ fontSize:28 }}>🍌</div><div style={{ fontSize:11 }}>Select a token</div>
                 </div>
               ):bubblesRef.current.map((h,i)=>(
-                <div key={h.address} onClick={()=>{selectedRef.current=i;setSelected(h);}} onMouseEnter={()=>{hoveredRef.current=i;}} onMouseLeave={()=>{hoveredRef.current=-1;}}
+                <div key={h.address} onClick={()=>{selectedRef.current=i;setSelected(h);const rect=canvasRef.current?.getBoundingClientRect();if(rect){setSelectedPos({x:rect.left+offsetRef.current.x+(h.x||0)*scaleRef.current,y:rect.top+offsetRef.current.y+(h.y||0)*scaleRef.current});}}} onMouseEnter={()=>{hoveredRef.current=i;}} onMouseLeave={()=>{hoveredRef.current=-1;}}
                   style={{ padding:'8px 14px',borderBottom:'1px solid rgba(245,200,66,0.05)',display:'flex',alignItems:'center',gap:8,cursor:'pointer',background:selectedRef.current===i?'rgba(245,200,66,0.04)':'transparent' }}>
                   <div style={{ width:20,height:20,borderRadius:'50%',background:h.cluster!==undefined?CLUSTER_COLORS[h.cluster%CLUSTER_COLORS.length]+'15':'rgba(245,200,66,0.06)',border:`1.5px solid ${h.cluster!==undefined?CLUSTER_COLORS[h.cluster%CLUSTER_COLORS.length]:'rgba(245,200,66,0.25)'}`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:8,fontWeight:700,color:h.cluster!==undefined?CLUSTER_COLORS[h.cluster%CLUSTER_COLORS.length]:'rgba(150,160,200,0.6)',flexShrink:0 }}>{h.rank}</div>
                   <div style={{ flex:1,minWidth:0 }}>
@@ -531,7 +531,7 @@ function AppContent() {
               </div>
               <div style={{ overflowY:'auto',flex:1 }}>
                 {bubblesRef.current.map((h,i)=>(
-                  <div key={h.address} onClick={()=>{selectedRef.current=i;setSelected(h);setShowList(false);setSelectedPos({x:window.innerWidth/2,y:window.innerHeight/2});}}
+                  <div key={h.address} onClick={()=>{selectedRef.current=i;setSelected(h);setShowList(false);const rect=canvasRef.current?.getBoundingClientRect();if(rect){setSelectedPos({x:rect.left+offsetRef.current.x+(h.x||0)*scaleRef.current,y:rect.top+offsetRef.current.y+(h.y||0)*scaleRef.current});}else{setSelectedPos({x:window.innerWidth/2,y:window.innerHeight/2});}}}
                     style={{ padding:'10px 16px',borderBottom:'1px solid rgba(245,200,66,0.05)',display:'flex',alignItems:'center',gap:10 }}>
                     <div style={{ width:22,height:22,borderRadius:'50%',background:h.cluster!==undefined?CLUSTER_COLORS[h.cluster%CLUSTER_COLORS.length]+'15':'rgba(245,200,66,0.06)',border:`1.5px solid ${h.cluster!==undefined?CLUSTER_COLORS[h.cluster%CLUSTER_COLORS.length]:'rgba(245,200,66,0.25)'}`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:9,fontWeight:700,color:h.cluster!==undefined?CLUSTER_COLORS[h.cluster%CLUSTER_COLORS.length]:'rgba(150,160,200,0.6)',flexShrink:0 }}>{h.rank}</div>
                     <div style={{ flex:1,minWidth:0 }}>
