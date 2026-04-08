@@ -98,34 +98,41 @@ export function applyForces(bubbles: Holder[], width: number, height: number): H
     fx += (cx - ax) * 0.00015;
     fy += (cy - ay) * 0.00015;
 
-    // Same cluster attraction — pull connected wallets toward each other
+    // Same cluster attraction — strong pull so connected wallets clump tightly
     if (a.cluster !== undefined) {
       for (let j = 0; j < arr.length; j++) {
         if (i === j || arr[j].cluster !== a.cluster) continue;
         const dx = (arr[j].x || 0) - ax, dy = (arr[j].y || 0) - ay;
         const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-        const target = (a.radius || 10) + (arr[j].radius || 10) + 35;
+        const target = (a.radius || 10) + (arr[j].radius || 10) + 15;
         if (dist > target) {
-          fx += (dx / dist) * 0.008;
-          fy += (dy / dist) * 0.008;
+          // Force scales with distance — farther apart = stronger pull
+          const pull = Math.min((dist - target) / 100, 1) * 0.06;
+          fx += (dx / dist) * pull;
+          fy += (dy / dist) * pull;
         }
       }
     }
 
-    // Bubble repulsion — strong force, no overlapping allowed
+    // Bubble repulsion — different strength for same-cluster vs different-cluster
     for (let j = 0; j < arr.length; j++) {
       if (i === j) continue;
+      const sameCluster = a.cluster !== undefined && arr[j].cluster === a.cluster;
       const dx = ax - (arr[j].x || 0), dy = ay - (arr[j].y || 0);
       const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-      const minD = (a.radius || 10) + (arr[j].radius || 10) + 32;
+      // Same-cluster: small gap (8px) but still no overlap
+      // Different-cluster: larger gap (32px) for breathing room
+      const gap = sameCluster ? 8 : 32;
+      const minD = (a.radius || 10) + (arr[j].radius || 10) + gap;
       if (dist < minD) {
         const f = (minD - dist) / minD;
-        fx += (dx / dist) * f * 1.2;
-        fy += (dy / dist) * f * 1.2;
+        const strength = sameCluster ? 0.8 : 1.2;
+        fx += (dx / dist) * f * strength;
+        fy += (dy / dist) * f * strength;
       }
     }
 
-    // Cross-group repulsion
+    // Cross-group repulsion — push different clusters apart
     if (a.cluster !== undefined) {
       for (let j = 0; j < arr.length; j++) {
         if (i === j || arr[j].cluster === a.cluster) continue;
