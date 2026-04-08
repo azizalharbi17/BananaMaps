@@ -131,12 +131,16 @@ async function getSolanaHolders(mintAddress: string): Promise<{ holders: any[]; 
 }
 
 // Check for native token transfers between top holder wallets (EVM)
-async function getEvmConnections(holders: { address: string }[], chainId: string): Promise<Connection[]> {
+// Also extracts entity labels from Moralis transaction enrichment
+async function getEvmConnections(
+  holders: { address: string }[], chainId: string
+): Promise<{ connections: Connection[]; enrichedLabels: Record<string, string> }> {
   const addrToIdx = new Map<string, number>();
   holders.forEach((h, i) => addrToIdx.set(h.address.toLowerCase(), i));
 
   const toCheck = holders.slice(0, CONNECTION_CHECK_LIMIT);
   const directedEdges = new Set<string>();
+  const enrichedLabels: Record<string, string> = {};
 
   // Process in batches of 10 concurrent requests
   for (let i = 0; i < toCheck.length; i += 10) {
@@ -153,6 +157,13 @@ async function getEvmConnections(holders: { address: string }[], chainId: string
           const from = tx.from_address?.toLowerCase();
           const to = tx.to_address?.toLowerCase();
           if (!from || !to) continue;
+          // Extract entity labels from enriched transaction data
+          if (tx.from_address_entity && from && addrToIdx.has(from)) {
+            enrichedLabels[from] = tx.from_address_entity;
+          }
+          if (tx.to_address_entity && to && addrToIdx.has(to)) {
+            enrichedLabels[to] = tx.to_address_entity;
+          }
           const fi = addrToIdx.get(from);
           const ti = addrToIdx.get(to);
           if (fi !== undefined && ti !== undefined && fi !== ti) {
@@ -174,7 +185,7 @@ async function getEvmConnections(holders: { address: string }[], chainId: string
     const reverse = `${b}-${a}`;
     connections.push({ from: a, to: b, bidirectional: directedEdges.has(reverse) });
   }
-  return connections;
+  return { connections, enrichedLabels };
 }
 
 // Check for SOL transfers between top Solana holder wallets via Helius enhanced transactions
@@ -375,7 +386,17 @@ export async function GET(req: NextRequest) {
         .filter(h => h.pct >= MIN_PCT)
         .slice(0, HOLDER_LIMIT)
         .map((h, i) => ({ ...h, rank: i + 1 }));
-      const connections = await getEvmConnections(holders, moralisChain);
+      const { connections, enrichedLabels: evmLabels } = await getEvmConnections(holders, moralisChain);
+      // Apply enriched entity labels from transaction data to unlabeled holders
+      for (const h of holders) {
+        if (!h.label) {
+          const entityName = evmLabels[h.address.toLowerCase()];
+          if (entityName) {
+            h.label = entityName;
+            h.labelType = 'entity';
+          }
+        }
+      }
       return NextResponse.json({ holders, connections, price: priceData.price, symbol: priceData.symbol, name: priceData.name, logo: priceData.logo });
     }
   } catch (e) {
