@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useRef, useState, Suspense, useCallback } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { Holder, initBubbles, detectClusters, applyForces, drawBubbles, CLUSTER_COLORS } from '@/lib/bubbleEngine';
+import { Holder, Connection, initBubbles, detectClusters, applyForces, drawBubbles, CLUSTER_COLORS } from '@/lib/bubbleEngine';
 import { calculateRugScore, RugScoreResult } from '@/lib/rugScore';
 import { getExchangeInfo } from '@/lib/exchanges';
 import { supabase } from '@/lib/supabase';
@@ -35,6 +35,7 @@ function AppContent() {
   const dragStartRef = useRef({ x: 0, y: 0 });
   const hasDraggedRef = useRef(false);
   const worldSizeRef = useRef({ w: 1200, h: 800 });
+  const connectionsRef = useRef<Connection[]>([]);
 
   // Check auth state
   useEffect(() => {
@@ -96,7 +97,7 @@ function AppContent() {
       ctx.save();
       ctx.translate(offsetRef.current.x, offsetRef.current.y);
       ctx.scale(scaleRef.current, scaleRef.current);
-      drawBubbles(ctx, bubblesRef.current, w, h, hoveredRef.current, selectedRef.current);
+      drawBubbles(ctx, bubblesRef.current, w, h, hoveredRef.current, selectedRef.current, connectionsRef.current);
       ctx.restore();
       animRef.current = requestAnimationFrame(loop);
     };
@@ -123,7 +124,9 @@ function AppContent() {
       canvas.height = canvas.offsetHeight;
       const w = canvas.offsetWidth, h = canvas.offsetHeight;
       worldSizeRef.current = { w, h };
-      const clustered = detectClusters(initBubbles(holders, w, h));
+      const connections: Connection[] = data.connections || [];
+      connectionsRef.current = connections;
+      const clustered = detectClusters(initBubbles(holders, w, h), connections);
       bubblesRef.current = clustered;
       autoFit(clustered, w, h);
       setChain(detectedChain);
