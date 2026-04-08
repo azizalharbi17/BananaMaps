@@ -9,7 +9,8 @@ const MORALIS_SOL_BASE = 'https://solana-gateway.moralis.io/token/mainnet';
 const HOLDER_LIMIT = 150;
 const FETCH_LIMIT = 500;
 const MIN_PCT = 0.001; // Filter out holders below 0.001% of supply
-const CONNECTION_CHECK_LIMIT = 50; // Check top N holders for on-chain transfers
+const CONNECTION_CHECK_LIMIT = 50; // Check top N EVM holders for on-chain transfers
+const SOL_CONNECTION_CHECK_LIMIT = 30; // Check top N Solana holders
 
 interface Connection { from: number; to: number; bidirectional: boolean; }
 
@@ -176,8 +177,71 @@ async function getEvmConnections(holders: { address: string }[], chainId: string
   return connections;
 }
 
-async function getSolanaConnections(): Promise<Connection[]> {
-  return [];
+// Check for SOL transfers between top Solana holder wallets via Helius enhanced transactions
+async function getSolanaConnections(
+  holders: { address: string; label?: string | null; labelType?: string | null }[]
+): Promise<{ connections: Connection[]; enrichedLabels: Record<string, { name: string; category: string }> }> {
+  const addrToIdx = new Map<string, number>();
+  holders.forEach((h, i) => addrToIdx.set(h.address, i));
+
+  const toCheck = holders.slice(0, SOL_CONNECTION_CHECK_LIMIT);
+  const directedEdges = new Set<string>();
+  const enrichedLabels: Record<string, { name: string; category: string }> = {};
+
+  // Process in batches of 10 concurrent requests
+  for (let i = 0; i < toCheck.length; i += 10) {
+    const batch = toCheck.slice(i, i + 10);
+    await Promise.all(batch.map(async (h) => {
+      try {
+        const res = await fetch(
+          `https://api.helius.xyz/v0/addresses/${h.address}/transactions?api-key=${HELIUS_KEY}&limit=50`
+        );
+        if (!res.ok) return;
+        const txns = await res.json();
+        if (!Array.isArray(txns)) return;
+        for (const tx of txns) {
+          // Check native SOL transfers
+          for (const nt of tx.nativeTransfers || []) {
+            const from = nt.fromUserAccount;
+            const to = nt.toUserAccount;
+            if (!from || !to || from === to) continue;
+            // Only keep if amount > 0 (skip fee dust)
+            if ((nt.amount || 0) <= 0) continue;
+            const fi = addrToIdx.get(from);
+            const ti = addrToIdx.get(to);
+            if (fi !== undefined && ti !== undefined && fi !== ti) {
+              directedEdges.add(`${fi}-${ti}`);
+            }
+          }
+
+          // Also check if source labels give us exchange info
+          if (tx.source && tx.feePayer) {
+            const fp = tx.feePayer;
+            const idx = addrToIdx.get(fp);
+            if (idx !== undefined && !holders[idx].label) {
+              const src = tx.source as string;
+              if (src && src !== 'UNKNOWN' && src !== 'SYSTEM_PROGRAM') {
+                enrichedLabels[fp] = { name: src, category: 'DEX' };
+              }
+            }
+          }
+        }
+      } catch {}
+    }));
+  }
+
+  // Deduplicate: if both A→B and B→A exist, emit one bidirectional connection
+  const connections: Connection[] = [];
+  const emitted = new Set<string>();
+  for (const edge of directedEdges) {
+    const [a, b] = edge.split('-').map(Number);
+    const canonical = Math.min(a, b) + '-' + Math.max(a, b);
+    if (emitted.has(canonical)) continue;
+    emitted.add(canonical);
+    const reverse = `${b}-${a}`;
+    connections.push({ from: a, to: b, bidirectional: directedEdges.has(reverse) });
+  }
+  return { connections, enrichedLabels };
 }
 
 export async function GET(req: NextRequest) {
@@ -256,7 +320,14 @@ export async function GET(req: NextRequest) {
         })
         .slice(0, HOLDER_LIMIT)
         .map((h, i) => ({ ...h, rank: i + 1 }));
-      const connections = await getSolanaConnections();
+      const { connections, enrichedLabels } = await getSolanaConnections(holders);
+      // Apply any enriched labels from transaction data
+      for (const h of holders) {
+        if (!h.label && enrichedLabels[h.address]) {
+          h.label = enrichedLabels[h.address].name;
+          h.labelType = enrichedLabels[h.address].category;
+        }
+      }
       return NextResponse.json({ holders, connections, price: priceData.price, symbol: priceData.symbol, name: priceData.name, logo: priceData.logo });
 
     } else {
