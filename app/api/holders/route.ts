@@ -14,7 +14,7 @@ async function getTokenPrice(address: string, chain: string): Promise<{ price: n
   try {
     if (chain === 'sol') {
       const [priceRes, assetRes] = await Promise.all([
-        fetch(`https://api.jup.ag/price/v2?ids=${address}`),
+        fetch(`https://api.jup.ag/price/v3?ids=${address}`),
         fetch(HELIUS_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -27,7 +27,7 @@ async function getTokenPrice(address: string, chain: string): Promise<{ price: n
       const logo = content?.files?.[0]?.cdn_uri || content?.links?.image || '';
       const meta = content?.metadata || {};
       return {
-        price: Number(priceData.data?.[address]?.price || assetData.result?.token_info?.price_info?.price_per_token || 0),
+        price: Number(priceData[address]?.usdPrice || assetData.result?.token_info?.price_info?.price_per_token || 0),
         symbol: meta.symbol || '',
         name: meta.name || '',
         logo,
