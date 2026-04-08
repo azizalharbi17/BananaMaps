@@ -16,6 +16,11 @@ export interface Holder {
   radius?: number;
 }
 
+export interface Connection {
+  from: number; // index into holders array (sender)
+  to: number;   // index into holders array (receiver)
+}
+
 export function initBubbles(holders: Holder[], width: number, height: number): Holder[] {
   const maxPct = holders[0]?.pct || 1;
   const minR = 6, maxR = 60;
@@ -35,21 +40,47 @@ export function initBubbles(holders: Holder[], width: number, height: number): H
   });
 }
 
-export function detectClusters(holders: Holder[]): Holder[] {
-  // Assign colors by grouping wallets with similar holdings
-  // This is visual grouping only — not claiming real on-chain connections
-  const result = holders.map(h => ({ ...h, cluster: undefined as number | undefined }));
-  
-  // Group into color bands by holding size
-  result.forEach((h, i) => {
-    if (h.pct >= 10) h.cluster = 0;        // Whales
-    else if (h.pct >= 5) h.cluster = 1;     // Large holders
-    else if (h.pct >= 2) h.cluster = 2;     // Medium holders
-    else if (h.pct >= 1) h.cluster = 3;     // Small-medium
-    else if (h.pct >= 0.5) h.cluster = 4;   // Small
-    else if (h.pct >= 0.1) h.cluster = 5;   // Micro
-    else h.cluster = 6;                      // Dust
-  });
+export function detectClusters(holders: Holder[], connections: Connection[]): Holder[] {
+  const n = holders.length;
+  const result = holders.map(h => ({ ...h, cluster: undefined as number | undefined, connections: [] as number[] }));
+
+  if (!connections.length) return result;
+
+  // Union-Find
+  const parent = Array.from({ length: n }, (_, i) => i);
+  const ufRank = new Array(n).fill(0);
+  function find(x: number): number {
+    if (parent[x] !== x) parent[x] = find(parent[x]);
+    return parent[x];
+  }
+  function union(a: number, b: number) {
+    const ra = find(a), rb = find(b);
+    if (ra === rb) return;
+    if (ufRank[ra] < ufRank[rb]) parent[ra] = rb;
+    else if (ufRank[ra] > ufRank[rb]) parent[rb] = ra;
+    else { parent[rb] = ra; ufRank[ra]++; }
+  }
+
+  // Track which holder indices appear in any connection
+  const connected = new Set<number>();
+  for (const c of connections) {
+    if (c.from >= 0 && c.from < n && c.to >= 0 && c.to < n && c.from !== c.to) {
+      union(c.from, c.to);
+      connected.add(c.from);
+      connected.add(c.to);
+      result[c.from].connections!.push(c.to);
+      result[c.to].connections!.push(c.from);
+    }
+  }
+
+  // Assign cluster IDs only to connected wallets
+  const rootToCluster = new Map<number, number>();
+  let nextCluster = 0;
+  for (const idx of connected) {
+    const root = find(idx);
+    if (!rootToCluster.has(root)) rootToCluster.set(root, nextCluster++);
+    result[idx].cluster = rootToCluster.get(root);
+  }
 
   return result;
 }
@@ -134,7 +165,8 @@ function drawArrow(ctx: CanvasRenderingContext2D, x1: number, y1: number, x2: nu
 
 export function drawBubbles(
   ctx: CanvasRenderingContext2D, bubbles: Holder[],
-  width: number, height: number, hoveredIndex: number, selectedIndex: number
+  width: number, height: number, hoveredIndex: number, selectedIndex: number,
+  connections?: Connection[]
 ) {
   ctx.clearRect(0, 0, width, height);
   const bg = ctx.createRadialGradient(width/2, height/2, 0, width/2, height/2, Math.max(width, height) * 0.8);
@@ -148,27 +180,26 @@ export function drawBubbles(
     ctx.fillStyle = `rgba(245,200,66,${0.015+(i%5)*0.008})`; ctx.fill();
   }
 
-  // Draw connections within groups
-  const groups: Record<number, Holder[]> = {};
-  bubbles.forEach(b => {
-    if (b.cluster !== undefined) {
-      if (!groups[b.cluster]) groups[b.cluster] = [];
-      groups[b.cluster].push(b);
-    }
-  });
-  Object.entries(groups).forEach(([id, group]) => {
-    const color = CLUSTER_COLORS[Number(id) % CLUSTER_COLORS.length];
-    const hub = group.reduce((a, b) => a.balance > b.balance ? a : b);
-    group.forEach(m => {
-      if (m === hub) return;
-      const x1 = hub.x || 0, y1 = hub.y || 0, x2 = m.x || 0, y2 = m.y || 0;
-      const dx = x2 - x1, dy = y2 - y1, dist = Math.sqrt(dx * dx + dy * dy) || 1;
-      if (dist > 200) return;
+  // Draw arrows for real on-chain connections (sender → receiver)
+  if (connections && connections.length > 0) {
+    for (const conn of connections) {
+      const sender = bubbles[conn.from];
+      const receiver = bubbles[conn.to];
+      if (!sender || !receiver) continue;
+      const x1 = sender.x || 0, y1 = sender.y || 0;
+      const x2 = receiver.x || 0, y2 = receiver.y || 0;
+      const dx = x2 - x1, dy = y2 - y1;
+      const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+      if (dist > 300) continue;
       const nx = dx / dist, ny = dy / dist;
-      const r1 = (hub.radius || 10) + 1, r2 = (m.radius || 10) + 1;
+      const r1 = (sender.radius || 10) + 1;
+      const r2 = (receiver.radius || 10) + 1;
+      const color = sender.cluster !== undefined
+        ? CLUSTER_COLORS[sender.cluster % CLUSTER_COLORS.length]
+        : 'rgba(160,170,200,0.5)';
       drawArrow(ctx, x1 + nx * r1, y1 + ny * r1, x2 - nx * r2, y2 - ny * r2, color);
-    });
-  });
+    }
+  }
 
   // Draw bubbles
   bubbles.forEach((b, i) => {

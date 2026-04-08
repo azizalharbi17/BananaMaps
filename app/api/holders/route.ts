@@ -9,6 +9,9 @@ const MORALIS_SOL_BASE = 'https://solana-gateway.moralis.io/token/mainnet';
 const HOLDER_LIMIT = 150;
 const FETCH_LIMIT = 500;
 const MIN_PCT = 0.001; // Filter out holders below 0.001% of supply
+const CONNECTION_CHECK_LIMIT = 50; // Check top N holders for on-chain transfers
+
+interface Connection { from: number; to: number; }
 
 async function getTokenPrice(address: string, chain: string): Promise<{ price: number; symbol: string; name: string; logo: string }> {
   try {
@@ -126,6 +129,50 @@ async function getSolanaHolders(mintAddress: string): Promise<{ holders: any[]; 
   return { holders: [], totalSupply: 0, source: 'helius' };
 }
 
+// Check for native token transfers between top holder wallets (EVM)
+async function getEvmConnections(holders: { address: string }[], chainId: string): Promise<Connection[]> {
+  const addrToIdx = new Map<string, number>();
+  holders.forEach((h, i) => addrToIdx.set(h.address.toLowerCase(), i));
+
+  const toCheck = holders.slice(0, CONNECTION_CHECK_LIMIT);
+  const seen = new Set<string>();
+  const connections: Connection[] = [];
+
+  // Process in batches of 10 concurrent requests
+  for (let i = 0; i < toCheck.length; i += 10) {
+    const batch = toCheck.slice(i, i + 10);
+    await Promise.all(batch.map(async (h) => {
+      try {
+        const res = await fetch(
+          `https://deep-index.moralis.io/api/v2.2/${h.address}?chain=${chainId}&limit=50`,
+          { headers: { 'X-API-Key': MORALIS_KEY } }
+        );
+        if (!res.ok) return;
+        const data = await res.json();
+        for (const tx of data.result || []) {
+          const from = tx.from_address?.toLowerCase();
+          const to = tx.to_address?.toLowerCase();
+          if (!from || !to) continue;
+          const fi = addrToIdx.get(from);
+          const ti = addrToIdx.get(to);
+          if (fi !== undefined && ti !== undefined && fi !== ti) {
+            const key = `${fi}-${ti}`;
+            if (!seen.has(key)) {
+              seen.add(key);
+              connections.push({ from: fi, to: ti });
+            }
+          }
+        }
+      } catch {}
+    }));
+  }
+  return connections;
+}
+
+async function getSolanaConnections(): Promise<Connection[]> {
+  return [];
+}
+
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const address = searchParams.get('address') || '';
@@ -202,7 +249,8 @@ export async function GET(req: NextRequest) {
         })
         .slice(0, HOLDER_LIMIT)
         .map((h, i) => ({ ...h, rank: i + 1 }));
-      return NextResponse.json({ holders, price: priceData.price, symbol: priceData.symbol, name: priceData.name, logo: priceData.logo });
+      const connections = await getSolanaConnections();
+      return NextResponse.json({ holders, connections, price: priceData.price, symbol: priceData.symbol, name: priceData.name, logo: priceData.logo });
 
     } else {
       // EVM chains — paginate Moralis to get more holders
@@ -249,7 +297,8 @@ export async function GET(req: NextRequest) {
         .filter(h => h.pct >= MIN_PCT)
         .slice(0, HOLDER_LIMIT)
         .map((h, i) => ({ ...h, rank: i + 1 }));
-      return NextResponse.json({ holders, price: priceData.price, symbol: priceData.symbol, name: priceData.name, logo: priceData.logo });
+      const connections = await getEvmConnections(holders, moralisChain);
+      return NextResponse.json({ holders, connections, price: priceData.price, symbol: priceData.symbol, name: priceData.name, logo: priceData.logo });
     }
   } catch (e) {
     return NextResponse.json({ holders: [], error: String(e) });
