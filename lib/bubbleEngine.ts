@@ -27,7 +27,7 @@ export function initBubbles(holders: Holder[], width: number, height: number): H
     const r = maxSpread * Math.sqrt((i + 0.5) / total);
     return {
       ...h,
-      radius: minR + (Math.sqrt(h.pct / maxPct)) * (maxR - minR),
+      radius: minR + (Math.pow(h.pct / maxPct, 0.35)) * (maxR - minR),
       x: cx + Math.cos(angle) * r,
       y: cy + Math.sin(angle) * r,
       vx: 0, vy: 0,
@@ -83,7 +83,7 @@ export function applyForces(bubbles: Holder[], width: number, height: number): H
       if (i === j) continue;
       const dx = ax - (arr[j].x || 0), dy = ay - (arr[j].y || 0);
       const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-      const minD = (a.radius || 10) + (arr[j].radius || 10) + 8;
+      const minD = (a.radius || 10) + (arr[j].radius || 10) + 18;
       if (dist < minD) {
         const f = (minD - dist) / minD;
         fx += (dx / dist) * f * 0.6;
@@ -97,8 +97,8 @@ export function applyForces(bubbles: Holder[], width: number, height: number): H
         if (i === j || arr[j].cluster === a.cluster) continue;
         const dx = ax - (arr[j].x || 0), dy = ay - (arr[j].y || 0);
         const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-        if (dist < 120) {
-          const f = (120 - dist) / 120;
+        if (dist < 200) {
+          const f = (200 - dist) / 200;
           fx += (dx / dist) * f * 0.2;
           fy += (dy / dist) * f * 0.2;
         }
@@ -124,12 +124,12 @@ function drawArrow(ctx: CanvasRenderingContext2D, x1: number, y1: number, x2: nu
   const dx = x2 - x1, dy = y2 - y1, dist = Math.sqrt(dx * dx + dy * dy) || 1;
   const nx = dx / dist, ny = dy / dist;
   ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2);
-  ctx.strokeStyle = color + '33'; ctx.lineWidth = 0.8; ctx.stroke();
-  const as = 4;
+  ctx.strokeStyle = color + '44'; ctx.lineWidth = 1.2; ctx.stroke();
+  const as = 5;
   ctx.beginPath(); ctx.moveTo(x2, y2);
   ctx.lineTo(x2 - nx * as - ny * as * 0.5, y2 - ny * as + nx * as * 0.5);
   ctx.lineTo(x2 - nx * as + ny * as * 0.5, y2 - ny * as - nx * as * 0.5);
-  ctx.closePath(); ctx.fillStyle = color + '55'; ctx.fill();
+  ctx.closePath(); ctx.fillStyle = color + '66'; ctx.fill();
 }
 
 export function drawBubbles(
@@ -163,6 +163,7 @@ export function drawBubbles(
       if (m === hub) return;
       const x1 = hub.x || 0, y1 = hub.y || 0, x2 = m.x || 0, y2 = m.y || 0;
       const dx = x2 - x1, dy = y2 - y1, dist = Math.sqrt(dx * dx + dy * dy) || 1;
+      if (dist > 200) return;
       const nx = dx / dist, ny = dy / dist;
       const r1 = (hub.radius || 10) + 1, r2 = (m.radius || 10) + 1;
       drawArrow(ctx, x1 + nx * r1, y1 + ny * r1, x2 - nx * r2, y2 - ny * r2, color);
