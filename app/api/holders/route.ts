@@ -5,6 +5,7 @@ const HELIUS_KEY = '47457a62-fd41-4fe7-991d-9ec8ed4fb6e0';
 const HELIUS_URL = `https://mainnet.helius-rpc.com/?api-key=${HELIUS_KEY}`;
 
 const MORALIS_CHAIN: Record<string, string> = { eth: '0x1', bsc: '0x38', base: '0x2105' };
+const MORALIS_SOL_BASE = 'https://solana-gateway.moralis.io/token/mainnet';
 const HOLDER_LIMIT = 150;
 const FETCH_LIMIT = 500;
 const MIN_PCT = 0.001; // Filter out holders below 0.001% of supply
@@ -50,35 +51,6 @@ async function getTokenPrice(address: string, chain: string): Promise<{ price: n
   }
 }
 
-// Resolve Solana token accounts to owner wallets (batch)
-async function resolveTokenAccountOwners(tokenAccounts: string[]): Promise<Record<string, string>> {
-  const ownerMap: Record<string, string> = {};
-  try {
-    // Process in chunks of 100 (RPC limit)
-    for (let i = 0; i < tokenAccounts.length; i += 100) {
-      const chunk = tokenAccounts.slice(i, i + 100);
-      const res = await fetch(HELIUS_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          jsonrpc: '2.0',
-          id: 1,
-          method: 'getMultipleAccounts',
-          params: [chunk, { encoding: 'jsonParsed' }],
-        }),
-      });
-      const data = await res.json();
-      const accounts = data.result?.value || [];
-      accounts.forEach((acc: any, idx: number) => {
-        if (acc?.data?.parsed?.info?.owner) {
-          ownerMap[chunk[idx]] = acc.data.parsed.info.owner;
-        }
-      });
-    }
-  } catch {}
-  return ownerMap;
-}
-
 // Helius batch identity lookup for Solana (chunks of 100)
 async function getSolanaIdentities(addresses: string[]): Promise<Record<string, { name: string; type: string; category: string }>> {
   const labels: Record<string, { name: string; type: string; category: string }> = {};
@@ -110,35 +82,32 @@ async function getSolanaIdentities(addresses: string[]): Promise<Record<string, 
   return labels;
 }
 
-// Get Solana holders using getTokenAccounts for more results
-async function getSolanaHolders(mintAddress: string): Promise<any[]> {
+// Get Solana top holders using Moralis Solana Top Holders API
+async function getSolanaHolders(mintAddress: string): Promise<{ holders: any[]; totalSupply: number; source: 'moralis' | 'helius' }> {
+  // Primary: Moralis Solana Top Holders API (paginated, up to FETCH_LIMIT)
   try {
-    // First try getTokenAccounts from Helius DAS API for more holders
-    const res = await fetch(HELIUS_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        id: 1,
-        method: 'getTokenAccounts',
-        params: { mint: mintAddress, limit: FETCH_LIMIT },
-      }),
-    });
-    const data = await res.json();
-    const accounts = data.result?.token_accounts || [];
-    if (accounts.length > 0) {
-      // Sort by amount descending
-      accounts.sort((a: any, b: any) => Number(b.amount) - Number(a.amount));
-      return accounts.slice(0, HOLDER_LIMIT).map((a: any) => ({
-        address: a.address,
-        owner: a.owner,
-        amount: a.amount,
-        decimals: a.decimals || 0,
-      }));
+    let allHolders: any[] = [];
+    let cursor: string | null = null;
+    const perPage = 100;
+    const maxPages = Math.ceil(FETCH_LIMIT / perPage);
+
+    for (let page = 0; page < maxPages; page++) {
+      const fetchUrl: string = `${MORALIS_SOL_BASE}/${mintAddress}/top-holders?limit=${perPage}${cursor ? `&cursor=${cursor}` : ''}`;
+      const res = await fetch(fetchUrl, { headers: { accept: 'application/json', 'X-API-Key': MORALIS_KEY } });
+      if (!res.ok) throw new Error(`Moralis ${res.status}`);
+      const data = await res.json();
+      if (!data.result || !Array.isArray(data.result)) break;
+      allHolders = allHolders.concat(data.result);
+      cursor = data.cursor || null;
+      if (!cursor || allHolders.length >= FETCH_LIMIT) break;
+    }
+
+    if (allHolders.length > 0) {
+      return { holders: allHolders, totalSupply: 0, source: 'moralis' };
     }
   } catch {}
 
-  // Fallback to getTokenLargestAccounts (max 20)
+  // Fallback: Helius getTokenLargestAccounts (max 20)
   try {
     const res = await fetch(HELIUS_URL, {
       method: 'POST',
@@ -146,14 +115,15 @@ async function getSolanaHolders(mintAddress: string): Promise<any[]> {
       body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'getTokenLargestAccounts', params: [mintAddress] })
     });
     const data = await res.json();
-    return (data.result?.value || []).map((a: any) => ({
+    const accounts = (data.result?.value || []).map((a: any) => ({
       address: a.address,
       owner: null,
       amount: a.amount,
       decimals: a.decimals || 0,
     }));
+    return { holders: accounts, totalSupply: 0, source: 'helius' };
   } catch {}
-  return [];
+  return { holders: [], totalSupply: 0, source: 'helius' };
 }
 
 export async function GET(req: NextRequest) {
@@ -165,47 +135,62 @@ export async function GET(req: NextRequest) {
     const pricePromise = getTokenPrice(address, chain);
 
     if (chain === 'sol') {
-      const [accounts, priceData] = await Promise.all([
+      const [solResult, priceData] = await Promise.all([
         getSolanaHolders(address),
         pricePromise,
       ]);
+
+      const { holders: accounts, source } = solResult;
 
       if (!accounts.length) {
         return NextResponse.json({ holders: [], price: 0, symbol: priceData.symbol, name: priceData.name, logo: priceData.logo });
       }
 
-      const total = accounts.reduce((s: number, a: any) => s + Number(a.amount), 0) || 1;
+      let allHoldersMapped: any[];
 
-      // If owners aren't included (fallback path), resolve them
-      const needsResolve = accounts.some((a: any) => !a.owner);
-      let ownerMap: Record<string, string> = {};
-      if (needsResolve) {
-        const tokenAddresses = accounts.map((a: any) => a.address);
-        ownerMap = await resolveTokenAccountOwners(tokenAddresses);
+      if (source === 'moralis') {
+        // Moralis returns ownerAddress, balanceFormatted, percentageRelativeToTotalSupply, usdValue
+        allHoldersMapped = accounts.map((h: any) => ({
+          address: h.ownerAddress,
+          balance: Number(h.balance),
+          balanceFormatted: Number(h.balanceFormatted),
+          usdValue: Number(h.usdValue || 0) || Number(h.balanceFormatted) * priceData.price,
+          pct: h.percentageRelativeToTotalSupply ?? 0,
+          rank: 0,
+          label: null,
+          labelType: null,
+        }));
+      } else {
+        // Helius fallback — raw token accounts without owner resolution
+        const total = accounts.reduce((s: number, a: any) => s + Number(a.amount), 0) || 1;
+        allHoldersMapped = accounts.map((a: any) => {
+          const rawBalance = Number(a.amount);
+          const decimals = a.decimals || 6;
+          const balance = rawBalance / Math.pow(10, decimals);
+          return {
+            address: a.address,
+            balance: rawBalance,
+            balanceFormatted: balance,
+            usdValue: balance * priceData.price,
+            pct: (rawBalance / total) * 100,
+            rank: 0,
+            label: null,
+            labelType: null,
+          };
+        });
       }
 
-      // Get unique owner addresses
-      const ownerAddresses = [...new Set(accounts.map((a: any) => a.owner || ownerMap[a.address] || a.address))];
+      // Helius identity lookup for wallet labels
+      const ownerAddresses = Array.from(new Set(allHoldersMapped.map((h: any) => h.address)));
       const identities = await getSolanaIdentities(ownerAddresses);
+      for (const h of allHoldersMapped) {
+        const identity = identities[h.address];
+        if (identity) {
+          h.label = identity.name;
+          h.labelType = identity.category;
+        }
+      }
 
-      const allHoldersMapped = accounts.map((a: any) => {
-        const rawBalance = Number(a.amount);
-        const decimals = a.decimals || 6;
-        const balance = rawBalance / Math.pow(10, decimals);
-        const ownerAddress = a.owner || ownerMap[a.address] || a.address;
-        const identity = identities[ownerAddress];
-        return {
-          address: ownerAddress,
-          tokenAccount: a.address,
-          balance: rawBalance,
-          balanceFormatted: balance,
-          usdValue: balance * priceData.price,
-          pct: (rawBalance / total) * 100,
-          rank: 0,
-          label: identity?.name || null,
-          labelType: identity?.category || null,
-        };
-      });
       // Filter dust, dedupe by owner, take top HOLDER_LIMIT
       const seen = new Set<string>();
       const holders = allHoldersMapped
