@@ -11,7 +11,7 @@ const FETCH_LIMIT = 500;
 const MIN_PCT = 0.001; // Filter out holders below 0.001% of supply
 const CONNECTION_CHECK_LIMIT = 50; // Check top N holders for on-chain transfers
 
-interface Connection { from: number; to: number; }
+interface Connection { from: number; to: number; bidirectional: boolean; }
 
 async function getTokenPrice(address: string, chain: string): Promise<{ price: number; symbol: string; name: string; logo: string }> {
   try {
@@ -135,8 +135,7 @@ async function getEvmConnections(holders: { address: string }[], chainId: string
   holders.forEach((h, i) => addrToIdx.set(h.address.toLowerCase(), i));
 
   const toCheck = holders.slice(0, CONNECTION_CHECK_LIMIT);
-  const seen = new Set<string>();
-  const connections: Connection[] = [];
+  const directedEdges = new Set<string>();
 
   // Process in batches of 10 concurrent requests
   for (let i = 0; i < toCheck.length; i += 10) {
@@ -156,15 +155,23 @@ async function getEvmConnections(holders: { address: string }[], chainId: string
           const fi = addrToIdx.get(from);
           const ti = addrToIdx.get(to);
           if (fi !== undefined && ti !== undefined && fi !== ti) {
-            const key = `${fi}-${ti}`;
-            if (!seen.has(key)) {
-              seen.add(key);
-              connections.push({ from: fi, to: ti });
-            }
+            directedEdges.add(`${fi}-${ti}`);
           }
         }
       } catch {}
     }));
+  }
+
+  // Deduplicate: if both A→B and B→A exist, emit one bidirectional connection
+  const connections: Connection[] = [];
+  const emitted = new Set<string>();
+  for (const edge of directedEdges) {
+    const [a, b] = edge.split('-').map(Number);
+    const canonical = Math.min(a, b) + '-' + Math.max(a, b);
+    if (emitted.has(canonical)) continue;
+    emitted.add(canonical);
+    const reverse = `${b}-${a}`;
+    connections.push({ from: a, to: b, bidirectional: directedEdges.has(reverse) });
   }
   return connections;
 }
