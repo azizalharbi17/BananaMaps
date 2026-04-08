@@ -112,16 +112,16 @@ export function applyForces(bubbles: Holder[], width: number, height: number): H
       }
     }
 
-    // Bubble repulsion — generous spacing
+    // Bubble repulsion — strong force, no overlapping allowed
     for (let j = 0; j < arr.length; j++) {
       if (i === j) continue;
       const dx = ax - (arr[j].x || 0), dy = ay - (arr[j].y || 0);
       const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-      const minD = (a.radius || 10) + (arr[j].radius || 10) + 28;
+      const minD = (a.radius || 10) + (arr[j].radius || 10) + 32;
       if (dist < minD) {
         const f = (minD - dist) / minD;
-        fx += (dx / dist) * f * 0.6;
-        fy += (dy / dist) * f * 0.6;
+        fx += (dx / dist) * f * 1.2;
+        fy += (dy / dist) * f * 1.2;
       }
     }
 
@@ -157,22 +157,26 @@ export const CLUSTER_COLORS = ['#a855f7','#14b8a6','#f97316','#ec4899','#3b82f6'
 function drawConnection(
   ctx: CanvasRenderingContext2D,
   x1: number, y1: number, x2: number, y2: number,
-  color: string, bidirectional: boolean
+  color: string
 ) {
+  const dx = x2 - x1, dy = y2 - y1, dist = Math.sqrt(dx * dx + dy * dy) || 1;
+  const nx = dx / dist, ny = dy / dist;
+  // Solid line
   ctx.beginPath();
   ctx.moveTo(x1, y1);
   ctx.lineTo(x2, y2);
-  if (bidirectional) {
-    ctx.strokeStyle = color + '55';
-    ctx.lineWidth = 1;
-    ctx.setLineDash([]);
-  } else {
-    ctx.strokeStyle = color + '44';
-    ctx.lineWidth = 0.8;
-    ctx.setLineDash([4, 4]);
-  }
+  ctx.strokeStyle = color + '88';
+  ctx.lineWidth = 1.5;
   ctx.stroke();
-  ctx.setLineDash([]);
+  // Small arrow tip at the receiver end
+  const as = 5;
+  ctx.beginPath();
+  ctx.moveTo(x2, y2);
+  ctx.lineTo(x2 - nx * as - ny * as * 0.5, y2 - ny * as + nx * as * 0.5);
+  ctx.lineTo(x2 - nx * as + ny * as * 0.5, y2 - ny * as - nx * as * 0.5);
+  ctx.closePath();
+  ctx.fillStyle = color + '99';
+  ctx.fill();
 }
 
 export function drawBubbles(
@@ -208,7 +212,7 @@ export function drawBubbles(
       const color = a.cluster !== undefined
         ? CLUSTER_COLORS[a.cluster % CLUSTER_COLORS.length]
         : 'rgba(160,170,200,0.5)';
-      drawConnection(ctx, x1 + nx * r1, y1 + ny * r1, x2 - nx * r2, y2 - ny * r2, color, !!conn.bidirectional);
+      drawConnection(ctx, x1 + nx * r1, y1 + ny * r1, x2 - nx * r2, y2 - ny * r2, color);
     }
   }
 
@@ -257,7 +261,7 @@ export function drawBubbles(
 
     // Exchange / entity label on bubble
     const label = b.label;
-    if (label && r >= 14) {
+    if (label && r >= 25) {
       const fontSize = Math.max(7, Math.min(r * 0.38, 14));
       ctx.font = `600 ${fontSize}px -apple-system, BlinkMacSystemFont, sans-serif`;
       ctx.textAlign = 'center';
