@@ -1,258 +1,61 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const MORALIS_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJub25jZSI6IjViZDYwYzFmLTZiM2YtNGRjMi05MmI5LTRhMmM3ZDhjODZkZCIsIm9yZ0lkIjoiNTA0OTU3IiwidXNlcklkIjoiNTE5NTc2IiwidHlwZUlkIjoiMzFkZThkMTgtY2Y2My00NzEyLWI1MjYtNzhjY2E1ZDU1ZGViIiwidHlwZSI6IlBST0pFQ1QiLCJpYXQiOjE3NzMyODg3NjIsImV4cCI6NDkyOTA0ODc2Mn0.RfKSauIp7N0FUQWpLBJ0L_Q7Qu7T6lle7i_VpiAtzpM';
-const HELIUS_KEY = '47457a62-fd41-4fe7-991d-9ec8ed4fb6e0';
+const MORALIS_KEY = process.env.MORALIS_API_KEY!;
+const HELIUS_KEY = process.env.HELIUS_API_KEY!;
 const HELIUS_URL = `https://mainnet.helius-rpc.com/?api-key=${HELIUS_KEY}`;
 
 const MORALIS_CHAIN: Record<string, string> = { eth: '0x1', bsc: '0x38', base: '0x2105' };
-const MORALIS_SOL_BASE = 'https://solana-gateway.moralis.io/token/mainnet';
-const HOLDER_LIMIT = 150;
-const FETCH_LIMIT = 500;
-const MIN_PCT = 0.001; // Filter out holders below 0.001% of supply
-const CONNECTION_CHECK_LIMIT = 50; // Check top N EVM holders for on-chain transfers
-const SOL_CONNECTION_CHECK_LIMIT = 30; // Check top N Solana holders
 
-interface Connection { from: number; to: number; bidirectional: boolean; }
-
-async function getTokenPrice(address: string, chain: string): Promise<{ price: number; symbol: string; name: string; logo: string }> {
-  try {
-    if (chain === 'sol') {
-      const [priceRes, assetRes] = await Promise.all([
-        fetch(`https://api.jup.ag/price/v3?ids=${address}`),
-        fetch(HELIUS_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'getAsset', params: { id: address } })
-        }),
-      ]);
-      const priceData = await priceRes.json();
-      const assetData = await assetRes.json();
-      const content = assetData.result?.content;
-      const logo = content?.files?.[0]?.cdn_uri || content?.links?.image || '';
-      const meta = content?.metadata || {};
-      return {
-        price: Number(priceData[address]?.usdPrice || assetData.result?.token_info?.price_info?.price_per_token || 0),
-        symbol: meta.symbol || '',
-        name: meta.name || '',
-        logo,
-      };
-    } else {
-      const chainId = MORALIS_CHAIN[chain] || '0x1';
-      const res = await fetch(
-        `https://deep-index.moralis.io/api/v2.2/erc20/${address}/price?chain=${chainId}`,
-        { headers: { 'X-API-Key': MORALIS_KEY } }
-      );
-      const data = await res.json();
-      return {
-        price: data.usdPrice || 0,
-        symbol: data.tokenSymbol || '',
-        name: data.tokenName || '',
-        logo: data.tokenLogo || '',
-      };
-    }
-  } catch {
-    return { price: 0, symbol: '', name: '', logo: '' };
-  }
-}
-
-// Helius batch identity lookup for Solana (chunks of 100)
-async function getSolanaIdentities(addresses: string[]): Promise<Record<string, { name: string; type: string; category: string }>> {
-  const labels: Record<string, { name: string; type: string; category: string }> = {};
-  if (!addresses.length) return labels;
-  try {
-    for (let i = 0; i < addresses.length; i += 100) {
-      const chunk = addresses.slice(i, i + 100);
-      const res = await fetch(`https://api.helius.xyz/v1/wallet/batch-identity?api-key=${HELIUS_KEY}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ addresses: chunk }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (Array.isArray(data)) {
-          for (const item of data) {
-            if (item.address && item.name) {
-              labels[item.address] = {
-                name: item.name,
-                type: item.type || '',
-                category: item.category || '',
-              };
-            }
-          }
-        }
-      }
-    }
-  } catch {}
-  return labels;
-}
-
-// Get Solana top holders using Moralis Solana Top Holders API
-async function getSolanaHolders(mintAddress: string): Promise<{ holders: any[]; totalSupply: number; source: 'moralis' | 'helius' }> {
-  // Primary: Moralis Solana Top Holders API (paginated, up to FETCH_LIMIT)
-  try {
-    let allHolders: any[] = [];
-    let cursor: string | null = null;
-    const perPage = 100;
-    const maxPages = Math.ceil(FETCH_LIMIT / perPage);
-
-    for (let page = 0; page < maxPages; page++) {
-      const fetchUrl: string = `${MORALIS_SOL_BASE}/${mintAddress}/top-holders?limit=${perPage}${cursor ? `&cursor=${cursor}` : ''}`;
-      const res = await fetch(fetchUrl, { headers: { accept: 'application/json', 'X-API-Key': MORALIS_KEY } });
-      if (!res.ok) throw new Error(`Moralis ${res.status}`);
-      const data = await res.json();
-      if (!data.result || !Array.isArray(data.result)) break;
-      allHolders = allHolders.concat(data.result);
-      cursor = data.cursor || null;
-      if (!cursor || allHolders.length >= FETCH_LIMIT) break;
-    }
-
-    if (allHolders.length > 0) {
-      return { holders: allHolders, totalSupply: 0, source: 'moralis' };
-    }
-  } catch {}
-
-  // Fallback: Helius getTokenLargestAccounts (max 20)
+async function getSolanaTokenInfo(address: string): Promise<{ price: number; symbol: string; name: string; logo: string; decimals: number }> {
   try {
     const res = await fetch(HELIUS_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'getTokenLargestAccounts', params: [mintAddress] })
-    });
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, methimport { NextRequest, NextResponse } from 'next/server';
+
+consata = await res.json();
+    const result = data.result;
+    const content = result?.content;
+    const meta = content?.metadata || {};
+    const tokenInfo = result?.token_info || {};
+    
+    // Fix double slash in CDN URL
+    const rawLogo = content?.files?.[0]?.cdn_uri || content?.files?.[0]?.uri || content?.links?.image || '';
+    const logo = rawLogo.replace('/cdn-cgi/image//', '/cdn-cgi/image/');
+    
+    // Use Helius price if available
+    const price = tokenInfo?.price_info?.price_per_token || 0;
+    const decimals = tokenInfo?.decimals || 6;
+
+    return {
+      price: Number(price),
+      symbol: meta.symbol || tokenInfo.symbol || '',
+      name: meta.name || '',
+      logo,
+      decimals,
+    };
+  } catch {
+    return { price: 0, symbol: '', name: '', logo: '', decimals: 6 };
+  }
+}
+
+async function getEVMTokenInfo(address: string, chain: string): Promise<{ price: number; symbol: string; name: string; logo: string }> {
+  try {
+    const chainId = MORALIS_CHAIN[chain] || '0x1';
+    const res = await fetch(
+      `https://deep-index.moralis.io/api/v2.2/erc20/${address}/price?chain=${chainId}`,
+      { headers: { 'X-API-Key': MORALIS_KEY } }
+    );
     const data = await res.json();
-    const accounts = (data.result?.value || []).map((a: any) => ({
-      address: a.address,
-      owner: null,
-      amount: a.amount,
-      decimals: a.decimals || 0,
-    }));
-    return { holders: accounts, totalSupply: 0, source: 'helius' };
-  } catch {}
-  return { holders: [], totalSupply: 0, source: 'helius' };
-}
-
-// Check for native token transfers between top holder wallets (EVM)
-// Also extracts entity labels from Moralis transaction enrichment
-async function getEvmConnections(
-  holders: { address: string }[], chainId: string
-): Promise<{ connections: Connection[]; enrichedLabels: Record<string, string> }> {
-  const addrToIdx = new Map<string, number>();
-  holders.forEach((h, i) => addrToIdx.set(h.address.toLowerCase(), i));
-
-  const toCheck = holders.slice(0, CONNECTION_CHECK_LIMIT);
-  const directedEdges = new Set<string>();
-  const enrichedLabels: Record<string, string> = {};
-
-  // Process in batches of 10 concurrent requests
-  for (let i = 0; i < toCheck.length; i += 10) {
-    const batch = toCheck.slice(i, i + 10);
-    await Promise.all(batch.map(async (h) => {
-      try {
-        const res = await fetch(
-          `https://deep-index.moralis.io/api/v2.2/${h.address}?chain=${chainId}&limit=50`,
-          { headers: { 'X-API-Key': MORALIS_KEY } }
-        );
-        if (!res.ok) return;
-        const data = await res.json();
-        for (const tx of data.result || []) {
-          const from = tx.from_address?.toLowerCase();
-          const to = tx.to_address?.toLowerCase();
-          if (!from || !to) continue;
-          // Extract entity labels from enriched transaction data
-          if (tx.from_address_entity && from && addrToIdx.has(from)) {
-            enrichedLabels[from] = tx.from_address_entity;
-          }
-          if (tx.to_address_entity && to && addrToIdx.has(to)) {
-            enrichedLabels[to] = tx.to_address_entity;
-          }
-          const fi = addrToIdx.get(from);
-          const ti = addrToIdx.get(to);
-          if (fi !== undefined && ti !== undefined && fi !== ti) {
-            directedEdges.add(`${fi}-${ti}`);
-          }
-        }
-      } catch {}
-    }));
+    return {
+      price: data.usdPrice || 0,
+      symbol: data.tokenSymbol || '',
+      name: data.tokenName || '',
+      logo: data.tokenLogo || '',
+    };
+  } catch {
+    return { price: 0, symbol: '', name: '', logo: '' };
   }
-
-  // Deduplicate: if both A→B and B→A exist, emit one bidirectional connection
-  const connections: Connection[] = [];
-  const emitted = new Set<string>();
-  for (const edge of directedEdges) {
-    const [a, b] = edge.split('-').map(Number);
-    const canonical = Math.min(a, b) + '-' + Math.max(a, b);
-    if (emitted.has(canonical)) continue;
-    emitted.add(canonical);
-    const reverse = `${b}-${a}`;
-    connections.push({ from: a, to: b, bidirectional: directedEdges.has(reverse) });
-  }
-  return { connections, enrichedLabels };
-}
-
-// Check for SOL transfers between top Solana holder wallets via Helius enhanced transactions
-async function getSolanaConnections(
-  holders: { address: string; label?: string | null; labelType?: string | null }[]
-): Promise<{ connections: Connection[]; enrichedLabels: Record<string, { name: string; category: string }> }> {
-  const addrToIdx = new Map<string, number>();
-  holders.forEach((h, i) => addrToIdx.set(h.address, i));
-
-  const toCheck = holders.slice(0, SOL_CONNECTION_CHECK_LIMIT);
-  const directedEdges = new Set<string>();
-  const enrichedLabels: Record<string, { name: string; category: string }> = {};
-
-  // Process in batches of 10 concurrent requests
-  for (let i = 0; i < toCheck.length; i += 10) {
-    const batch = toCheck.slice(i, i + 10);
-    await Promise.all(batch.map(async (h) => {
-      try {
-        const res = await fetch(
-          `https://api.helius.xyz/v0/addresses/${h.address}/transactions?api-key=${HELIUS_KEY}&limit=50`
-        );
-        if (!res.ok) return;
-        const txns = await res.json();
-        if (!Array.isArray(txns)) return;
-        for (const tx of txns) {
-          // Check native SOL transfers
-          for (const nt of tx.nativeTransfers || []) {
-            const from = nt.fromUserAccount;
-            const to = nt.toUserAccount;
-            if (!from || !to || from === to) continue;
-            // Only keep if amount > 0 (skip fee dust)
-            if ((nt.amount || 0) <= 0) continue;
-            const fi = addrToIdx.get(from);
-            const ti = addrToIdx.get(to);
-            if (fi !== undefined && ti !== undefined && fi !== ti) {
-              directedEdges.add(`${fi}-${ti}`);
-            }
-          }
-
-          // Also check if source labels give us exchange info
-          if (tx.source && tx.feePayer) {
-            const fp = tx.feePayer;
-            const idx = addrToIdx.get(fp);
-            if (idx !== undefined && !holders[idx].label) {
-              const src = tx.source as string;
-              if (src && src !== 'UNKNOWN' && src !== 'SYSTEM_PROGRAM') {
-                enrichedLabels[fp] = { name: src, category: 'DEX' };
-              }
-            }
-          }
-        }
-      } catch {}
-    }));
-  }
-
-  // Deduplicate: if both A→B and B→A exist, emit one bidirectional connection
-  const connections: Connection[] = [];
-  const emitted = new Set<string>();
-  for (const edge of directedEdges) {
-    const [a, b] = edge.split('-').map(Number);
-    const canonical = Math.min(a, b) + '-' + Math.max(a, b);
-    if (emitted.has(canonical)) continue;
-    emitted.add(canonical);
-    const reverse = `${b}-${a}`;
-    connections.push({ from: a, to: b, bidirectional: directedEdges.has(reverse) });
-  }
-  return { connections, enrichedLabels };
 }
 
 export async function GET(req: NextRequest) {
@@ -261,143 +64,55 @@ export async function GET(req: NextRequest) {
   const chain = searchParams.get('chain') || 'eth';
 
   try {
-    const pricePromise = getTokenPrice(address, chain);
-
     if (chain === 'sol') {
-      const [solResult, priceData] = await Promise.all([
-        getSolanaHolders(address),
-        pricePromise,
+      const [rpcRes, tokenInfo] = await Promise.all([
+        fetch(HELIUS_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'getTokenLargestAccounts', params: [address] })
+        }),
+        getSolanaTokenInfo(address),
       ]);
-
-      const { holders: accounts, source } = solResult;
-
-      if (!accounts.length) {
-        return NextResponse.json({ holders: [], price: 0, symbol: priceData.symbol, name: priceData.name, logo: priceData.logo });
-      }
-
-      let allHoldersMapped: any[];
-
-      if (source === 'moralis') {
-        // Moralis returns ownerAddress, balanceFormatted, percentageRelativeToTotalSupply, usdValue
-        allHoldersMapped = accounts.map((h: any) => ({
-          address: h.ownerAddress,
-          balance: Number(h.balance),
-          balanceFormatted: Number(h.balanceFormatted),
-          usdValue: Number(h.usdValue || 0) || Number(h.balanceFormatted) * priceData.price,
-          pct: h.percentageRelativeToTotalSupply ?? 0,
-          rank: 0,
-          label: null,
-          labelType: null,
-        }));
-      } else {
-        // Helius fallback — raw token accounts without owner resolution
-        const total = accounts.reduce((s: number, a: any) => s + Number(a.amount), 0) || 1;
-        allHoldersMapped = accounts.map((a: any) => {
-          const rawBalance = Number(a.amount);
-          const decimals = a.decimals || 6;
-          const balance = rawBalance / Math.pow(10, decimals);
-          return {
-            address: a.address,
-            balance: rawBalance,
-            balanceFormatted: balance,
-            usdValue: balance * priceData.price,
-            pct: (rawBalance / total) * 100,
-            rank: 0,
-            label: null,
-            labelType: null,
-          };
-        });
-      }
-
-      // Helius identity lookup for wallet labels
-      const ownerAddresses = Array.from(new Set(allHoldersMapped.map((h: any) => h.address)));
-      const identities = await getSolanaIdentities(ownerAddresses);
-      for (const h of allHoldersMapped) {
-        const identity = identities[h.address];
-        if (identity) {
-          h.label = identity.name;
-          h.labelType = identity.category;
-        }
-      }
-
-      // Filter dust, dedupe by owner, take top HOLDER_LIMIT
-      const seen = new Set<string>();
-      const holders = allHoldersMapped
-        .filter(h => {
-          if (h.pct < MIN_PCT) return false;
-          if (seen.has(h.address)) return false;
-          seen.add(h.address);
-          return true;
-        })
-        .slice(0, HOLDER_LIMIT)
-        .map((h, i) => ({ ...h, rank: i + 1 }));
-      const { connections, enrichedLabels } = await getSolanaConnections(holders);
-      // Apply any enriched labels from transaction data
-      for (const h of holders) {
-        if (!h.label && enrichedLabels[h.address]) {
-          h.label = enrichedLabels[h.address].name;
-          h.labelType = enrichedLabels[h.address].category;
-        }
-      }
-      return NextResponse.json({ holders, connections, price: priceData.price, symbol: priceData.symbol, name: priceData.name, logo: priceData.logo });
-
-    } else {
-      // EVM chains — paginate Moralis to get more holders
-      const moralisChain = MORALIS_CHAIN[chain] || '0x1';
-      const priceData = await pricePromise;
-
-      let allHolders: any[] = [];
-      let cursor: string | null = null;
-      const perPage = 100;
-      const maxPages = Math.ceil(FETCH_LIMIT / perPage);
-
-      for (let page = 0; page < maxPages; page++) {
-        const fetchUrl: string = `https://deep-index.moralis.io/api/v2.2/erc20/${address}/owners?chain=${moralisChain}&order=DESC&limit=${perPage}${cursor ? `&cursor=${cursor}` : ''}`;
-        const res = await fetch(fetchUrl, { headers: { 'X-API-Key': MORALIS_KEY } });
-        const data = await res.json();
-        if (!data.result || !Array.isArray(data.result)) break;
-        allHolders = allHolders.concat(data.result);
-        cursor = data.cursor || null;
-        if (!cursor || allHolders.length >= FETCH_LIMIT) break;
-      }
-
-      if (!allHolders.length) return NextResponse.json({ holders: [], price: 0 });
-
-      const total = allHolders.reduce((s: number, h: any) => s + Number(h.balance_formatted || h.balance), 0) || 1;
-
-      const allMapped = allHolders.map((h: any) => {
-        const balance = Number(h.balance_formatted || h.balance);
-        const addr = h.owner_address;
-        const moralisLabel = h.owner_address_label || null;
+      const data = await rpcRes.json();
+      const accounts = data.result?.value || [];
+      const total = accounts.reduce((s: number, a: any) => s + Number(a.amount), 0) || 1;
+      const holders = accounts.slice(0, 50).map((a: any, i: number) => {
+        const rawBalance = Number(a.amount);
+        const balance = rawBalance / Math.pow(10, tokenInfo.decimals);
         return {
-          address: addr,
-          balance: Number(h.balance),
+          address: a.address,
+          balance: rawBalance,
           balanceFormatted: balance,
-          usdValue: balance * priceData.price,
-          pct: (balance / total) * 100,
-          rank: 0,
-          label: moralisLabel || null,
-          labelType: moralisLabel ? 'entity' : null,
+          usdValue: balance * tokenInfo.price,
+          pct: (rawBalance / total) * 100,
+          rank: i + 1,
         };
       });
-
-      // Filter dust and take top HOLDER_LIMIT
-      const holders = allMapped
-        .filter(h => h.pct >= MIN_PCT)
-        .slice(0, HOLDER_LIMIT)
-        .map((h, i) => ({ ...h, rank: i + 1 }));
-      const { connections, enrichedLabels: evmLabels } = await getEvmConnections(holders, moralisChain);
-      // Apply enriched entity labels from transaction data to unlabeled holders
-      for (const h of holders) {
-        if (!h.label) {
-          const entityName = evmLabels[h.address.toLowerCase()];
-          if (entityName) {
-            h.label = entityName;
-            h.labelType = 'entity';
-          }
-        }
-      }
-      return NextResponse.json({ holders, connections, price: priceData.price, symbol: priceData.symbol, name: priceData.name, logo: priceData.logo });
+      return NextResponse.json({ holders, price: tokenInfo.price, symbol: tokenInfo.symbol, name: tokenInfo.name, logo: tokenInfo.logo });
+    } else {
+      const moralisChain = MORALIS_CHAIN[chain] || '0x1';
+      const [holdersRes, tokenInfo] = await Promise.all([
+        fetch(
+          `https://deep-index.moralis.io/api/v2.2/erc20/${address}/owners?chain=${moralisChain}&order=DESC&limit=50`,
+          { headers: { 'X-API-Key': MORALIS_KEY } }
+        ),
+        getEVMTokenInfo(address, chain),
+      ]);
+      const data = await holdersRes.json();
+      if (!data.result || !Array.isArray(data.result)) return NextResponse.json({ holders: [], debug: JSON.stringify(data).slice(0, 200) });
+      const total = data.result.reduce((s: number, h: any) => s + Number(h.balance_formatted || h.balance), 0) || 1;
+      const holders = data.result.slice(0, 50).map((h: any, i: number) => {
+        const balance = Number(h.balance_formatted || h.balance);
+        return {
+          address: h.owner_address,
+          balance: Number(h.balance),
+          balanceFormatted: balance,
+          usdValue: balance * tokenInfo.price,
+          pct: (balance / total) * 100,
+          rank: i + 1,
+        };
+      });
+      return NextResponse.json({ holders, price: tokenInfo.price, symbol: tokenInfo.symbol, name: tokenInfo.name, logo: tokenInfo.logo });
     }
   } catch (e) {
     return NextResponse.json({ holders: [], error: String(e) });
