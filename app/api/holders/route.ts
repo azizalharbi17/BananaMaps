@@ -11,9 +11,9 @@ async function getSolanaTokenInfo(address: string): Promise<{ price: number; sym
     const res = await fetch(HELIUS_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ jsonrpc: '2.0', id: 1, methimport { NextRequest, NextResponse } from 'next/server';
-
-consata = await res.json();
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'getAsset', params: { id: address } }),
+    });
+    const data = await res.json();
     const result = data.result;
     const content = result?.content;
     const meta = content?.metadata || {};
