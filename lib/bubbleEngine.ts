@@ -86,74 +86,85 @@ export function detectClusters(holders: Holder[], connections: Connection[]): Ho
   return result;
 }
 
+// D3-equivalent force tuning constants
+const MANY_BODY_STRENGTH = 500;   // forceManyBody — long-range repulsion (pushes bubbles to edges)
+const COLLIDE_BUFFER = 10;        // forceCollide — guaranteed empty space around each bubble
+const COLLIDE_STRENGTH = 1.0;
+const LINK_GAP = 8;               // forceLink target — short, stiff cluster edges
+const LINK_STIFFNESS = 0.05;
+const CENTER_STRENGTH = 0.0005;   // forceX/Y(0) — gentle drift back to center
+const VELOCITY_DECAY = 0.85;
+
 export function applyForces(bubbles: Holder[], width: number, height: number): Holder[] {
   const arr = bubbles.map(b => ({ ...b }));
   const cx = width / 2, cy = height / 2;
   const boundaryR = Math.min(width, height) * 0.48;
+
   for (let i = 0; i < arr.length; i++) {
     let fx = 0, fy = 0;
     const a = arr[i], ax = a.x || 0, ay = a.y || 0;
+    const ar = a.radius || 10;
 
-    // Gentle center attraction
-    fx += (cx - ax) * 0.00015;
-    fy += (cy - ay) * 0.00015;
+    // forceX(cx) + forceY(cy) — weak centering force, so bubbles drift back gently
+    fx += (cx - ax) * CENTER_STRENGTH;
+    fy += (cy - ay) * CENTER_STRENGTH;
 
-    // Same cluster attraction — strong pull so connected wallets clump tightly
-    if (a.cluster !== undefined) {
-      for (let j = 0; j < arr.length; j++) {
-        if (i === j || arr[j].cluster !== a.cluster) continue;
-        const dx = (arr[j].x || 0) - ax, dy = (arr[j].y || 0) - ay;
+    // forceLink — stiff spring on actual transaction edges only.
+    // Connected wallets clump tighter than the global repulsion would otherwise allow.
+    const links = a.connections;
+    if (links && links.length) {
+      for (const j of links) {
+        if (j === i || j < 0 || j >= arr.length) continue;
+        const b = arr[j];
+        const dx = (b.x || 0) - ax, dy = (b.y || 0) - ay;
         const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-        const target = (a.radius || 10) + (arr[j].radius || 10) + 15;
-        if (dist > target) {
-          // Force scales with distance — farther apart = stronger pull
-          const pull = Math.min((dist - target) / 100, 1) * 0.06;
-          fx += (dx / dist) * pull;
-          fy += (dy / dist) * pull;
-        }
+        const target = ar + (b.radius || 10) + LINK_GAP;
+        const delta = dist - target; // positive = too far, pulls together
+        const f = delta * LINK_STIFFNESS;
+        fx += (dx / dist) * f;
+        fy += (dy / dist) * f;
       }
     }
 
-    // Bubble repulsion — different strength for same-cluster vs different-cluster
+    // forceManyBody — long-range repulsion between every pair of bubbles.
+    // F = strength / dist² along the unit vector away from the other body.
+    // This is what pushes unconnected bubbles toward the edges of the canvas
+    // instead of letting them collapse into the center.
     for (let j = 0; j < arr.length; j++) {
       if (i === j) continue;
-      const sameCluster = a.cluster !== undefined && arr[j].cluster === a.cluster;
+      const dx = ax - (arr[j].x || 0), dy = ay - (arr[j].y || 0);
+      // Floor distSq to avoid singularity / explosion when two bubbles coincide
+      const distSq = Math.max(dx * dx + dy * dy, 100);
+      const dist = Math.sqrt(distSq);
+      const f = MANY_BODY_STRENGTH / distSq;
+      fx += (dx / dist) * f;
+      fy += (dy / dist) * f;
+    }
+
+    // forceCollide — hard 10px buffer around every bubble, strength 1.0.
+    // This is the "no overlap, ever" guarantee on top of the soft manyBody force.
+    for (let j = 0; j < arr.length; j++) {
+      if (i === j) continue;
       const dx = ax - (arr[j].x || 0), dy = ay - (arr[j].y || 0);
       const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-      // Same-cluster: small gap (8px) but still no overlap
-      // Different-cluster: larger gap (32px) for breathing room
-      const gap = sameCluster ? 8 : 32;
-      const minD = (a.radius || 10) + (arr[j].radius || 10) + gap;
+      const minD = ar + (arr[j].radius || 10) + COLLIDE_BUFFER;
       if (dist < minD) {
-        const f = (minD - dist) / minD;
-        const strength = sameCluster ? 0.8 : 1.2;
-        fx += (dx / dist) * f * strength;
-        fy += (dy / dist) * f * strength;
+        const overlap = (minD - dist) / minD;
+        fx += (dx / dist) * overlap * COLLIDE_STRENGTH;
+        fy += (dy / dist) * overlap * COLLIDE_STRENGTH;
       }
     }
 
-    // Cross-group repulsion — push different clusters apart
-    if (a.cluster !== undefined) {
-      for (let j = 0; j < arr.length; j++) {
-        if (i === j || arr[j].cluster === a.cluster) continue;
-        const dx = ax - (arr[j].x || 0), dy = ay - (arr[j].y || 0);
-        const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-        if (dist < 200) {
-          const f = (200 - dist) / 200;
-          fx += (dx / dist) * f * 0.2;
-          fy += (dy / dist) * f * 0.2;
-        }
-      }
-    }
-
+    // Boundary — keep bubbles inside the canvas
     const distFromCenter = Math.sqrt((ax - cx) ** 2 + (ay - cy) ** 2);
-    if (distFromCenter > boundaryR - (a.radius || 10)) {
-      const strength = Math.pow((distFromCenter - (boundaryR - (a.radius || 10))) / boundaryR, 1.5) * 2;
+    if (distFromCenter > boundaryR - ar) {
+      const strength = Math.pow((distFromCenter - (boundaryR - ar)) / boundaryR, 1.5) * 2;
       fx += (cx - ax) / distFromCenter * strength;
       fy += (cy - ay) / distFromCenter * strength;
     }
-    const vx = ((a.vx || 0) + fx) * 0.85;
-    const vy = ((a.vy || 0) + fy) * 0.85;
+
+    const vx = ((a.vx || 0) + fx) * VELOCITY_DECAY;
+    const vy = ((a.vy || 0) + fy) * VELOCITY_DECAY;
     arr[i] = { ...a, x: ax + vx, y: ay + vy, vx, vy };
   }
   return arr;
