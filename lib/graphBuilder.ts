@@ -3,6 +3,7 @@
 import { TokenGraph } from './graphTypes';
 import { buildGraph, normAddr, RawHolder, RawTransfer, AddrLabel, TokenMeta } from './graphCore';
 import { getExchangeInfo } from './exchanges';
+import { resolveWalletLabels } from './labelResolver';
 
 const MORALIS_KEY = process.env.MORALIS_API_KEY!;
 const HELIUS_KEY = process.env.HELIUS_API_KEY!;
@@ -15,8 +16,8 @@ export const CHAIN_LABEL: Record<string, string> = { eth: 'Ethereum', bsc: 'BSC'
 
 const TOP_HOLDERS = 150;
 const TRANSFER_PAGES_PER_WALLET = 1; // 100 transfers per holder
-const CONCURRENCY: Record<string, number> = { sol: 5, evm: 3 };
-const BATCH_DELAY_MS: Record<string, number> = { sol: 250, evm: 350 };
+const CONCURRENCY: Record<string, number> = { sol: 3, evm: 3 };
+const BATCH_DELAY_MS: Record<string, number> = { sol: 400, evm: 350 };
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 const FETCH_TIMEOUT_MS = 15_000;
@@ -91,13 +92,14 @@ interface HolderFetch {
   labels: Map<string, AddrLabel>;
 }
 
-const CEX_NAME_RE = /binance|coinbase|kraken|okx|bybit|upbit|kucoin|gate\.?io|huobi|htx|bitget|mexc|crypto\.com|bitfinex|gemini|robinhood|bithumb|exchange/i;
+const CEX_NAME_RE = /binance|coinbase|kraken|okx|bybit|upbit|kucoin|gate\.?io|huobi|htx|bitget|mexc|crypto\.com|bitfinex|gemini|robinhood|bithumb|korbit|paribu|bitvavo|coinone|bitflyer|coincheck|bitso|btcturk|bitstamp|okcoin|poloniex|wazirx|indodax|exchange/i;
 
 function classifyMoralisLabel(label: string | null, entity: string | null, isContract: boolean): AddrLabel | null {
   const name = entity || label;
   if (name && CEX_NAME_RE.test(name)) return { label: name, labelType: 'cex' };
   if (name && /uniswap|pancake|sushiswap|1inch|curve|balancer|aerodrome|router|\bdex\b/i.test(name)) return { label: name, labelType: 'dex' };
-  if (name && /burn|null address|dead/i.test(name)) return { label: name, labelType: 'burn' };
+  // Moralis labels vanity burn wallets "Null: 0xdea...069"
+  if (name && /burn|^null[: ]|null address|dead|incinerat/i.test(name)) return { label: name, labelType: 'burn' };
   if (name) return isContract ? { label: name, labelType: 'contract' } : { label: name };
   if (isContract) return { label: 'Contract', labelType: 'contract' };
   return null;
@@ -402,7 +404,40 @@ export async function computeTokenGraph(address: string, chain: string): Promise
 
   const meta = isSol ? await fetchMetaSOL(address, holders.length) : await fetchMetaEVM(address, chain, holders.length);
 
-  const graph = buildGraph(chain, address, meta, holders, transfers, labels, new Date().toISOString());
+  const computedAt = new Date().toISOString();
+  // Pass 1 determines the final ≤500-node set; the label resolver then works that
+  // exact set (static list → wallet_labels cache → Solscan/heuristics → contract
+  // detection), and pass 2 rebuilds so newly labeled CEX/burn wallets are pulled
+  // out of clusters.
+  const pass1 = buildGraph(chain, address, meta, holders, transfers, labels, computedAt);
+  // Exchange wallets stand out by counterparty count — spend the per-address label
+  // budget on the highest-degree unlabeled nodes first.
+  const suspects = [
+    ...pass1.nodes.filter(n => n.kind === 'holder' && !n.labelType).sort((a, b) => b.degree - a.degree).map(n => n.address),
+    ...pass1.nodes
+      .filter(n => n.kind === 'counterparty' && (!n.labelType || n.label === 'Exchange-like (unverified)') && n.degree >= 3)
+      .sort((a, b) => b.degree - a.degree)
+      .map(n => n.address),
+  ];
+  let graph = pass1;
+  try {
+    const resolved = await resolveWalletLabels(chain, {
+      addresses: pass1.nodes.map(n => n.address),
+      apiLabels: labels,
+      suspects,
+    });
+    let changed = false;
+    for (const [addr, lb] of resolved) {
+      const prev = labels.get(addr);
+      if (!prev || prev.label !== lb.label || prev.labelType !== lb.labelType) {
+        labels.set(addr, lb);
+        changed = true;
+      }
+    }
+    if (changed) graph = buildGraph(chain, address, meta, holders, transfers, labels, computedAt);
+  } catch (e) {
+    console.error('[graph] label resolution failed, using pass-1 labels:', e instanceof Error ? e.message : e);
+  }
   console.log(`[graph] ${chain}:${address} nodes=${graph.nodes.length} edges=${graph.edges.length} clusters=${graph.clusters.length} (${Date.now() - t0}ms total)`);
   return { graph, partial };
 }

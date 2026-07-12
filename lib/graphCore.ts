@@ -133,7 +133,7 @@ export function buildGraph(
         if (holderSet.has(nb)) holderNeighbors++;
         if (holderNeighbors >= HUB_HOLDER_NEIGHBORS) break;
       }
-      if (holderNeighbors >= HUB_HOLDER_NEIGHBORS) lb = { label: lb?.label || 'Likely CEX wallet', labelType: 'cex' };
+      if (holderNeighbors >= HUB_HOLDER_NEIGHBORS) lb = { label: lb?.label || 'Exchange-like (unverified)', labelType: 'cex' };
     }
     addNode({
       address: addr,

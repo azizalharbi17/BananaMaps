@@ -59,6 +59,65 @@ export async function getCachedGraph(chain: string, address: string): Promise<Ca
   return memCache.get(key(chain, address)) || null;
 }
 
+// ---------- wallet_labels: resolved wallet labels, cached forever ----------
+
+export interface WalletLabelRow {
+  address: string;
+  name: string;
+  type: 'cex' | 'burn' | 'contract' | 'amm' | 'dex';
+  source: string;
+}
+
+const memLabels: Map<string, WalletLabelRow> =
+  ((globalThis as any).__walletLabelCache ||= new Map<string, WalletLabelRow>());
+
+export async function getWalletLabels(chain: string, addresses: string[]): Promise<Map<string, WalletLabelRow>> {
+  const out = new Map<string, WalletLabelRow>();
+  const missing: string[] = [];
+  for (const a of addresses) {
+    const hit = memLabels.get(key(chain, a));
+    if (hit) out.set(a, hit);
+    else missing.push(a);
+  }
+  const client = supa();
+  if (client && sbHealthy() && missing.length) {
+    try {
+      // Chunk the IN() lookups so a 500-node graph doesn't build an oversized query
+      for (let i = 0; i < missing.length; i += 200) {
+        const { data, error } = await client
+          .from('wallet_labels')
+          .select('address, name, type, source')
+          .eq('chain', chain)
+          .in('address', missing.slice(i, i + 200));
+        if (error) throw error;
+        for (const row of data || []) {
+          const entry = row as WalletLabelRow;
+          out.set(entry.address, entry);
+          memLabels.set(key(chain, entry.address), entry);
+        }
+      }
+    } catch (e) {
+      markSbFailed('labels read', e);
+    }
+  }
+  return out;
+}
+
+export async function setWalletLabels(chain: string, rows: WalletLabelRow[]): Promise<void> {
+  if (!rows.length) return;
+  for (const r of rows) memLabels.set(key(chain, r.address), r);
+  const client = supa();
+  if (!client || !sbHealthy()) return;
+  try {
+    const { error } = await client
+      .from('wallet_labels')
+      .upsert(rows.map(r => ({ chain, ...r })), { onConflict: 'chain,address' });
+    if (error) throw error;
+  } catch (e) {
+    markSbFailed('labels write', e);
+  }
+}
+
 export async function setCachedGraph(chain: string, address: string, graph: TokenGraph): Promise<void> {
   const entry: CachedGraph = { graph, computedAt: graph.computedAt };
   memCache.set(key(chain, address), entry);

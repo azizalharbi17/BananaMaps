@@ -1,0 +1,1158 @@
+{
+  "evm": {
+    "0x28c6c06298d514db089934071355e5743bf21d60": {
+      "name": "Binance",
+      "type": "cex"
+    },
+    "0x21a31ee1afc51d94c2efccaa2092ad1028285549": {
+      "name": "Binance",
+      "type": "cex"
+    },
+    "0xdfd5293d8e347dfe59e90efd55b2956a1343963d": {
+      "name": "Binance",
+      "type": "cex"
+    },
+    "0x56eddb7aa87536c09ccc2793473599fd21a8b17f": {
+      "name": "Binance",
+      "type": "cex"
+    },
+    "0x9696f59e4d72e237be84ffd425dcad154bf96976": {
+      "name": "Binance",
+      "type": "cex"
+    },
+    "0xf977814e90da44bfa03b6295a0616a897441acec": {
+      "name": "Binance",
+      "type": "cex"
+    },
+    "0x8894e0a0c962cb723c1ef8a1b46e5fb3969917d6": {
+      "name": "Binance",
+      "type": "cex"
+    },
+    "0xe2fc31f816a9b94326492132018c3aecc4a93ae1": {
+      "name": "Binance",
+      "type": "cex"
+    },
+    "0x3c783c21a0383057d128bae431894a5c19f9cf06": {
+      "name": "Binance",
+      "type": "cex"
+    },
+    "0xbe0eb53f46cd790cd13851d5eff43d12404d33e8": {
+      "name": "Binance",
+      "type": "cex"
+    },
+    "0xf17aced3c7a8daa29ebb90db8d1b6efd8c364a18": {
+      "name": "Binance",
+      "type": "cex"
+    },
+    "0x5a52e96bacdabb82fd05763e25335261b270efcb": {
+      "name": "Binance",
+      "type": "cex"
+    },
+    "0x835678a611b28684005a5e2233695fb6cbbb0007": {
+      "name": "Binance",
+      "type": "cex"
+    },
+    "0x47ac0fb4f2d84898e4d9e7b4dab3c24507a6d503": {
+      "name": "Binance",
+      "type": "cex"
+    },
+    "0xab83d182f3485cf1d6ccdd34c7cfef95b4c08da4": {
+      "name": "Binance",
+      "type": "cex"
+    },
+    "0xc3c8e163b2a4a8b0e38a3e33e7b5aabc39b34647": {
+      "name": "Binance",
+      "type": "cex"
+    },
+    "0x503828976d22510aad0201ac7ec88293211d23da": {
+      "name": "Coinbase",
+      "type": "cex"
+    },
+    "0xddfabcdc4d8ffc6d5beaf154f18b778f892a0740": {
+      "name": "Coinbase",
+      "type": "cex"
+    },
+    "0x3cd751e6b0078be393132286c442345e68ff0afc": {
+      "name": "Coinbase",
+      "type": "cex"
+    },
+    "0xb5d85cbf7cb3ee0d56b3bb207d5fc4b82f43f511": {
+      "name": "Coinbase",
+      "type": "cex"
+    },
+    "0xeb2629a2734e272bcc07bda959863f316f4bd4cf": {
+      "name": "Coinbase",
+      "type": "cex"
+    },
+    "0xa9d1e08c7793af67e9d92fe308d5697fb81d3e43": {
+      "name": "Coinbase",
+      "type": "cex"
+    },
+    "0x77696bb39917c91a0c3908d577d5e322095425ca": {
+      "name": "Coinbase",
+      "type": "cex"
+    },
+    "0x7c195d981abfdc3ddecd2ca0fed0958430488e34": {
+      "name": "Coinbase",
+      "type": "cex"
+    },
+    "0x95a9bd206ae52c4ba8eecfc93d18eacdd41c88cc": {
+      "name": "Coinbase",
+      "type": "cex"
+    },
+    "0xb739d0895772dbb71a89a3754a160269068f0d45": {
+      "name": "Coinbase",
+      "type": "cex"
+    },
+    "0xa090e606e30bd747d4e6245a1517ebe430f0057e": {
+      "name": "Coinbase",
+      "type": "cex"
+    },
+    "0x71660c4005ba85c37ccec55d0c4493e66fe775d3": {
+      "name": "Coinbase",
+      "type": "cex"
+    },
+    "0x2910543af39aba0cd09dbb2d50200b3e800a63d2": {
+      "name": "Kraken",
+      "type": "cex"
+    },
+    "0x0a869d79a7052c7f1b55a8ebabbea3420f0d1e13": {
+      "name": "Kraken",
+      "type": "cex"
+    },
+    "0xe853c56864a2ebe4576a807d26fdc4a0ada51919": {
+      "name": "Kraken",
+      "type": "cex"
+    },
+    "0x267be1c1d684f78cb4f6a176c4911b741e4ffdc0": {
+      "name": "Kraken",
+      "type": "cex"
+    },
+    "0xfa52274dd61e1643d2205169732f29114bc240b3": {
+      "name": "Kraken",
+      "type": "cex"
+    },
+    "0xae2d4617c862309a3d75a0ffb358c7a5009c673f": {
+      "name": "Kraken",
+      "type": "cex"
+    },
+    "0x43984d578803891dfa9706bdeee6078d80cfc668": {
+      "name": "Kraken",
+      "type": "cex"
+    },
+    "0x66f820a414680b5bcda5eeca5dea238543f42054": {
+      "name": "Kraken",
+      "type": "cex"
+    },
+    "0x6cc5f688a315f3dc28a7781717a9a798a59fda7b": {
+      "name": "OKX",
+      "type": "cex"
+    },
+    "0x236f9f97e0e62388479bf9e5ba4889e46b0273c3": {
+      "name": "OKX",
+      "type": "cex"
+    },
+    "0xa7efae728d2936e78bda97dc267687568dd593f3": {
+      "name": "OKX",
+      "type": "cex"
+    },
+    "0x98ec059dc3adfbdd63429454aeb0c990fba4a128": {
+      "name": "OKX",
+      "type": "cex"
+    },
+    "0x6fb624b48571b93e5616632c1334768f7e4e6923": {
+      "name": "OKX",
+      "type": "cex"
+    },
+    "0xd6216fc19db775df9774a6e33526131da7d19a2c": {
+      "name": "KuCoin",
+      "type": "cex"
+    },
+    "0xf3f094484ec6901ffc9681bcb808b96bafd0b8a8": {
+      "name": "KuCoin",
+      "type": "cex"
+    },
+    "0x1692e170361cefd1eb7240ec13d048fd9af6d667": {
+      "name": "KuCoin",
+      "type": "cex"
+    },
+    "0xf89d7b9c864f589bbf53a82105107622b35eaa40": {
+      "name": "Bybit",
+      "type": "cex"
+    },
+    "0x1db92e2eebc8e0c075a02bea49a2935bcd2dfcf4": {
+      "name": "Bybit",
+      "type": "cex"
+    },
+    "0xee5b5b923ffce93a870b3104b7ca09c3db80047a": {
+      "name": "Bybit",
+      "type": "cex"
+    },
+    "0x0d0707963952f2fba59dd06f2b425ace40b492fe": {
+      "name": "Gate.io",
+      "type": "cex"
+    },
+    "0x1c4b70a3968436b9a0a9cf5205c787eb81bb558c": {
+      "name": "Gate.io",
+      "type": "cex"
+    },
+    "0xd793281b45cebbcfee34f7b1539e8bfae88ba0ed": {
+      "name": "Gate.io",
+      "type": "cex"
+    },
+    "0x876eabf441b2ee5b5b0554fd502a8e0600950cfa": {
+      "name": "Bitfinex",
+      "type": "cex"
+    },
+    "0x742d35cc6634c0532925a3b844bc9e7595f2bd3e": {
+      "name": "Bitfinex",
+      "type": "cex"
+    },
+    "0x1151314c646ce4e0efd76d1af4760ae66a9fe30f": {
+      "name": "Bitfinex",
+      "type": "cex"
+    },
+    "0x36a85757645e8e8aec062a1dee289c7d615901ca": {
+      "name": "Bitfinex",
+      "type": "cex"
+    },
+    "0xd24400ae8bfebb18ca49be86258a3c749cf46853": {
+      "name": "Gemini",
+      "type": "cex"
+    },
+    "0x6fc82a5fe25a5cdb58bc74600a40a69c065263f8": {
+      "name": "Gemini",
+      "type": "cex"
+    },
+    "0x61edcdf5bb737adffe5043706e7c5bb1f1a56eea": {
+      "name": "Gemini",
+      "type": "cex"
+    },
+    "0xab5c66752a9e8167967685f1450532fb96d5d24f": {
+      "name": "HTX",
+      "type": "cex"
+    },
+    "0x6748f50f686bfbca6fe8ad62b22228b87f31ff2b": {
+      "name": "HTX",
+      "type": "cex"
+    },
+    "0xfdb16996831753d5331ff813c29a93c76834a0ad": {
+      "name": "HTX",
+      "type": "cex"
+    },
+    "0x46340b20830761efd32832a74d7169b29feb9758": {
+      "name": "HTX",
+      "type": "cex"
+    },
+    "0x1062a747393198f70f71ec65a582423dba7e5ab3": {
+      "name": "HTX",
+      "type": "cex"
+    },
+    "0x6262998ced04146fa42253a5c0af90ca02dfd2a3": {
+      "name": "Crypto.com",
+      "type": "cex"
+    },
+    "0x72a53cdbbcc1b9efa39c834a540550e23463aacb": {
+      "name": "Crypto.com",
+      "type": "cex"
+    },
+    "0xcffad3200574698b78f32232aa9d63eabd290703": {
+      "name": "Crypto.com",
+      "type": "cex"
+    },
+    "0x40b38765696e3d5d8d9d834d8aad4bb6e418e489": {
+      "name": "Robinhood",
+      "type": "cex"
+    },
+    "0x75e89d5979e4f6fba9f97c104c2f0afb3f1dcb88": {
+      "name": "MEXC",
+      "type": "cex"
+    },
+    "0x0211f3cedbef3143223d3acf0e589747933e8527": {
+      "name": "MEXC",
+      "type": "cex"
+    },
+    "0x1ab4973a48dc892cd9971ece8e01dcc7688f8f23": {
+      "name": "Bitget",
+      "type": "cex"
+    },
+    "0x5bdf85216ec1e38d6458c870992a69e38e03f7ef": {
+      "name": "Bitget",
+      "type": "cex"
+    },
+    "0x97b9d2102a9a65a26e1ee82d59e42d1b73b68689": {
+      "name": "Bitget",
+      "type": "cex"
+    },
+    "0x390de26d772d2e2005c6d1d24afc902bae37a4bb": {
+      "name": "Upbit",
+      "type": "cex"
+    },
+    "0xba826fec90cefdf6706858e5fbafcb27a290fbe0": {
+      "name": "Upbit",
+      "type": "cex"
+    },
+    "0x3fc91a3afd70395cd496c647d5a6cc9d4b2b7fad": {
+      "name": "Uniswap Router",
+      "type": "dex"
+    },
+    "0x7a250d5630b4cf539739df2c5dacb4c659f2488d": {
+      "name": "Uniswap V2 Router",
+      "type": "dex"
+    },
+    "0xe592427a0aece92de3edee1f18e0157c05861564": {
+      "name": "Uniswap V3 Router",
+      "type": "dex"
+    },
+    "0x000000fee13a103a10d593b9ae06b3e05f2e7e1c": {
+      "name": "Uniswap V4",
+      "type": "dex"
+    },
+    "0x1111111254eeb25477b68fb85ed929f73a960582": {
+      "name": "1inch",
+      "type": "dex"
+    },
+    "0x11111112542d85b3ef69ae05771c2dccff4faa26": {
+      "name": "1inch V3",
+      "type": "dex"
+    },
+    "0x000000000000000000000000000000000000dead": {
+      "name": "Burn Address",
+      "type": "burn"
+    },
+    "0x0000000000000000000000000000000000000000": {
+      "name": "Null Address",
+      "type": "burn"
+    },
+    "0x0000000000000000000000000000000000000001": {
+      "name": "Burn Address",
+      "type": "burn"
+    },
+    "0xdead000000000000000000000042069420694206": {
+      "name": "Burn Address",
+      "type": "burn"
+    },
+    "0x3f5ce5fbfe3e9af3971dd833d26ba9b5c936f0be": {
+      "name": "Binance",
+      "type": "cex"
+    },
+    "0xd551234ae421e3bcba99a0da6d736074f22192ff": {
+      "name": "Binance",
+      "type": "cex"
+    },
+    "0x515b72ed8a97f42c568d6a143232775018f133c8": {
+      "name": "Binance",
+      "type": "cex"
+    },
+    "0x8894e0a0c962cb723c1976a4421c95949be2d4e3": {
+      "name": "Binance",
+      "type": "cex"
+    },
+    "0xa180fe01b906a1be37be6c534a3300785b20d947": {
+      "name": "Binance",
+      "type": "cex"
+    },
+    "0x73af3bcf944a6559933396c1577b257e2054d935": {
+      "name": "Robinhood",
+      "type": "cex"
+    },
+    "0xa26e73c8e9507d50bf808b7a2ca9d5de4fcc4a04": {
+      "name": "Robinhood",
+      "type": "cex"
+    },
+    "0x2efb50e952580f4ff32d8d2122853432bbf2e204": {
+      "name": "Robinhood",
+      "type": "cex"
+    },
+    "0x841ed663f2636863d40be4ee76243377dff13a34": {
+      "name": "Robinhood",
+      "type": "cex"
+    },
+    "0xe0f3e36dbdfa9696b7bcb0d3313522a0bb28d5f4": {
+      "name": "Robinhood",
+      "type": "cex"
+    },
+    "0x7c5830cb1a1efe898dcd5cf401165cb952508ccc": {
+      "name": "Robinhood",
+      "type": "cex"
+    },
+    "0xc9cf0ec93d764f5c9571fd12f764bae7fc87c84e": {
+      "name": "Upbit",
+      "type": "cex"
+    },
+    "0x5e032243d507c743b061ef021e2ec7fcc6d3ab89": {
+      "name": "Upbit",
+      "type": "cex"
+    },
+    "0x1938a448d105d26c40a52a1bfe99b8ca7a745ad0": {
+      "name": "Upbit",
+      "type": "cex"
+    },
+    "0x03747f06215b44e498831da019b27f53e483599f": {
+      "name": "Upbit",
+      "type": "cex"
+    },
+    "0x5fbe6f686cccbf2a978926d135448ede0b71bb41": {
+      "name": "Upbit",
+      "type": "cex"
+    },
+    "0x8c266cf2e163443b1d6b183321e7f166f92579ba": {
+      "name": "Upbit",
+      "type": "cex"
+    },
+    "0x52c6e1ddbbc132c7d10eec5d0d8bf5c4d0617f6e": {
+      "name": "Upbit",
+      "type": "cex"
+    },
+    "0x1c1a7ce2b24db65c0b6747d616fdffbacffc3132": {
+      "name": "Upbit",
+      "type": "cex"
+    },
+    "0x39275f5ccaf27bdbf40059926d42c6a09a03f40a": {
+      "name": "Upbit",
+      "type": "cex"
+    },
+    "0xade85038d52eedebd46af89df6d606012ce3ec69": {
+      "name": "Upbit",
+      "type": "cex"
+    },
+    "0x3cc936b795a188f0e246cbb2d74c5bd190aecf18": {
+      "name": "MEXC",
+      "type": "cex"
+    },
+    "0x2e8f79ad740de90dc5f5a9f0d8d9661a60725e64": {
+      "name": "MEXC",
+      "type": "cex"
+    },
+    "0x83c1c224044ef8573e9a728dbb91013cf80827e6": {
+      "name": "MEXC",
+      "type": "cex"
+    },
+    "0xdf90c9b995a3b10a5b8570a47101e6c6a29eb945": {
+      "name": "MEXC",
+      "type": "cex"
+    },
+    "0x51e3d44172868acc60d68ca99591ce4230bc75e0": {
+      "name": "MEXC",
+      "type": "cex"
+    },
+    "0xffb3118124cdaebd9095fa9a479895042018cac2": {
+      "name": "MEXC",
+      "type": "cex"
+    },
+    "0x9b64203878f24eb0cdf55c8c6fa7d08ba0cf77e5": {
+      "name": "MEXC",
+      "type": "cex"
+    },
+    "0x576b81f0c21edbc920ad63feeeb2b0736b018a58": {
+      "name": "MEXC",
+      "type": "cex"
+    },
+    "0x1ae3739e17d8500f2b2d80086ed092596a116e0b": {
+      "name": "Bitget",
+      "type": "cex"
+    },
+    "0x3a7d1a8c3a8dc9d48a68e628432198a2ead4917c": {
+      "name": "Bitget",
+      "type": "cex"
+    },
+    "0x2bf7494111a59bd51f731dcd4873d7d71f8feeec": {
+      "name": "Bitget",
+      "type": "cex"
+    },
+    "0x31a36512d4903635b7dd6828a934c3915a5809be": {
+      "name": "Bitget",
+      "type": "cex"
+    },
+    "0x461f6dcdd5be42d41fe71611154279d87c06b406": {
+      "name": "Bitget",
+      "type": "cex"
+    },
+    "0x9e00816f61a709fa124d36664cd7b6f14c13ee05": {
+      "name": "Bitget",
+      "type": "cex"
+    },
+    "0xdfe4b89cf009bffa33d9bca1f19694fc2d4d943d": {
+      "name": "Bitget",
+      "type": "cex"
+    },
+    "0xbc942e2250ec7ab83bfc4516bca4e281dbfbb393": {
+      "name": "Bitget",
+      "type": "cex"
+    },
+    "0x1a96e5da1315efcf9b75100f5757d5e8b76abb0c": {
+      "name": "Bitget",
+      "type": "cex"
+    },
+    "0x1d5ba5414f2983212e03bf7725add9eb4cdb00dc": {
+      "name": "Bitget",
+      "type": "cex"
+    },
+    "0xe80623a9d41f2f05780d9cd9cea0f797fd53062a": {
+      "name": "Bitget",
+      "type": "cex"
+    },
+    "0xa7a93fd0a276fc1c0197a5b5623ed117786eed06": {
+      "name": "Bybit",
+      "type": "cex"
+    },
+    "0xe1ab8c08294f8ee707d4efa458eab8bbeeb09215": {
+      "name": "Bybit",
+      "type": "cex"
+    },
+    "0xbaed383ede0e5d9d72430661f3285daa77e9439f": {
+      "name": "Bybit",
+      "type": "cex"
+    },
+    "0xf5f3436a05b5ced2490dae07b86eb5bbd02782aa": {
+      "name": "Bybit",
+      "type": "cex"
+    },
+    "0x4230c402c08cb66dcf3820649a115e54661fce9d": {
+      "name": "Bybit",
+      "type": "cex"
+    },
+    "0x3d5202a0564de9b05ecd07c955bcca964585ea03": {
+      "name": "Bybit",
+      "type": "cex"
+    },
+    "0x1e32760a3285550278aeafa776e5641bc581c845": {
+      "name": "Bybit",
+      "type": "cex"
+    },
+    "0x88a1493366d48225fc3cefbdae9ebb23e323ade3": {
+      "name": "Bybit",
+      "type": "cex"
+    },
+    "0x12136e543b551ecdfdea9a0ed23ed0eff5505ee0": {
+      "name": "Bybit",
+      "type": "cex"
+    },
+    "0x4ce053dfe58541e08f149c1050eb3df09d7a40bc": {
+      "name": "Bybit",
+      "type": "cex"
+    },
+    "0xd8db73f025adf9f1f6a754a4b0b7a9349b7ff128": {
+      "name": "Bybit",
+      "type": "cex"
+    },
+    "0x57b83aaff113ef81a729b63274ed6f17404c9ba6": {
+      "name": "Bybit",
+      "type": "cex"
+    },
+    "0x7793cd85c11a924478d358d49b05b37e91b5810f": {
+      "name": "Gate.io",
+      "type": "cex"
+    },
+    "0x234ee9e35f8e9749a002fc42970d570db716453b": {
+      "name": "Gate.io",
+      "type": "cex"
+    },
+    "0xc882b111a75c0c657fc507c04fbfcd2cc984f071": {
+      "name": "Gate.io",
+      "type": "cex"
+    },
+    "0x05ee546c1a62f90d7acbffd6d846c9c54c7cf94c": {
+      "name": "Gate.io",
+      "type": "cex"
+    },
+    "0x85faa6c1f2450b9caea300838981c2e6e120c35c": {
+      "name": "Gate.io",
+      "type": "cex"
+    },
+    "0x925206b8a707096ed26ae47c84747fe0bb734f59": {
+      "name": "Gate.io",
+      "type": "cex"
+    },
+    "0xeb01f8cdae433e7b55023ff0b2da44c4c712dce2": {
+      "name": "Gate.io",
+      "type": "cex"
+    },
+    "0xb7715cb185990a1d7fede7bb5a3c369296018279": {
+      "name": "Gate.io",
+      "type": "cex"
+    },
+    "0x5f65f7b609678448494de4c87521cdf6cef1e932": {
+      "name": "Gemini",
+      "type": "cex"
+    },
+    "0xb302bfe9c246c6e150af70b1caaa5e3df60dac05": {
+      "name": "Gemini",
+      "type": "cex"
+    },
+    "0x8d6f396d210d385033b348bcae9e4f9ea4e045bd": {
+      "name": "Gemini",
+      "type": "cex"
+    },
+    "0xd69b0089d9ca950640f5dc9931a41a5965f00303": {
+      "name": "Gemini",
+      "type": "cex"
+    },
+    "0x183b1ffb0aa9213b9335adfad82e47bfb02f8d24": {
+      "name": "Gemini",
+      "type": "cex"
+    },
+    "0x7758e507850da48cd47df1fb5f875c23e3340c50": {
+      "name": "Crypto.com",
+      "type": "cex"
+    },
+    "0xf3b0073e3a7f747c7a38b36b805247b222c302a3": {
+      "name": "Crypto.com",
+      "type": "cex"
+    },
+    "0x9fb538820d4fde2fcc509dc01ae73a192f36cfcc": {
+      "name": "Crypto.com",
+      "type": "cex"
+    },
+    "0x0ecc16d3fa38e1a59c10e44cda4e2e9d9941275a": {
+      "name": "Crypto.com",
+      "type": "cex"
+    },
+    "0xd7a827fbaf38c98e8336c5658e4bcbcd20a4fd2d": {
+      "name": "Crypto.com",
+      "type": "cex"
+    },
+    "0x77134cbc06cb00b66f4c7e623d5fdbf6777635ec": {
+      "name": "Bitfinex",
+      "type": "cex"
+    },
+    "0xf4b51b14b9ee30dc37ec970b50a486f37686e2a8": {
+      "name": "Bitfinex",
+      "type": "cex"
+    },
+    "0x742d35cc6634c0532925a3b844bc454e4438f44e": {
+      "name": "Bitfinex",
+      "type": "cex"
+    },
+    "0xdcd0272462140d0a3ced6c4bf970c7641f08cd2c": {
+      "name": "Bitfinex",
+      "type": "cex"
+    },
+    "0x4fdd5eb2fb260149a3903859043e962ab89d8ed4": {
+      "name": "Bitfinex",
+      "type": "cex"
+    },
+    "0x1b29dd8ff0eb3240238bf97cafd6edea05d5ba82": {
+      "name": "Bitfinex",
+      "type": "cex"
+    },
+    "0x2b5634c42055806a59e9107ed44d43c426e58258": {
+      "name": "KuCoin",
+      "type": "cex"
+    },
+    "0x689c56aef474df92d44a1b70850f808488f9769c": {
+      "name": "KuCoin",
+      "type": "cex"
+    },
+    "0xa1d8d972560c2f8144af871db508f0b0b10a3fbf": {
+      "name": "KuCoin",
+      "type": "cex"
+    },
+    "0x4ad64983349c49defe8d7a4686202d24b25d0ce8": {
+      "name": "KuCoin",
+      "type": "cex"
+    },
+    "0xf6874c88757721a02f47592140905c4336dfbc61": {
+      "name": "Coinbase",
+      "type": "cex"
+    },
+    "0x6c8dd0e9cc58c07429e065178d88444b60e60b80": {
+      "name": "Coinbase",
+      "type": "cex"
+    },
+    "0x6f52730dba7b02beefcaf0d6998c9ae901ea04f9": {
+      "name": "Coinbase",
+      "type": "cex"
+    },
+    "0x0bf5ec06f44e9aa068732b1c203f007855a5eed8": {
+      "name": "Coinbase",
+      "type": "cex"
+    },
+    "0x5a0036bcab4501e70f086c634e2958a8beae3a11": {
+      "name": "OKX",
+      "type": "cex"
+    },
+    "0x2ce910fbba65b454bbaf6a18c952a70f3bcd8299": {
+      "name": "OKX",
+      "type": "cex"
+    },
+    "0x2c8fbb630289363ac80705a1a61273f76fd5a161": {
+      "name": "OKX",
+      "type": "cex"
+    },
+    "0x59fae149a8f8ec74d5bc038f8b76d25b136b9573": {
+      "name": "OKX",
+      "type": "cex"
+    },
+    "0x5041ed759dd4afc3a72b8192c143f72f4724081a": {
+      "name": "OKX",
+      "type": "cex"
+    },
+    "0xe6a02eefc2612b13f2b3b914009576ce5495ec0e": {
+      "name": "Kraken",
+      "type": "cex"
+    },
+    "0xd4039ecc40aeda0582036437cf3ec02845da4c13": {
+      "name": "Kraken",
+      "type": "cex"
+    },
+    "0xa24787320ede4cc19d800bf87b41ab9539c4da9d": {
+      "name": "Kraken",
+      "type": "cex"
+    },
+    "0x9d6d492bd500da5b33cf95a5d610a73360fcaaa0": {
+      "name": "HTX",
+      "type": "cex"
+    },
+    "0xbc53b706b165d2b7e98f254095d9d342e845e5ac": {
+      "name": "HTX",
+      "type": "cex"
+    },
+    "0x7262b784e35e1f0d1b83f4f00cab1877e3047e70": {
+      "name": "HTX",
+      "type": "cex"
+    },
+    "0x88d34944cf554e9cccf4a24292d891f620e9c94f": {
+      "name": "Bithumb",
+      "type": "cex"
+    },
+    "0x3052cd6bf951449a984fe4b5a38b46aef9455c8e": {
+      "name": "Bithumb",
+      "type": "cex"
+    },
+    "0x2140efd7ba31169c69dfff6cdc66c542f0211825": {
+      "name": "Bithumb",
+      "type": "cex"
+    },
+    "0xa0ff1e0f30b5dda2dc01e7e828290bc72b71e57d": {
+      "name": "Bithumb",
+      "type": "cex"
+    },
+    "0xc1da8f69e4881efe341600620268934ef01a3e63": {
+      "name": "Bithumb",
+      "type": "cex"
+    },
+    "0xdead000000000000000042069420694206942069": {
+      "name": "Burn Address",
+      "type": "burn"
+    }
+  },
+  "bsc": {
+    "0x631fc1ea2270e98fbd9d92658ece0f5a269aa161": {
+      "name": "Binance",
+      "type": "cex"
+    },
+    "0xb1256d6b31e4ae87da1d56e5890c66be7f1c038e": {
+      "name": "Binance",
+      "type": "cex"
+    },
+    "0x01c952174c24e1210d26961d456a77a39e1f0bb0": {
+      "name": "Binance",
+      "type": "cex"
+    },
+    "0x161ba15a5f335c9f06bb5bbb0a9ce14076fbb645": {
+      "name": "Binance",
+      "type": "cex"
+    },
+    "0x515b72ed8a97f42c568d6a143232775f954c3d8a": {
+      "name": "Binance",
+      "type": "cex"
+    },
+    "0x8ff804cc2143451f454779a40de386f913dcff20": {
+      "name": "Binance Staking",
+      "type": "cex"
+    },
+    "0x73f5ebe90f27b46ea12e5795d16c4b408b19cc6f": {
+      "name": "Binance",
+      "type": "cex"
+    },
+    "0x10ed43c718714eb63d5aa57b78b54704e256024e": {
+      "name": "PancakeSwap V2",
+      "type": "dex"
+    },
+    "0x13f4ea83d0bd40e75c8222255bc855a974568dd4": {
+      "name": "PancakeSwap V3",
+      "type": "dex"
+    },
+    "0x4b16c5de96eb2117bbe5fd171e4d203624b014aa": {
+      "name": "PancakeSwap",
+      "type": "dex"
+    },
+    "0x1b81d678ffb9c0263b24a97847620c99d213eb14": {
+      "name": "PancakeSwap",
+      "type": "dex"
+    },
+    "0xce1e9629d7f3a8f73f4aacd01d2437d5a9ef2862": {
+      "name": "Gate.io",
+      "type": "cex"
+    },
+    "0x4982085c9e2f89f2ecb8131eca71afad896e89cb": {
+      "name": "MEXC",
+      "type": "cex"
+    },
+    "0x0c952174c24e1210d26961d456a77a39e1f0bb0c": {
+      "name": "KuCoin",
+      "type": "cex"
+    },
+    "0x3a6d8ca21d1cf76f653a67577fa0d27453350dd8": {
+      "name": "Biswap Router",
+      "type": "dex"
+    }
+  },
+  "base": {
+    "0x1a0ad011913a150f69f6a19df447a0cfd9551054": {
+      "name": "Coinbase",
+      "type": "cex"
+    },
+    "0xcf77a3ba9a5ca399b7c97c74d54e5b1beb874e43": {
+      "name": "Aerodrome Router",
+      "type": "dex"
+    },
+    "0x327df1e6de05895d2ab08513aadd9313fe505d86": {
+      "name": "BaseSwap Router",
+      "type": "dex"
+    }
+  },
+  "sol": {
+    "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM": {
+      "name": "Binance",
+      "type": "cex"
+    },
+    "3yFwqXBfZY4jBVUafQ1YEXw189y2dN3V5KQq9uzBDy1E": {
+      "name": "Binance",
+      "type": "cex"
+    },
+    "2ojv9BAiHUrvsm9gxDe7fJSzbNZSJcxZvf8dqmWGHG8S": {
+      "name": "Binance",
+      "type": "cex"
+    },
+    "H8sMJSCQxfKiFTCfDR3DUMLPwcRbM61LGFJ8N4dK3WjS": {
+      "name": "Coinbase",
+      "type": "cex"
+    },
+    "GJRs4FwHtemZ5ZE9x3FNvJ8TMwitKTh21yxdRPqn7npE": {
+      "name": "Coinbase",
+      "type": "cex"
+    },
+    "FWznbcNXWQuHTawe9RxvQ2LdCENssh12dsznf4RiouN5": {
+      "name": "Kraken",
+      "type": "cex"
+    },
+    "5VCwKtCXgCJ6kit5FybXjvriW3xELsFDhYrPSqtJNmcD": {
+      "name": "OKX",
+      "type": "cex"
+    },
+    "u6PJ8DtQuPFnfmwHbGFULQ4u4EgjDiyYKjVEsynXq2w": {
+      "name": "Gate.io",
+      "type": "cex"
+    },
+    "ASTyfSima4LLAdDgoFGkgqoKowG1LZFDr9fAQrg7iaJZ": {
+      "name": "MEXC",
+      "type": "cex"
+    },
+    "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8": {
+      "name": "Raydium",
+      "type": "amm"
+    },
+    "5Q544fKrFoe6tsEbD7S8EmxGTJYAKtTVhAW5Q5pge4j1": {
+      "name": "Raydium",
+      "type": "amm"
+    },
+    "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK": {
+      "name": "Raydium",
+      "type": "amm"
+    },
+    "routeUGWgWzqBWFcrCfv8tritsqukccJPu3q5GPP3xS": {
+      "name": "Raydium Route",
+      "type": "dex"
+    },
+    "JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4": {
+      "name": "Jupiter V6",
+      "type": "dex"
+    },
+    "JUP4Fb2cqiRUcaTHdrPC8h2gNsA2ETXiPDD33WcGuJB": {
+      "name": "Jupiter V4",
+      "type": "dex"
+    },
+    "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc": {
+      "name": "Orca",
+      "type": "amm"
+    },
+    "9W959DqEETiGZocYWCQPaJ6sBmUzgfxXfqGeTEdp3aQP": {
+      "name": "Orca V2",
+      "type": "dex"
+    },
+    "39azUYFWPz3VHgKCf3VChUwbpURdCHRxjWVowf5jUJjg": {
+      "name": "Pump.fun",
+      "type": "amm"
+    },
+    "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo": {
+      "name": "Meteora",
+      "type": "amm"
+    },
+    "1nc1nerator11111111111111111111111111111111": {
+      "name": "Burn Address",
+      "type": "burn"
+    },
+    "11111111111111111111111111111111": {
+      "name": "System Program",
+      "type": "burn"
+    },
+    "CK8i4zFXkDE2KWfyg7g9S748r6mwxajbcKcyGhQMR3qQ": {
+      "name": "Bybit",
+      "type": "cex"
+    },
+    "5tzFkiKscXHK5ZXCGbXZxdw7gTjjD1mBwuoFbhUvuAi9": {
+      "name": "Binance",
+      "type": "cex"
+    },
+    "3gd3dqgtJ4jWfBfLYTX67DALFetjc5iS72sCgRhCkW2u": {
+      "name": "Binance",
+      "type": "cex"
+    },
+    "HXsKP7wrBWaQ8T2Vtjry3Nj3oUgwYcqq9vrHDM12G664": {
+      "name": "Binance",
+      "type": "cex"
+    },
+    "6QJzieMYfp7yr3EdrePaQoG3Ghxs2wM98xSLRu8Xh56U": {
+      "name": "Binance",
+      "type": "cex"
+    },
+    "GBrURzmtWujJRTA3Bkvo7ZgWuZYLMMwPCwre7BejJXnK": {
+      "name": "Binance",
+      "type": "cex"
+    },
+    "GK35nWN6ZHSGZrRTf8kTQd8RkFCighChPEb41XwSFVAC": {
+      "name": "Binance",
+      "type": "cex"
+    },
+    "G9RCBaYb8aBRxoe8QBC2ucGrVqjuZFysRhY8d56cnNT1": {
+      "name": "Binance",
+      "type": "cex"
+    },
+    "DRpbCBMxVnDK7maPM5tGv6MvB3v1sRMC86PZ8okm21hy": {
+      "name": "Binance",
+      "type": "cex"
+    },
+    "AC5RDfQFmDS1deWZos921JfqscXdByf8BKHs5ACWjtW2": {
+      "name": "Bybit",
+      "type": "cex"
+    },
+    "42brAgAVNzMBP7aaktPvAmBSPEkehnFQejiZc53EpJFd": {
+      "name": "Bybit",
+      "type": "cex"
+    },
+    "98Nfcvz1yFgwimcmQNBpqob4bzSBqxCsCynigyFdDaZV": {
+      "name": "Bybit",
+      "type": "cex"
+    },
+    "8vHZDc2VTtynUizstoJHtXaH5VNKzynySMLZRZ8rj8Vc": {
+      "name": "Bybit",
+      "type": "cex"
+    },
+    "AL63c8ZNNAHZbAub6v1EGqQLt1fwyGQbVnFudw8xTPa5": {
+      "name": "Bybit",
+      "type": "cex"
+    },
+    "4raqd4tCEnm2yGeUocVqPgN2MPB1W6A3EZfC8LoMChvf": {
+      "name": "Bybit",
+      "type": "cex"
+    },
+    "iGdFcQoyR2MwbXMHQskhmNsqddZ6rinsipHc4TNSdwu": {
+      "name": "Bybit",
+      "type": "cex"
+    },
+    "9ZifroknFoYu4r6DUk6nYoJiUQnEyyoUyeAwjXbPoL2x": {
+      "name": "Bybit",
+      "type": "cex"
+    },
+    "2qo8jvuc49pFmTjmUHLiARSV6ppPTaE7gw27ZJ6DnNZy": {
+      "name": "Bybit",
+      "type": "cex"
+    },
+    "Gem2VAypSg7Ai7vjDKPTtqFahpoQWkfgVkyzx3rPoTka": {
+      "name": "Bybit",
+      "type": "cex"
+    },
+    "5LZkATrLwHYCQj2YuVbjjgsDZzBk6YfL4pFQRJmtboT2": {
+      "name": "Bybit",
+      "type": "cex"
+    },
+    "is6MTRHEgyFLNTfYcuV4QBWLjrZBfmhVNYR6ccgr8KV": {
+      "name": "OKX",
+      "type": "cex"
+    },
+    "CBEADkb8TZAXHjVE3zwad4L995GZE7rJcacJ7asebkVG": {
+      "name": "OKX",
+      "type": "cex"
+    },
+    "C68a6RCGLiPskbPYtAcsCjhG8tfTWYcoB4JjCrXFdqyo": {
+      "name": "OKX",
+      "type": "cex"
+    },
+    "9un5wqE3q4oCjyrDkwsdD48KteCJitQX5978Vh7KKxHo": {
+      "name": "OKX",
+      "type": "cex"
+    },
+    "3WjxkXbu9JBosUWUnJpjzec7Wa4rSkWo9khUbbLDCssk": {
+      "name": "OKX",
+      "type": "cex"
+    },
+    "2AQdpHJ2JpcEgPiATUXjQxA8QmafFegfQwSLWSprPicm": {
+      "name": "Coinbase",
+      "type": "cex"
+    },
+    "G6zmnfSdG6QJaDWYwbGQ4dpCSUC4gvjfZxYQ4ZharV7C": {
+      "name": "Coinbase",
+      "type": "cex"
+    },
+    "D6gCBB3CZEMNbX1PDr3GtZAMhnebEumcgJ2yv8Etv5hF": {
+      "name": "Coinbase",
+      "type": "cex"
+    },
+    "krakeNd6ednDPEXxHAmoBs1qKVM8kLg79PvWF2mhXV1": {
+      "name": "Kraken",
+      "type": "cex"
+    },
+    "6LY1JzAFVZsP2a2xKrtU6znQMQ5h4i7tocWdgrkZzkzF": {
+      "name": "Kraken",
+      "type": "cex"
+    },
+    "E2RvJg2myWpKcbkhBuF81gfhYr6KvmNcDbSmr5qnatYy": {
+      "name": "Kraken",
+      "type": "cex"
+    },
+    "4xLpwxgYuPwPvtQjE94RLS4WZ4aD8NJYYKr2AJk99Qdg": {
+      "name": "Robinhood",
+      "type": "cex"
+    },
+    "9FtGm6hJULCpA8An4sFg5ysHUExDZBtMeDCxsYnTnWh5": {
+      "name": "Robinhood",
+      "type": "cex"
+    },
+    "6brjeZNfSpqjWoo16z1YbywKguAruXZhNz9bJMVZE8pD": {
+      "name": "Robinhood",
+      "type": "cex"
+    },
+    "AeBwztwXScyNNuQCEdhS54wttRQrw3Nj1UtqddzB4C7b": {
+      "name": "Robinhood",
+      "type": "cex"
+    },
+    "6FEVkH17P9y8Q9aCkDdPcMDjvj7SVxrTETaYEm8f51Jy": {
+      "name": "Crypto.com",
+      "type": "cex"
+    },
+    "AobVSwdW9BbpMdJvTqeCN4hPAmh4rHm7vwLnQ5ATSyrS": {
+      "name": "Crypto.com",
+      "type": "cex"
+    },
+    "22Wnk8PwyWZV7BfkZGJEKT9jGGdtvu7xY6EXeRh7zkBa": {
+      "name": "Crypto.com",
+      "type": "cex"
+    },
+    "ADqZYsW9SVZ6bCSGDqfBiPkfaZuQKGg79MA357otX8Ud": {
+      "name": "Crypto.com",
+      "type": "cex"
+    },
+    "HiRpdAZifEsZGdzQ5Xo5wcnaH3D2Jj9SoNsUzcYNK78J": {
+      "name": "Gate.io",
+      "type": "cex"
+    },
+    "57vSaRTqN9iXaemgh4AoDsZ63mcaoshfMK8NP3Z5QNbs": {
+      "name": "KuCoin",
+      "type": "cex"
+    },
+    "BmFdpraQhkiDQE6SnfG5omcA1VwzqfXrwtNYBwWTymy6": {
+      "name": "KuCoin",
+      "type": "cex"
+    },
+    "FZ1t8TZtx7VSCQdBsxvFJiezj9paUBF6Ub7RKA2eTGyE": {
+      "name": "KuCoin",
+      "type": "cex"
+    },
+    "HVh6wHNBAsG3pq1Bj5oCzRjoWKVogEDHwUHkRz3ekFgt": {
+      "name": "KuCoin",
+      "type": "cex"
+    },
+    "BY4StcU9Y2BpgH8quZzorg31EGE4L1rjomN8FNsCBEcx": {
+      "name": "HTX",
+      "type": "cex"
+    },
+    "8NBEbxLknGv5aRYefFrW2qFXoDZyi9fSHJNiJRvEcMBE": {
+      "name": "HTX",
+      "type": "cex"
+    },
+    "5bJcc9eb2XE7mqcET2xDuAdMGuXWybb4YPmAHLjKLhQG": {
+      "name": "HTX",
+      "type": "cex"
+    },
+    "88xTWZMeKfiTgbfEmPLdsUCQcZinwUfk25EBQZ21XMAZ": {
+      "name": "HTX",
+      "type": "cex"
+    },
+    "5PAhQiYdLBd6SVdjzBQDxUAEFyDdF5ExNPQfcscnPRj5": {
+      "name": "MEXC",
+      "type": "cex"
+    },
+    "7mhcgF1DVsj5iv4CxZDgp51H6MBBwqamsH1KnqXhSRc5": {
+      "name": "Upbit",
+      "type": "cex"
+    },
+    "FxteHmLwG9nk1eL4pjNve3Eub2goGkkz6g6TbvdmW46a": {
+      "name": "Bitfinex",
+      "type": "cex"
+    },
+    "GnCRxKqUEPouYMvTb5nJMGrDB3VkTXZnDTaDuVZdnWA3": {
+      "name": "Bitfinex",
+      "type": "cex"
+    },
+    "FyJBKcfcEBzGN74uNxZ95GxnCxeuJJujQCELpPv14ZfN": {
+      "name": "Bitfinex",
+      "type": "cex"
+    },
+    "A77HErqtfN1hLLpvZ9pCtu66FEtM8BveoaKbbMoZ4RiR": {
+      "name": "Bitget",
+      "type": "cex"
+    },
+    "7TWnq4WeYcwQWBCwKeEX2Q9xqVtthPGkB7adNvueuVuh": {
+      "name": "Bitget",
+      "type": "cex"
+    },
+    "CPMMoo8L3F4NbTegBCKVNunggL7H1ZpdTHKxQB5qKP1C": {
+      "name": "Raydium",
+      "type": "amm"
+    },
+    "GpMZbSM2GgvTKHJirzeGfMFoaZ8UR2X7F4v8vHTvxFbL": {
+      "name": "Raydium",
+      "type": "amm"
+    },
+    "LanMV9sAd7wArD4vJFi2qDdfnVhFxYSUg6eADduJ3uj": {
+      "name": "Raydium",
+      "type": "amm"
+    },
+    "Eo7WjKq67rjJQSZxS6z3YkapzY3eMj6Xy8X5EQVn5UaB": {
+      "name": "Meteora",
+      "type": "amm"
+    },
+    "cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG": {
+      "name": "Meteora",
+      "type": "amm"
+    },
+    "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P": {
+      "name": "Pump.fun",
+      "type": "amm"
+    },
+    "pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA": {
+      "name": "Pump.fun",
+      "type": "amm"
+    },
+    "CebN5WGQ4jvEPvsVU4EoHEpgzq1VV7AbicfhtW4xC9iM": {
+      "name": "Pump.fun",
+      "type": "amm"
+    },
+    "TSLvdd1pWpHVjahSpsvCXUbgwsL3JAcvokwaKt1eokM": {
+      "name": "Pump.fun",
+      "type": "amm"
+    }
+  }
+}

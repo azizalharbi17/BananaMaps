@@ -184,15 +184,23 @@ function AppContent() {
       userTouchedViewRef.current = false;
     }
     simRef.current = g;
+    if (process.env.NODE_ENV === 'development') (window as any).__simDebug = { sim: g, size: { ...sizeRef.current } };
   }, [graph, hidden]);
 
-  // Single rAF loop: tick the sim while hot, always draw.
+  // Single render loop: tick the sim while hot, always draw. Driven by rAF with a
+  // timer backup — browsers suspend rAF entirely in hidden/embedded tabs, and the
+  // sim should still settle there.
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
+    let timer: ReturnType<typeof setTimeout>;
+    let stopped = false;
     const loop = () => {
+      if (stopped) return;
+      cancelAnimationFrame(animRef.current);
+      clearTimeout(timer);
       const dpr = window.devicePixelRatio || 1;
       const { w, h } = sizeRef.current;
       // All drawing happens in CSS pixels; the DPR transform keeps output crisp.
@@ -227,9 +235,11 @@ function AppContent() {
         ctx.restore();
       }
       animRef.current = requestAnimationFrame(loop);
+      timer = setTimeout(loop, 66); // backup cadence when rAF is suspended
     };
     animRef.current = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(animRef.current);
+    timer = setTimeout(loop, 66);
+    return () => { stopped = true; cancelAnimationFrame(animRef.current); clearTimeout(timer); };
   }, []);
 
   const loadToken = useCallback(async (input: string, opts?: { refresh?: boolean; chainOverride?: string }) => {

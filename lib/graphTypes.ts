@@ -55,4 +55,4 @@ export interface TokenGraph {
   computedAt: string;
 }
 
-export const GRAPH_VERSION = 2;
+export const GRAPH_VERSION = 3;

@@ -131,10 +131,12 @@ export function buildSim(
   return { nodes, links, sim };
 }
 
-const NAVY_FILL = 'rgba(26,34,63,0.92)';
-const NAVY_STROKE = 'rgba(90,108,160,0.75)';
-const GRAY_FILL = 'rgba(72,76,88,0.85)';
-const GRAY_STROKE = 'rgba(140,145,160,0.8)';
+// BubbleMaps look: see-through centers with a solid colored ring. Transparency is
+// load-bearing — overlapping bubbles must both stay readable.
+const NAVY_FILL = 'rgba(30,40,72,0.3)';
+const NAVY_STROKE = 'rgba(126,144,196,0.5)';
+const GRAY_FILL = 'rgba(88,92,104,0.28)';
+const GRAY_STROKE = 'rgba(150,155,170,0.85)';
 
 function hexA(hex: string, alpha: number): string {
   const a = Math.round(alpha * 255).toString(16).padStart(2, '0');
@@ -200,16 +202,22 @@ export function drawGraph(
     const clustered = n.cluster !== undefined;
     const isLabeled = !!n.labelType; // CEX/DEX/burn/contract → gray when shown
 
-    let fill: string, stroke: string;
+    // Colored ring + translucent center; hover/select brightens the fill.
+    const hot = isHovered || isSelected;
+    let fill: string, stroke: string, strokeW: number;
     if (isLabeled) {
       fill = GRAY_FILL; stroke = GRAY_STROKE;
+      strokeW = Math.max(1.5, 1.5 / scale);
     } else if (clustered) {
       const c = clusterColor(n.cluster!);
-      fill = hexA(c, 0.8); stroke = c;
+      fill = hexA(c, hot ? 0.35 : 0.18); stroke = c;
+      strokeW = Math.max(2, 2 / scale);
     } else if (n.kind === 'counterparty') {
-      fill = 'rgba(96,110,150,0.55)'; stroke = 'rgba(120,134,175,0.5)';
+      fill = 'rgba(30,40,72,0.2)'; stroke = 'rgba(120,134,175,0.35)';
+      strokeW = Math.max(1, 1 / scale);
     } else {
       fill = NAVY_FILL; stroke = NAVY_STROKE;
+      strokeW = Math.max(1.5, 1.5 / scale);
     }
 
     // Soft glow for hovered / selected; highlighted matches get the cheaper ring below
@@ -226,9 +234,9 @@ export function drawGraph(
 
     ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2);
     ctx.fillStyle = fill; ctx.fill();
-    ctx.strokeStyle = isHovered || isSelected ? '#FFFFFF' : stroke;
-    ctx.lineWidth = isHovered || isSelected ? 2 : isHighlit ? 2 : 1.2;
-    if (isHighlit && !isHovered && !isSelected) ctx.strokeStyle = '#FFD600';
+    ctx.strokeStyle = hot ? '#FFFFFF' : stroke;
+    ctx.lineWidth = hot || isHighlit ? Math.max(strokeW, 2 / scale) : strokeW;
+    if (isHighlit && !hot) ctx.strokeStyle = '#FFD600';
     ctx.stroke();
 
     // Entity label (CEX etc.) on big-enough bubbles
