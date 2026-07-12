@@ -85,13 +85,29 @@ function shortEntityName(name: string): string {
   return name.replace(/\s*(hot\s*|cold\s*)?wallet\s*\d*$/i, '').replace(/\s*\d+$/, '').trim() || name;
 }
 
+// Latched off when the key's plan doesn't include the labels endpoint (401/403),
+// so builds don't burn seconds on calls that can never succeed.
+let vybeUsable = true;
+
 async function vybeLookup(addresses: string[]): Promise<WalletLabelRow[]> {
   const rows: WalletLabelRow[] = [];
+  if (!vybeUsable) return rows;
   for (const address of addresses) {
-    const data = await getJson(
-      `https://api.vybenetwork.xyz/v4/wallets/labeled-accounts?accountAddress=${address}`,
-      { 'X-API-KEY': VYBE_KEY },
-    );
+    let data;
+    try {
+      const res = await fetch(
+        `https://api.vybenetwork.xyz/v4/wallets/labeled-accounts?accountAddress=${address}`,
+        { headers: { 'X-API-KEY': VYBE_KEY }, signal: AbortSignal.timeout(12_000) },
+      );
+      if (res.status === 401 || res.status === 403) {
+        console.error(`[labels] vybe key lacks access to labeled-accounts (${res.status}) — disabling for this instance`);
+        vybeUsable = false;
+        return rows;
+      }
+      data = res.ok ? await res.json() : null;
+    } catch {
+      data = null;
+    }
     const acct = data?.accounts?.[0]; // empty array = unlabeled, not an error
     if (acct?.name) {
       const labels: string[] = (acct.labels || []).map((l: any) => String(l).toLowerCase());
