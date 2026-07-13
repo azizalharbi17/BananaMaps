@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse, after } from 'next/server';
-import { computeTokenGraph, resolveTokenInput, normAddr, CHAIN_LABEL, UpstreamError, ComputeResult } from '@/lib/graphBuilder';
-import { getCachedGraph, setCachedGraph } from '@/lib/graphCache';
-import { GRAPH_VERSION, MIN_COMPAT_VERSION } from '@/lib/graphTypes';
-import { checkBuildAllowed, tryClaimBuildSlot, recordBuildEnd, recordIpBuild, clientIp } from '@/lib/buildGuard';
+import { resolveTokenInput, normAddr, CHAIN_LABEL, UpstreamError, NotIndexedError } from '@/lib/graphBuilder';
+import { getCachedGraph } from '@/lib/graphCache';
+import { MIN_COMPAT_VERSION } from '@/lib/graphTypes';
+import { checkBuildAllowed, clientIp } from '@/lib/buildGuard';
+import { runBuild, isBuildInFlight, BuildSlotsBusy } from '@/lib/buildRunner';
 import { KNOWN_TOKENS } from '@/lib/constants';
 
 // Full builds fetch ~150 wallet histories; background refreshes need the same window.
@@ -18,41 +19,8 @@ const REFRESH_COOLDOWN_MS = 30 * 60_000;
 // whose rebuilds keep failing (flaky upstream, partial results) can't burn CU all day.
 const REVALIDATE_RETRY_MS = 30 * 60_000;
 
-// Coalesce concurrent builds of the same token — a second request for an uncached
-// token awaits the in-flight build instead of starting its own 150-wallet fetch.
-// Pinned to globalThis so dev-mode module reloads don't lose in-flight entries.
-const inFlight: Map<string, Promise<ComputeResult | null>> =
-  ((globalThis as any).__graphInFlight ||= new Map());
 const lastRevalidateAttempt: Map<string, number> =
   ((globalThis as any).__graphRevalAttempts ||= new Map());
-
-/** Thrown when every concurrent build slot is taken at the moment of starting. */
-class BuildSlotsBusy extends Error {}
-
-/**
- * Run a guarded, coalesced build. The concurrency slot is claimed synchronously at
- * start (closing the check-then-act gap), the cache upsert happens once inside the
- * shared flight (not per awaiter), and the visitor's IP is charged only when this
- * call actually starts a new build rather than joining an existing one.
- */
-async function runBuild(address: string, chain: string, addrKey: string, ip: string | null): Promise<ComputeResult | null> {
-  const flightKey = `${chain}:${addrKey}`;
-  let promise = inFlight.get(flightKey);
-  if (!promise) {
-    if (!tryClaimBuildSlot(chain)) throw new BuildSlotsBusy();
-    if (ip) recordIpBuild(ip);
-    promise = computeTokenGraph(address, chain)
-      .then(async (result) => {
-        if (result && !result.partial) {
-          await setCachedGraph(chain, addrKey, result.graph);
-        }
-        return result;
-      })
-      .finally(() => { inFlight.delete(flightKey); recordBuildEnd(); });
-    inFlight.set(flightKey, promise);
-  }
-  return promise;
-}
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -106,7 +74,7 @@ export async function GET(req: NextRequest) {
         try {
           const lastAttempt = lastRevalidateAttempt.get(flightKey) || 0;
           if (Date.now() - lastAttempt < REVALIDATE_RETRY_MS) return;
-          if (inFlight.has(flightKey)) return; // already rebuilding
+          if (isBuildInFlight(chain, addrKey)) return; // already rebuilding
           const verdict = await checkBuildAllowed(chain, null, { background: true });
           if (!verdict.allowed) return;
           lastRevalidateAttempt.set(flightKey, Date.now());
@@ -121,7 +89,7 @@ export async function GET(req: NextRequest) {
     // 4. Inline build (first-ever view or explicit refresh) — rate-limited per IP
     //    and against the daily CU budget. Joining an existing flight skips the guard
     //    (it consumes nothing new).
-    const joining = inFlight.has(flightKey);
+    const joining = isBuildInFlight(chain, addrKey);
     if (!joining) {
       const verdict = await checkBuildAllowed(chain, ip);
       if (!verdict.allowed) {
@@ -157,6 +125,9 @@ export async function GET(req: NextRequest) {
       throw e;
     }
   } catch (e) {
+    if (e instanceof NotIndexedError) {
+      return NextResponse.json({ error: e.message }, { status: 404 });
+    }
     console.error('[api/graph]', e);
     const msg = e instanceof UpstreamError
       ? 'Data source temporarily unavailable — try again shortly'

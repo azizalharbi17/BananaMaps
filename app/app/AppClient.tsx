@@ -83,7 +83,7 @@ function TokenTile({ t, onOpen }: { t: DiscoverToken; onOpen: (addr: string, cha
   );
 }
 
-function AppContent() {
+function AppContent({ embed = false }: { embed?: boolean }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animRef = useRef<number>(0);
   const simRef = useRef<GraphSim | null>(null);
@@ -352,6 +352,11 @@ function AppContent() {
   // browser back/forward — the URL is the source of truth for which token shows.
   const urlToken = searchParams.get('token');
   const urlChain = searchParams.get('chain');
+  // Embed mode (/embed route, or ?embed=1): map-only chrome for iframing on
+  // partner sites (e.g. BananaScreener) — no nav, compact sidebar drawer,
+  // attribution link instead.
+  const isEmbed = embed || searchParams.get('embed') === '1';
+  const [embedListOpen, setEmbedListOpen] = useState(false);
   useEffect(() => {
     if (urlToken && urlToken !== lastLoadedRef.current) {
       setSearch(urlToken);
@@ -585,6 +590,7 @@ function AppContent() {
 
   return (
     <div style={{ height: '100dvh', background: '#0a0800', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      {!isEmbed && (
       <nav style={{ display: 'flex', alignItems: 'center', padding: '10px 12px', borderBottom: '1px solid rgba(245,200,66,0.1)', gap: 8, flexShrink: 0, background: '#0a0800' }}>
         <a href="/" style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 800, fontSize: 19, textDecoration: 'none', color: '#f0ede6', flexShrink: 0 }}>
           <span>🍌</span><span className="nav-hide-mobile">Banana<span style={{ color: '#F5C842' }}>Maps</span></span>
@@ -688,6 +694,7 @@ function AppContent() {
           <button onClick={() => setShowList(true)} style={{ background: 'rgba(245,200,66,0.08)', border: '1px solid rgba(100,120,200,0.2)', borderRadius: 6, padding: '6px 8px', color: 'rgba(245,200,66,0.8)', fontSize: 10, cursor: 'pointer', flexShrink: 0 }}>☰</button>
         )}
       </nav>
+      )}
 
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden', position: 'relative' }}>
         <div style={{ flex: 1, position: 'relative', background: '#0a0800' }}>
@@ -708,7 +715,7 @@ function AppContent() {
                     Search any token or paste a contract address
                   </div>
                 </div>
-                {discover && discover.popular.length > 0 && (
+                {!isEmbed && discover && discover.popular.length > 0 && (
                   <>
                     <div style={{ fontSize: 9, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'rgba(245,200,66,0.4)', marginTop: 18 }}>Popular maps · instant</div>
                     <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : '1fr 1fr 1fr', gap: 8 }}>
@@ -716,7 +723,7 @@ function AppContent() {
                     </div>
                   </>
                 )}
-                {discover && discover.trending.length > 0 && (
+                {!isEmbed && discover && discover.trending.length > 0 && (
                   <>
                     <div style={{ fontSize: 9, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'rgba(245,200,66,0.4)', marginTop: 16 }}>
                       Trending now <span style={{ opacity: 0.6, textTransform: 'none', letterSpacing: 0 }}>· first map takes ~2 min to compute</span>
@@ -754,7 +761,7 @@ function AppContent() {
                 <div style={{ background: 'rgba(0,0,0,0.75)', border: `1px solid ${CC[graph.chain]}44`, borderRadius: 16, padding: '4px 10px', fontSize: 10, color: CC[graph.chain], display: 'flex', alignItems: 'center', gap: 5 }}>
                   <span style={{ width: 6, height: 6, borderRadius: '50%', background: CC[graph.chain], display: 'inline-block' }} />{CL[graph.chain]}
                 </div>
-                {isMobile && (
+                {(isMobile || isEmbed) && (
                   <div style={{ background: 'rgba(0,0,0,0.75)', border: '1px solid rgba(245,200,66,0.25)', borderRadius: 16, padding: '4px 10px', fontSize: 11, color: '#F5C842', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
                     {graph.logo && <img src={graph.logo} alt="" style={{ width: 14, height: 14, borderRadius: '50%' }} onError={e => (e.currentTarget.style.display = 'none')} />}
                     {graph.name || graph.symbol}
@@ -817,6 +824,47 @@ function AppContent() {
                   <span style={{ width: 5, height: 5, borderRadius: '50%', background: clusterColor(c.id), display: 'inline-block' }} />Cluster {c.id + 1} · {c.pct.toFixed(1)}%
                 </div>
               ))}
+            </div>
+          )}
+          {isEmbed && (
+            <a href={`https://www.bananamaps.io/app?token=${encodeURIComponent(urlToken || '')}${urlChain ? `&chain=${encodeURIComponent(urlChain)}` : ''}`}
+              target="_blank" rel="noopener noreferrer"
+              style={{ position: 'absolute', bottom: 12, left: 12, display: 'flex', alignItems: 'center', gap: 5, background: 'rgba(0,0,0,0.75)', border: '1px solid rgba(245,200,66,0.25)', borderRadius: 16, padding: '5px 12px', fontSize: 11, fontWeight: 700, color: '#f0ede6', textDecoration: 'none', zIndex: 150 }}>
+              🍌 Banana<span style={{ color: '#F5C842' }}>Maps</span>
+              <span style={{ color: 'rgba(245,235,200,0.55)', fontWeight: 500 }}>· Open full map ↗</span>
+            </a>
+          )}
+          {isEmbed && graph && (
+            <button onClick={() => setEmbedListOpen(v => !v)}
+              style={{ position: 'absolute', top: 10, right: 10, display: 'flex', alignItems: 'center', gap: 5, background: 'rgba(0,0,0,0.75)', border: '1px solid rgba(245,200,66,0.25)', borderRadius: 16, padding: '5px 12px', fontSize: 10, fontWeight: 600, color: 'rgba(245,235,200,0.8)', cursor: 'pointer', zIndex: 150 }}>
+              ☰ Holders
+            </button>
+          )}
+          {isEmbed && embedListOpen && graph && (
+            <div style={{ position: 'absolute', top: 0, right: 0, bottom: 0, width: 270, background: 'rgba(10,8,0,0.97)', borderLeft: '1px solid rgba(245,200,66,0.15)', zIndex: 160, display: 'flex', flexDirection: 'column' }}>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '6px 8px 0' }}>
+                <button onClick={() => setEmbedListOpen(false)} style={{ background: 'rgba(255,255,255,0.05)', border: 'none', borderRadius: '50%', width: 24, height: 24, color: 'rgba(255,255,255,0.4)', cursor: 'pointer', fontSize: 14 }}>×</button>
+              </div>
+              <div style={{ flex: 1, minHeight: 0 }}>
+                <AddressList
+                  graph={graph}
+                  hidden={hidden}
+                  toggleHidden={toggleHidden}
+                  selectedAddr={selectedAddr}
+                  onSelect={selectFromList}
+                  onHoverAddr={addr => { hoveredIdxRef.current = addr !== null ? (addrToIdx.get(addr) ?? -1) : -1; }}
+                  query={query}
+                  setQuery={setQuery}
+                  ungroup={ungroup}
+                  setUngroup={setUngroup}
+                  expanded={expanded}
+                  toggleExpanded={id => setExpanded(prev => {
+                    const next = new Set(prev);
+                    if (next.has(id)) next.delete(id); else next.add(id);
+                    return next;
+                  })}
+                />
+              </div>
             </div>
           )}
           {graph && (
@@ -890,7 +938,7 @@ function AppContent() {
           )}
         </div>
 
-        {!isMobile && (
+        {!isMobile && !isEmbed && (
           <div style={{ width: 270, borderLeft: '1px solid rgba(245,200,66,0.08)', background: '#0a0800', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
             {graph ? (
               <AddressList
@@ -955,6 +1003,6 @@ function AppContent() {
   );
 }
 
-export default function AppClient() {
-  return <Suspense><AppContent /></Suspense>;
+export default function AppClient({ embed = false }: { embed?: boolean }) {
+  return <Suspense><AppContent embed={embed} /></Suspense>;
 }

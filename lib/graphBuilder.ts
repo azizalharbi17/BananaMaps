@@ -25,6 +25,9 @@ const FETCH_TIMEOUT_MS = 15_000;
 /** Upstream is broken (rate-limited, 5xx, network) — distinct from "no such token". */
 export class UpstreamError extends Error {}
 
+/** The token exists (DexScreener knows it) but holder data isn't indexed yet. */
+export class NotIndexedError extends Error {}
+
 /**
  * GET/POST JSON with timeout + retry.
  * Returns null for 4xx no-data responses (bad token, nothing there).
@@ -202,7 +205,7 @@ async function fetchMetaEVM(token: string, chain: string, holderCount: number): 
     tryFetchJson(`https://api.dexscreener.com/latest/dex/tokens/${token}`),
     tryFetchJson(`${MORALIS_BASE}/erc20/${token}/holders?chain=${chainId}`, moralisHeaders),
   ]);
-  const pair = bestPair(dex?.pairs, chain);
+  const pair = bestPair(dex?.pairs, token, chain);
   return {
     name: price?.tokenName || pair?.baseToken?.name || '',
     symbol: price?.tokenSymbol || pair?.baseToken?.symbol || '',
@@ -210,7 +213,7 @@ async function fetchMetaEVM(token: string, chain: string, holderCount: number): 
     price: firstFinite(price?.usdPrice, pair?.priceUsd),
     priceChange24h: firstFinite(price?.usdPrice24hrPercentChange, pair?.priceChange?.h24),
     marketCap: firstFinite(pair?.marketCap, pair?.fdv),
-    volume24h: sumVolume24h(dex?.pairs, chain),
+    volume24h: sumVolume24h(dex?.pairs, token, chain),
     totalHolders: firstFinite(holderStats?.totalHolders),
     holderCount,
   };
@@ -248,7 +251,85 @@ async function fetchHoldersSOL(mint: string): Promise<HolderFetch> {
     if (!cursor) break;
     await sleep(250);
   }
+  if (!holders.length) {
+    // Brand-new tokens (pump.fun launches etc.) lag Moralis indexing. For small
+    // tokens, aggregating raw token accounts by owner via Helius is feasible.
+    const fallback = await fetchHoldersSOLFallback(mint);
+    if (fallback) return fallback;
+  }
   return { holders: holders.slice(0, TOP_HOLDERS), labels };
+}
+
+// Top-150 needs ALL token accounts (pages are unsorted). This path only triggers
+// when Moralis's holder aggregation lags (young-but-hot tokens — they can hit six
+// figures of token accounts within days), so the cap must cover that scale. A
+// 150k-account token ≈ 150 calls ≈ 40s inside the build window.
+const MAX_FALLBACK_PAGES = 250;
+const FALLBACK_WAVE = 4;
+
+async function fetchAccountsPage(rpc: string, mint: string, page: number): Promise<any[] | null> {
+  const res = await tryFetchJson(rpc, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ jsonrpc: '2.0', id: page, method: 'getTokenAccounts', params: { mint, limit: 1000, page } }),
+  });
+  const accounts = res?.result?.token_accounts;
+  return Array.isArray(accounts) ? accounts : null;
+}
+
+async function fetchHoldersSOLFallback(mint: string): Promise<HolderFetch | null> {
+  const rpc = `https://mainnet.helius-rpc.com/?api-key=${HELIUS_KEY}`;
+  const asset = await tryFetchJson(rpc, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'getAsset', params: { id: mint } }),
+  });
+  const supply = Number(asset?.result?.token_info?.supply);
+  const decimals = Number(asset?.result?.token_info?.decimals ?? 6);
+  if (!Number.isFinite(supply) || supply <= 0) return null;
+
+  const byOwner = new Map<string, number>();
+  let exhausted = false;
+  for (let start = 1; start <= MAX_FALLBACK_PAGES && !exhausted; start += FALLBACK_WAVE) {
+    const pages = Array.from({ length: Math.min(FALLBACK_WAVE, MAX_FALLBACK_PAGES - start + 1) }, (_, i) => start + i);
+    const waves = await Promise.all(pages.map(page => fetchAccountsPage(rpc, mint, page)));
+    for (let i = 0; i < waves.length; i++) {
+      let accounts = waves[i];
+      if (!accounts) {
+        // Transient RPC failure — one retry after a breather before declaring the
+        // scan unusable (a partial view would misrepresent the top holders).
+        await sleep(1500);
+        accounts = await fetchAccountsPage(rpc, mint, pages[i]);
+        if (!accounts) {
+          console.error(`[graph] sol:${mint} fallback scan aborted at page ${pages[i]}`);
+          return null;
+        }
+      }
+      if (!accounts.length || accounts.length < 1000) exhausted = true;
+      for (const a of accounts) {
+        if (a.owner) byOwner.set(a.owner, (byOwner.get(a.owner) || 0) + Number(a.amount || 0));
+      }
+    }
+    if (!exhausted && start + FALLBACK_WAVE > MAX_FALLBACK_PAGES) return null; // token too large for this path
+    if (!exhausted) await sleep(250);
+  }
+  if (!byOwner.size) return null;
+
+  console.log(`[graph] sol:${mint} using Helius token-account fallback (${byOwner.size} owners)`);
+  const labels = new Map<string, AddrLabel>();
+  const holders: RawHolder[] = [...byOwner.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, TOP_HOLDERS)
+    .map(([address, raw]) => {
+      const known = getExchangeInfo(address, 'sol');
+      if (known) labels.set(address, { label: known.name, labelType: known.type });
+      return {
+        address,
+        balanceFormatted: raw / Math.pow(10, decimals),
+        pct: (raw / supply) * 100,
+      };
+    });
+  return { holders, labels };
 }
 
 async function fetchTransfersSOL(
@@ -298,7 +379,7 @@ async function fetchMetaSOL(mint: string, holderCount: number): Promise<TokenMet
       body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'getAsset', params: { id: mint } }),
     }),
   ]);
-  const pair = bestPair(dex?.pairs, 'sol');
+  const pair = bestPair(dex?.pairs, mint, 'sol');
   const tokenInfo = asset?.result?.token_info;
   return {
     name: meta?.name || asset?.result?.content?.metadata?.name || pair?.baseToken?.name || '',
@@ -307,7 +388,7 @@ async function fetchMetaSOL(mint: string, holderCount: number): Promise<TokenMet
     price: firstFinite(pair?.priceUsd, tokenInfo?.price_info?.price_per_token),
     priceChange24h: firstFinite(pair?.priceChange?.h24),
     marketCap: firstFinite(pair?.marketCap, pair?.fdv, meta?.marketCap),
-    volume24h: sumVolume24h(dex?.pairs, 'sol'),
+    volume24h: sumVolume24h(dex?.pairs, mint, 'sol'),
     holderCount,
   };
 }
@@ -316,23 +397,33 @@ async function fetchMetaSOL(mint: string, holderCount: number): Promise<TokenMet
 
 const DEX_CHAIN_TO_OURS: Record<string, string> = { ethereum: 'eth', bsc: 'bsc', base: 'base', solana: 'sol' };
 
-function chainPairs(pairs: any[] | undefined, chain?: string): any[] {
+/**
+ * Pairs on our chain where the token is the BASE. DexScreener's /tokens/{addr}
+ * also returns pairs where the token is the QUOTE, and priceUsd / marketCap /
+ * priceChange always describe the base token — reading those off a quote-side
+ * pair yields another token's numbers entirely.
+ */
+function chainPairs(pairs: any[] | undefined, token: string, chain?: string): any[] {
   if (!pairs?.length) return [];
-  if (!chain) return pairs;
-  const slug = Object.entries(DEX_CHAIN_TO_OURS).find(([, v]) => v === chain)?.[0];
-  return pairs.filter(p => p.chainId === slug);
+  const t = token.toLowerCase();
+  let out = pairs.filter(p => (p.baseToken?.address || '').toLowerCase() === t);
+  if (chain) {
+    const slug = Object.entries(DEX_CHAIN_TO_OURS).find(([, v]) => v === chain)?.[0];
+    out = out.filter(p => p.chainId === slug);
+  }
+  return out;
 }
 
-function bestPair(pairs: any[] | undefined, chain?: string): any | null {
-  const candidates = chainPairs(pairs, chain);
+function bestPair(pairs: any[] | undefined, token: string, chain?: string): any | null {
+  const candidates = chainPairs(pairs, token, chain);
   if (!candidates.length) return null;
   // Pairs are NOT sorted by liquidity — pick max explicitly.
   return candidates.reduce((a, b) => ((a.liquidity?.usd || 0) >= (b.liquidity?.usd || 0) ? a : b));
 }
 
-/** Token 24h DEX volume = sum across the chain's pairs (a single pair understates it). */
-function sumVolume24h(pairs: any[] | undefined, chain?: string): number {
-  return chainPairs(pairs, chain).reduce((s, p) => s + (Number(p.volume?.h24) || 0), 0);
+/** Token 24h DEX volume = sum across the chain's base-side pairs. */
+function sumVolume24h(pairs: any[] | undefined, token: string, chain?: string): number {
+  return chainPairs(pairs, token, chain).reduce((s, p) => s + (Number(p.volume?.h24) || 0), 0);
 }
 
 export interface Resolved {
@@ -405,7 +496,15 @@ export async function computeTokenGraph(address: string, chain: string): Promise
   // Holder fetch failures throw UpstreamError (surfaces as 500, not a bogus "not found").
   const { holders, labels } = isSol ? await fetchHoldersSOL(address) : await fetchHoldersEVM(address, chain);
   console.log(`[graph] ${chain}:${address} holders=${holders.length} (${Date.now() - t0}ms)`);
-  if (!holders.length) return null;
+  if (!holders.length) {
+    // "Not found" is only true if DexScreener has never seen the address either —
+    // otherwise the token is real and our holder sources just haven't indexed it.
+    const dex = await tryFetchJson(`https://api.dexscreener.com/latest/dex/tokens/${address}`);
+    if (dex?.pairs?.length) {
+      throw new NotIndexedError('New token — holder data isn\'t indexed yet. Try again in a few minutes.');
+    }
+    return null;
+  }
 
   const { transfers, failedWallets } = isSol
     ? await fetchTransfersSOL(address, holders, labels)

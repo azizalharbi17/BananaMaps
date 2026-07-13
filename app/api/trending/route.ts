@@ -1,22 +1,10 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { fetchTrendingChain, TrendingToken, TRENDING_NETWORKS } from '@/lib/trending';
 
 export const dynamic = 'force-dynamic';
 
-// GeckoTerminal network slugs → our chain codes. One keyless call per chain,
-// 30 req/min limit — hourly caching keeps us far under it.
-const NETWORKS: [string, string][] = [['eth', 'eth'], ['bsc', 'bsc'], ['base', 'base'], ['solana', 'sol']];
 const TTL_MS = 3600_000;
-
-export interface TrendingToken {
-  chain: string;
-  address: string;
-  name: string;
-  symbol: string;
-  logo: string;
-  change24h: number;
-  volume24h: number;
-}
 
 interface TrendingPayload {
   popular: TrendingToken[];
@@ -25,46 +13,6 @@ interface TrendingPayload {
 }
 
 const cache: { payload: TrendingPayload | null } = ((globalThis as any).__trendingCache ||= { payload: null });
-
-async function fetchTrendingChain(net: string, chain: string): Promise<TrendingToken[]> {
-  try {
-    const res = await fetch(
-      `https://api.geckoterminal.com/api/v2/networks/${net}/trending_pools?include=base_token`,
-      { signal: AbortSignal.timeout(10_000) },
-    );
-    if (!res.ok) return [];
-    const data = await res.json();
-    if (!Array.isArray(data?.data)) return []; // transient errors return a body without `data`
-    const tokens = new Map<string, any>();
-    for (const inc of data.included || []) {
-      if (inc.type === 'token') tokens.set(inc.id, inc.attributes);
-    }
-    const out: TrendingToken[] = [];
-    const seen = new Set<string>();
-    // Wrapped natives / stables trend constantly but their holder maps are noise
-    const SKIP = new Set(['WETH', 'WBNB', 'WSOL', 'SOL', 'WBTC', 'USDC', 'USDT', 'DAI', 'CBBTC']);
-    for (const pool of data.data) {
-      const tokId = pool.relationships?.base_token?.data?.id;
-      const tok = tokId && tokens.get(tokId);
-      if (!tok?.address || seen.has(tokId)) continue;
-      if (SKIP.has(String(tok.symbol || '').toUpperCase())) continue;
-      seen.add(tokId);
-      out.push({
-        chain,
-        address: tok.address,
-        name: tok.name || tok.symbol || '',
-        symbol: tok.symbol || '',
-        logo: tok.image_url && tok.image_url !== 'missing.png' ? tok.image_url : '',
-        change24h: Number(pool.attributes?.price_change_percentage?.h24) || 0,
-        volume24h: Number(pool.attributes?.volume_usd?.h24) || 0,
-      });
-      if (out.length >= 3) break;
-    }
-    return out;
-  } catch {
-    return [];
-  }
-}
 
 /** Tokens we already have snapshots for — these load instantly. */
 async function fetchPopular(): Promise<TrendingToken[]> {
@@ -102,7 +50,7 @@ export async function GET() {
   }
   const [popular, ...chains] = await Promise.all([
     fetchPopular(),
-    ...NETWORKS.map(([net, chain]) => fetchTrendingChain(net, chain)),
+    ...TRENDING_NETWORKS.map(([net, chain]) => fetchTrendingChain(net, chain)),
   ]);
   // Interleave chains so no single chain dominates the grid
   const trending: TrendingToken[] = [];
