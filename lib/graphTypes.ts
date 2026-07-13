@@ -47,6 +47,10 @@ export interface TokenGraph {
   logo: string;
   price: number;
   priceChange24h: number;
+  marketCap?: number;
+  volume24h?: number;
+  /** Total on-chain holder count (EVM only; we map the top 150). */
+  totalHolders?: number;
   nodes: GraphNode[];
   edges: GraphEdge[];
   clusters: ClusterSummary[];
@@ -55,4 +59,7 @@ export interface TokenGraph {
   computedAt: string;
 }
 
-export const GRAPH_VERSION = 3;
+export const GRAPH_VERSION = 4;
+/** Cached snapshots at or above this version are served; older ones recompute.
+ *  v4 only ADDED optional meta fields, so v3 snapshots remain servable. */
+export const MIN_COMPAT_VERSION = 3;

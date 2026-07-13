@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://www.bananamaps.io'),
   title: 'BananaMaps — Crypto Holder Intelligence',
   description: 'Visualize token holder distribution across Ethereum, BSC, Solana and Base. Expose clusters, whales, and suspicious wallet behaviour in seconds.',
   openGraph: {

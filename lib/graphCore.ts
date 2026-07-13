@@ -28,6 +28,9 @@ export interface TokenMeta {
   logo: string;
   price: number;
   priceChange24h: number;
+  marketCap?: number;
+  volume24h?: number;
+  totalHolders?: number;
   holderCount?: number;
 }
 
@@ -199,6 +202,9 @@ export function buildGraph(
     logo: meta.logo,
     price: meta.price,
     priceChange24h: meta.priceChange24h,
+    marketCap: meta.marketCap || undefined,
+    volume24h: meta.volume24h || undefined,
+    totalHolders: meta.totalHolders || undefined,
     nodes,
     edges,
     clusters,

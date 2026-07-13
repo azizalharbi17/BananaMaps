@@ -197,9 +197,10 @@ function firstFinite(...vals: unknown[]): number {
 
 async function fetchMetaEVM(token: string, chain: string, holderCount: number): Promise<TokenMeta> {
   const chainId = MORALIS_CHAIN[chain] || '0x1';
-  const [price, dex] = await Promise.all([
+  const [price, dex, holderStats] = await Promise.all([
     tryFetchJson(`${MORALIS_BASE}/erc20/${token}/price?chain=${chainId}&include=percent_change`, moralisHeaders),
     tryFetchJson(`https://api.dexscreener.com/latest/dex/tokens/${token}`),
+    tryFetchJson(`${MORALIS_BASE}/erc20/${token}/holders?chain=${chainId}`, moralisHeaders),
   ]);
   const pair = bestPair(dex?.pairs, chain);
   return {
@@ -208,6 +209,9 @@ async function fetchMetaEVM(token: string, chain: string, holderCount: number): 
     logo: price?.tokenLogo || pair?.info?.imageUrl || '',
     price: firstFinite(price?.usdPrice, pair?.priceUsd),
     priceChange24h: firstFinite(price?.usdPrice24hrPercentChange, pair?.priceChange?.h24),
+    marketCap: firstFinite(pair?.marketCap, pair?.fdv),
+    volume24h: sumVolume24h(dex?.pairs, chain),
+    totalHolders: firstFinite(holderStats?.totalHolders),
     holderCount,
   };
 }
@@ -302,6 +306,8 @@ async function fetchMetaSOL(mint: string, holderCount: number): Promise<TokenMet
     logo: pair?.info?.imageUrl || meta?.logo || asset?.result?.content?.links?.image || '',
     price: firstFinite(pair?.priceUsd, tokenInfo?.price_info?.price_per_token),
     priceChange24h: firstFinite(pair?.priceChange?.h24),
+    marketCap: firstFinite(pair?.marketCap, pair?.fdv, meta?.marketCap),
+    volume24h: sumVolume24h(dex?.pairs, 'sol'),
     holderCount,
   };
 }
@@ -310,16 +316,23 @@ async function fetchMetaSOL(mint: string, holderCount: number): Promise<TokenMet
 
 const DEX_CHAIN_TO_OURS: Record<string, string> = { ethereum: 'eth', bsc: 'bsc', base: 'base', solana: 'sol' };
 
+function chainPairs(pairs: any[] | undefined, chain?: string): any[] {
+  if (!pairs?.length) return [];
+  if (!chain) return pairs;
+  const slug = Object.entries(DEX_CHAIN_TO_OURS).find(([, v]) => v === chain)?.[0];
+  return pairs.filter(p => p.chainId === slug);
+}
+
 function bestPair(pairs: any[] | undefined, chain?: string): any | null {
-  if (!pairs?.length) return null;
-  let candidates = pairs;
-  if (chain) {
-    const slug = Object.entries(DEX_CHAIN_TO_OURS).find(([, v]) => v === chain)?.[0];
-    candidates = pairs.filter(p => p.chainId === slug);
-  }
+  const candidates = chainPairs(pairs, chain);
   if (!candidates.length) return null;
   // Pairs are NOT sorted by liquidity — pick max explicitly.
   return candidates.reduce((a, b) => ((a.liquidity?.usd || 0) >= (b.liquidity?.usd || 0) ? a : b));
+}
+
+/** Token 24h DEX volume = sum across the chain's pairs (a single pair understates it). */
+function sumVolume24h(pairs: any[] | undefined, chain?: string): number {
+  return chainPairs(pairs, chain).reduce((s, p) => s + (Number(p.volume?.h24) || 0), 0);
 }
 
 export interface Resolved {

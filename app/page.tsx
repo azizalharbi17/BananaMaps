@@ -130,10 +130,10 @@ export default function Home() {
         {/* Feature cards */}
         <div className="feat-grid">
           {[
-            { icon: '🐋', title: 'Whale Detection', desc: 'Instantly spot large holders and track their movements.' },
-            { icon: '🔗', title: 'Cluster Analysis', desc: 'Identify wallets funded from the same source — classic rug setup.' },
-            { icon: '📡', title: 'Live On-Chain Data', desc: 'Real-time on-chain data, always up to date.' },
-            { icon: '⚡', title: 'Multi-Chain', desc: 'ETH, BSC, Solana and Base — all in one place.' },
+            { icon: '🐋', title: 'Whale Detection', desc: 'Top 150 holders mapped with real transfer flows between them.' },
+            { icon: '🔗', title: 'Cluster Analysis', desc: 'Connected-wallet clusters from on-chain transfers — classic rug setup, exposed.' },
+            { icon: '🏦', title: 'Exchange Labeling', desc: 'Binance, Bybit, Coinbase and 250+ known wallets identified and separated.' },
+            { icon: '⚡', title: 'Multi-Chain', desc: 'ETH, BSC, Solana and Base — snapshots refresh automatically.' },
           ].map(card => (
             <div key={card.title} className="feat-card">
               <div style={{ fontSize: 26, marginBottom: 10 }}>{card.icon}</div>
@@ -160,7 +160,8 @@ export default function Home() {
         flexWrap: 'wrap', gap: 8,
       }}>
         <div>© 2026 BananaMaps</div>
-        <div style={{ display: 'flex', gap: 20 }}>
+        <div style={{ maxWidth: 520, textAlign: 'right', lineHeight: 1.5, opacity: 0.8 }}>
+          On-chain data for informational purposes only — not financial advice. Always do your own research.
         </div>
       </footer>
 
