@@ -20,11 +20,22 @@ const MAX_CONCURRENT_BUILDS = num(process.env.GUARD_MAX_CONCURRENT_BUILDS, 3);
 const EVM_BUILDS_PER_DAY = num(process.env.GUARD_EVM_BUILDS_PER_DAY, 25);
 const SOL_BUILDS_PER_DAY = num(process.env.GUARD_SOL_BUILDS_PER_DAY, 100);
 
+// A build can never legitimately outlive the route's maxDuration — leases older
+// than this are expired, so a leaked slot (crash, dev-reload edge case) self-heals
+// instead of wedging the instance at "busy" forever.
+const SLOT_LEASE_MS = 360_000;
+
 interface IpWindow { hour: number[]; day: number[] }
 const ipWindows: Map<string, IpWindow> =
   ((globalThis as any).__guardIpWindows ||= new Map());
-const state: { active: number; dayStamp: string; evmBuilds: number; solBuilds: number } =
-  ((globalThis as any).__guardState ||= { active: 0, dayStamp: '', evmBuilds: 0, solBuilds: 0 });
+const state: { leases: number[]; dayStamp: string; evmBuilds: number; solBuilds: number } =
+  ((globalThis as any).__guardState2 ||= { leases: [], dayStamp: '', evmBuilds: 0, solBuilds: 0 });
+
+const activeBuilds = () => {
+  const cutoff = Date.now() - SLOT_LEASE_MS;
+  state.leases = state.leases.filter(t => t > cutoff);
+  return state.leases.length;
+};
 
 let sb: SupabaseClient | null | undefined;
 let sbFailedAt = 0; // cooldown so a dead Supabase doesn't add 4s to every request
@@ -78,7 +89,7 @@ export type GuardVerdict = { allowed: true } | { allowed: false; reason: string 
 export async function checkBuildAllowed(chain: string, ip: string | null, opts?: { background?: boolean }): Promise<GuardVerdict> {
   rollDay();
 
-  if (state.active >= MAX_CONCURRENT_BUILDS) {
+  if (activeBuilds() >= MAX_CONCURRENT_BUILDS) {
     return { allowed: false, reason: 'busy' };
   }
 
@@ -115,15 +126,15 @@ export async function checkBuildAllowed(chain: string, ip: string | null, opts?:
  */
 export function tryClaimBuildSlot(chain: string): boolean {
   rollDay();
-  if (state.active >= MAX_CONCURRENT_BUILDS) return false;
-  state.active++;
+  if (activeBuilds() >= MAX_CONCURRENT_BUILDS) return false;
+  state.leases.push(Date.now());
   if (chain === 'sol') state.solBuilds++;
   else state.evmBuilds++;
   return true;
 }
 
 export function recordBuildEnd() {
-  state.active = Math.max(0, state.active - 1);
+  state.leases.shift(); // release the oldest lease; expiry covers anything missed
 }
 
 /** Charge a build against a visitor's allowance (inline builds only). */
