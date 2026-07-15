@@ -26,11 +26,20 @@ export async function generateMetadata(
     }
   } catch { /* generic fallback is fine */ }
 
-  const og = `/api/og?token=${encodeURIComponent(token)}${chain ? `&chain=${encodeURIComponent(chain)}` : ''}`;
+  const qs = `token=${encodeURIComponent(token)}${chain ? `&chain=${encodeURIComponent(chain)}` : ''}`;
+  const og = `/api/og?${qs}`;
   return {
     title,
     description,
-    openGraph: { title, description, images: [{ url: og, width: 1200, height: 630 }] },
+    // page-level openGraph replaces the layout's wholesale, so restate the site fields
+    openGraph: {
+      type: 'website',
+      siteName: 'BananaMaps',
+      url: `/app?${qs}`,
+      title,
+      description,
+      images: [{ url: og, width: 1200, height: 630, alt: title }],
+    },
     twitter: { card: 'summary_large_image', title, description, images: [og] },
   };
 }
