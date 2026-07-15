@@ -1,31 +1,41 @@
 import type { Metadata } from 'next';
 import './globals.css';
 
+const TITLE = 'BananaMaps — Crypto Holder Intelligence';
+const DESCRIPTION =
+  'Visualize token holder distribution across Ethereum, BSC, Solana and Base. Expose clusters, whales, and suspicious wallet behaviour in seconds.';
+
 export const metadata: Metadata = {
   metadataBase: new URL('https://www.bananamaps.io'),
-  title: 'BananaMaps — Crypto Holder Intelligence',
-  description: 'Visualize token holder distribution across Ethereum, BSC, Solana and Base. Expose clusters, whales, and suspicious wallet behaviour in seconds.',
+  title: TITLE,
+  description: DESCRIPTION,
+  applicationName: 'BananaMaps',
   openGraph: {
-    title: 'BananaMaps — Crypto Holder Intelligence',
+    type: 'website',
+    title: TITLE,
     description: 'Visualize who really holds the bag.',
-    url: 'https://bananamaps.io',
+    url: 'https://www.bananamaps.io',
     siteName: 'BananaMaps',
     images: [
       {
-        url: 'https://bananamaps.io/og-image.png',
+        url: '/og.png',
         width: 1200,
         height: 630,
-      }
+        alt: TITLE,
+      },
     ],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: TITLE,
+    description: 'Visualize who really holds the bag.',
+    images: ['/og.png'],
   },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <head>
-        <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🍌</text></svg>" />
-      </head>
       <body>{children}</body>
     </html>
   );
