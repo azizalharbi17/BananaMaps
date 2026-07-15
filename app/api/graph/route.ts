@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse, after } from 'next/server';
 import { resolveTokenInput, normAddr, CHAIN_LABEL, UpstreamError, NotIndexedError } from '@/lib/graphBuilder';
 import { getCachedGraph } from '@/lib/graphCache';
-import { MIN_COMPAT_VERSION } from '@/lib/graphTypes';
+import { MIN_COMPAT_VERSION, TokenGraph } from '@/lib/graphTypes';
 import { checkBuildAllowed, clientIp } from '@/lib/buildGuard';
 import { runBuild, isBuildInFlight, BuildSlotsBusy } from '@/lib/buildRunner';
 import { KNOWN_TOKENS } from '@/lib/constants';
@@ -22,11 +22,57 @@ const REVALIDATE_RETRY_MS = 30 * 60_000;
 const lastRevalidateAttempt: Map<string, number> =
   ((globalThis as any).__graphRevalAttempts ||= new Map());
 
+const guardDeniedMsg = (reason: string) => reason === 'ip-limit'
+  ? 'Rate limit reached — try again in a little while'
+  : 'High demand right now — new token maps are temporarily paused, try again soon';
+
+// Terminal outcome of a background (wait=0) build that produced no cache entry —
+// not-found, upstream failure, or a partial result. Lets polls report the failure
+// within one cycle instead of spinning to the client-side timeout. In-memory, so
+// a poll routed to another instance just keeps polling; the client timeout is the
+// cross-instance backstop.
+interface BuildOutcome { at: number; error?: string; status?: number; graph?: TokenGraph }
+const lastBuildOutcome: Map<string, BuildOutcome> =
+  ((globalThis as any).__graphBuildOutcomes ||= new Map());
+const OUTCOME_TTL_MS = 10 * 60_000;
+
+// Polls re-run token resolution every 20s; pinning the first successful
+// resolution keeps the {address, chain} stable under the poll loop and spares
+// DexScreener the repeat lookups. Consulted for polls only — fresh requests
+// keep resolving so a new pool listing can still win.
+const resolvedInputs: Map<string, { address: string; chain: string; at: number }> =
+  ((globalThis as any).__graphResolvedInputs ||= new Map());
+const RESOLVE_TTL_MS = 10 * 60_000;
+
+function recordOutcome(flightKey: string, outcome: BuildOutcome) {
+  // Bound memory: partial graphs are large, so sweep expired entries as we write
+  if (lastBuildOutcome.size > 50) {
+    for (const [k, v] of lastBuildOutcome) {
+      if (Date.now() - v.at >= OUTCOME_TTL_MS) lastBuildOutcome.delete(k);
+    }
+  }
+  lastBuildOutcome.set(flightKey, outcome);
+}
+
+function buildErrorOutcome(e: unknown): BuildOutcome {
+  if (e instanceof NotIndexedError) return { at: Date.now(), error: e.message, status: 404 };
+  if (e instanceof BuildSlotsBusy) return { at: Date.now(), error: 'High demand right now — try again in a minute', status: 429 };
+  const error = e instanceof UpstreamError
+    ? 'Data source temporarily unavailable — try again shortly'
+    : 'Failed to build graph';
+  return { at: Date.now(), error, status: 502 };
+}
+
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const token = searchParams.get('token') || '';
   const chainHint = searchParams.get('chain') || 'eth';
   const refresh = searchParams.get('refresh') === '1';
+  // Non-blocking first build (embed iframes can't hold a 1-3 min request open):
+  // wait=0 starts the build in the background and returns 202; poll=1 is a pure
+  // cache probe that never starts work, so polls are safe on any instance.
+  const nowait = searchParams.get('wait') === '0';
+  const poll = searchParams.get('poll') === '1';
   const ip = clientIp(req.headers);
 
   if (!token.trim()) {
@@ -41,15 +87,26 @@ export async function GET(req: NextRequest) {
       address = known.address;
       chain = known.chain;
     } else {
-      const resolved = await resolveTokenInput(token, chainHint);
-      if (!resolved) {
-        return NextResponse.json(
-          { error: `Token not found on ${CHAIN_LABEL[chainHint] || chainHint}` },
-          { status: 404 },
-        );
+      const inputKey = `${token.trim().toLowerCase()}|${chainHint}`;
+      const pinned = poll ? resolvedInputs.get(inputKey) : undefined;
+      if (pinned && Date.now() - pinned.at < RESOLVE_TTL_MS) {
+        ({ address, chain } = pinned);
+      } else {
+        const resolved = await resolveTokenInput(token, chainHint);
+        if (!resolved) {
+          return NextResponse.json(
+            { error: `Token not found on ${CHAIN_LABEL[chainHint] || chainHint}` },
+            { status: 404 },
+          );
+        }
+        ({ address, chain } = resolved);
+        if (resolvedInputs.size > 500) {
+          for (const [k, v] of resolvedInputs) {
+            if (Date.now() - v.at >= RESOLVE_TTL_MS) resolvedInputs.delete(k);
+          }
+        }
+        resolvedInputs.set(inputKey, { address, chain, at: Date.now() });
       }
-      address = resolved.address;
-      chain = resolved.chain;
     }
     const addrKey = normAddr(address, chain);
     const flightKey = `${chain}:${addrKey}`;
@@ -86,7 +143,54 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ graph: cached.graph, cachedAt: cached.computedAt, fromCache: true, revalidating: true });
     }
 
-    // 4. Inline build (first-ever view or explicit refresh) — rate-limited per IP
+    // 4. Nothing cached yet. Poll probes answer from cache and recorded build
+    //    outcomes alone — never start a build, so the 20s embed polling loop costs
+    //    nothing regardless of which instance it lands on.
+    if (!refresh && poll) {
+      const outcome = lastBuildOutcome.get(flightKey);
+      if (outcome && Date.now() - outcome.at < OUTCOME_TTL_MS && !isBuildInFlight(chain, addrKey)) {
+        if (outcome.graph) {
+          // Partial build: served once like the inline path would, never cached
+          return NextResponse.json({ graph: outcome.graph, cachedAt: outcome.graph.computedAt, fromCache: false, partial: true });
+        }
+        return NextResponse.json({ error: outcome.error }, { status: outcome.status });
+      }
+      return NextResponse.json(
+        { building: true, inFlight: isBuildInFlight(chain, addrKey) },
+        { status: 202 },
+      );
+    }
+
+    // 5. Non-blocking first build: same guard + IP charge as an inline build, but
+    //    the response returns immediately and after() keeps the instance alive
+    //    until the build settles. The client polls until the snapshot lands (or a
+    //    recorded terminal outcome tells it to stop).
+    if (!refresh && nowait) {
+      if (!isBuildInFlight(chain, addrKey)) {
+        const verdict = await checkBuildAllowed(chain, ip);
+        if (!verdict.allowed) {
+          return NextResponse.json({ error: guardDeniedMsg(verdict.reason) }, { status: 429 });
+        }
+        lastBuildOutcome.delete(flightKey);
+        const bg = runBuild(address, chain, addrKey, ip)
+          .then(result => {
+            if (!result) {
+              recordOutcome(flightKey, { at: Date.now(), error: `Token not found on ${CHAIN_LABEL[chain] || chain}`, status: 404 });
+            } else if (result.partial) {
+              recordOutcome(flightKey, { at: Date.now(), graph: result.graph });
+            }
+            // Full builds need no outcome — the cache write is the signal.
+          })
+          .catch(e => {
+            console.error('[api/graph] background first build failed:', e instanceof Error ? e.message : e);
+            recordOutcome(flightKey, buildErrorOutcome(e));
+          });
+        after(() => bg);
+      }
+      return NextResponse.json({ building: true, etaSeconds: 120 }, { status: 202 });
+    }
+
+    // 6. Inline build (first-ever view or explicit refresh) — rate-limited per IP
     //    and against the daily CU budget. Joining an existing flight skips the guard
     //    (it consumes nothing new).
     const joining = isBuildInFlight(chain, addrKey);
@@ -97,10 +201,7 @@ export async function GET(req: NextRequest) {
           // Over budget but we have SOMETHING — stale beats an error.
           return NextResponse.json({ graph: cached.graph, cachedAt: cached.computedAt, fromCache: true, stale: true });
         }
-        const msg = verdict.reason === 'ip-limit'
-          ? 'Rate limit reached — try again in a little while'
-          : 'High demand right now — new token maps are temporarily paused, try again soon';
-        return NextResponse.json({ error: msg }, { status: 429 });
+        return NextResponse.json({ error: guardDeniedMsg(verdict.reason) }, { status: 429 });
       }
     }
     try {

@@ -21,6 +21,20 @@ function fmtPrice(p: number): string {
   return m ? `$0.${m[1]}${m[2]}` : '$' + p.toPrecision(3);
 }
 
+// Non-blocking first-build polling (embed mode): probe cadence, one re-kick in
+// case the background build died server-side, and a hard stop so the state never
+// spins forever. The re-kick waits out the server's 300s maxDuration — a build
+// still missing past that is definitively dead, so re-kicking can't duplicate a
+// live one — and the give-up leaves the re-kicked build time to finish.
+const BUILD_POLL_MS = 20_000;
+const BUILD_REKICK_MS = 330_000;
+const BUILD_GIVE_UP_MS = 510_000;
+
+function fmtElapsed(ms: number): string {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
+
 function fmtAge(iso: string): string {
   const ms = Date.now() - new Date(iso).getTime();
   const m = Math.floor(ms / 60000);
@@ -100,14 +114,20 @@ function AppContent({ embed = false }: { embed?: boolean }) {
   const userTouchedViewRef = useRef(false);
   const sizeRef = useRef({ w: 800, h: 600 }); // canvas CSS-pixel size (backing store is DPR-scaled)
   const reqSeqRef = useRef(0);                // stale-response guard for loadToken
+  const aliveRef = useRef(true);              // stops the embed poll loop after unmount
   const lastLoadedRef = useRef<string | null>(null);
   const pinchedRef = useRef(false);           // suppress tap-select after a pinch gesture
 
   const searchParams = useSearchParams();
   const router = useRouter();
+  // Embed mode (/embed route, or ?embed=1): map-only chrome for iframing on
+  // partner sites (e.g. BananaScreener) — no nav, compact sidebar drawer,
+  // attribution link instead. Also switches first builds to non-blocking polling.
+  const isEmbed = embed || searchParams.get('embed') === '1';
   const [search, setSearch] = useState(searchParams.get('token') || '');
   const [chain, setChain] = useState('eth');
   const [loading, setLoading] = useState(false);
+  const [building, setBuilding] = useState<number | null>(null); // build start ts while the server computes
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [graph, setGraph] = useState<TokenGraph | null>(null);
@@ -187,6 +207,19 @@ function AppContent({ embed = false }: { embed?: boolean }) {
   useEffect(() => {
     const t = setInterval(() => setAgeTick(v => v + 1), 60_000);
     return () => clearInterval(t);
+  }, []);
+
+  // Tick the elapsed readout on the building overlay once a second
+  const [buildTick, setBuildTick] = useState(0);
+  useEffect(() => {
+    if (building === null) return;
+    const t = setInterval(() => setBuildTick(v => v + 1), 1000);
+    return () => clearInterval(t);
+  }, [building]);
+
+  useEffect(() => {
+    aliveRef.current = true;
+    return () => { aliveRef.current = false; };
   }, []);
 
   function syncCanvasSize(canvas: HTMLCanvasElement) {
@@ -298,6 +331,7 @@ function AppContent({ embed = false }: { embed?: boolean }) {
     const myReq = ++reqSeqRef.current; // ignore this response if a newer request starts
     lastLoadedRef.current = input.trim();
     setError(null);
+    setBuilding(null);
     if (opts?.refresh) setRefreshing(true);
     else {
       setLoading(true);
@@ -305,11 +339,54 @@ function AppContent({ embed = false }: { embed?: boolean }) {
       setShowList(false);
     }
     try {
-      const params = new URLSearchParams({ token: input.trim(), chain: opts?.chainOverride || chain });
+      const baseParams = () => new URLSearchParams({ token: input.trim(), chain: opts?.chainOverride || chain });
+      const params = baseParams();
       if (opts?.refresh) params.set('refresh', '1');
-      const res = await fetch(`/api/graph?${params}`);
-      const data = await res.json();
+      // An iframe visitor can't sit on a 1-3 min build request — ask the API to
+      // build in the background (202) and poll until the snapshot lands.
+      else if (isEmbed) params.set('wait', '0');
+      let res = await fetch(`/api/graph?${params}`);
+      let data = await res.json();
       if (reqSeqRef.current !== myReq) return;
+      if (res.status === 202 && data.building) {
+        setLoading(false);
+        const started = Date.now();
+        setBuilding(started);
+        let rekicked = false;
+        let misses = 0;
+        let errStreak = 0;
+        while (true) {
+          await new Promise(r => setTimeout(r, BUILD_POLL_MS));
+          if (!aliveRef.current || reqSeqRef.current !== myReq) return;
+          if (Date.now() - started > BUILD_GIVE_UP_MS) {
+            setError('This map is taking longer than usual to build — try again in a minute.');
+            return;
+          }
+          const p = baseParams();
+          // One re-kick after the server's build ceiling in case the original died.
+          const rekicking = !rekicked && Date.now() - started > BUILD_REKICK_MS;
+          if (rekicking) p.set('wait', '0');
+          else p.set('poll', '1');
+          try {
+            res = await fetch(`/api/graph?${p}`);
+            data = await res.json();
+            misses = 0;
+            if (rekicking) rekicked = true; // only consumed once it actually reached the server
+          } catch {
+            if (++misses >= 3) throw new Error('poll failed');
+            continue; // transient network blip — keep polling
+          }
+          if (!aliveRef.current || reqSeqRef.current !== myReq) return;
+          if (res.ok && data.graph) break;
+          if (res.status === 202) { errStreak = 0; continue; }
+          // Error responses can be transient too (an upstream blip can 502 one
+          // probe) — only give up when they persist.
+          if (++errStreak >= 3) {
+            setError(data.error || 'Failed to load token');
+            return;
+          }
+        }
+      }
       if (!res.ok || !data.graph) {
         setError(data.error || 'Failed to load token');
         return;
@@ -344,18 +421,15 @@ function AppContent({ embed = false }: { embed?: boolean }) {
       if (reqSeqRef.current === myReq) {
         setLoading(false);
         setRefreshing(false);
+        setBuilding(null);
       }
     }
-  }, [chain]);
+  }, [chain, isEmbed]);
 
   // URL-driven loading: covers first mount, in-app searches (router.push), and
   // browser back/forward — the URL is the source of truth for which token shows.
   const urlToken = searchParams.get('token');
   const urlChain = searchParams.get('chain');
-  // Embed mode (/embed route, or ?embed=1): map-only chrome for iframing on
-  // partner sites (e.g. BananaScreener) — no nav, compact sidebar drawer,
-  // attribution link instead.
-  const isEmbed = embed || searchParams.get('embed') === '1';
   const [embedListOpen, setEmbedListOpen] = useState(false);
   useEffect(() => {
     if (urlToken && urlToken !== lastLoadedRef.current) {
@@ -587,6 +661,7 @@ function AppContent({ embed = false }: { embed?: boolean }) {
   }
 
   void ageTick; // consumed for periodic re-render of the age pill
+  void buildTick; // consumed for the per-second elapsed readout while building
 
   return (
     <div style={{ height: '100dvh', background: '#0a0800', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -703,7 +778,7 @@ function AppContent({ embed = false }: { embed?: boolean }) {
             onMouseLeave={() => { isDraggingRef.current = false; hoveredIdxRef.current = -1; }}
             style={{ width: '100%', height: '100%', display: 'block', cursor: 'grab', touchAction: 'none' }}
           />
-          {!loading && !graph && (
+          {!loading && building === null && !graph && (
             <div style={{ position: 'absolute', inset: 0, overflowY: 'auto', display: 'flex', justifyContent: 'center' }}>
               <div style={{ width: '100%', maxWidth: 680, padding: '36px 20px 60px', display: 'flex', flexDirection: 'column', gap: 10 }}>
                 <div style={{ textAlign: 'center' }}>
@@ -714,6 +789,13 @@ function AppContent({ embed = false }: { embed?: boolean }) {
                   <div style={{ fontSize: 11, color: 'rgba(245,235,200,0.35)', marginTop: 4 }}>
                     Search any token or paste a contract address
                   </div>
+                  {/* The embed has no search bar, so an error needs its own way back */}
+                  {isEmbed && error && urlToken && (
+                    <button onClick={() => loadToken(urlToken, urlChain ? { chainOverride: urlChain } : undefined)}
+                      style={{ marginTop: 12, background: '#F5C842', color: '#000', border: 'none', borderRadius: 8, padding: '7px 16px', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
+                      ↻ Try again
+                    </button>
+                  )}
                 </div>
                 {!isEmbed && discover && discover.popular.length > 0 && (
                   <>
@@ -747,6 +829,18 @@ function AppContent({ embed = false }: { embed?: boolean }) {
               <div style={{ fontSize: 44, animation: 'spin 1s linear infinite' }}>🍌</div>
               <div style={{ fontSize: 13, color: 'rgba(245,200,66,0.7)' }}>Mapping holders & transfers...</div>
               <div style={{ fontSize: 10, color: 'rgba(245,200,66,0.35)' }}>First load computes the full graph — can take a minute</div>
+            </div>
+          )}
+          {!loading && building !== null && (
+            <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 14, background: 'rgba(10,8,0,0.9)', padding: 20 }}>
+              <div style={{ fontSize: 44, animation: 'spin 1s linear infinite' }}>🍌</div>
+              <div style={{ fontSize: 14, color: 'rgba(245,200,66,0.85)', fontWeight: 700 }}>Building this holder map</div>
+              <div style={{ fontSize: 11, color: 'rgba(245,235,200,0.45)', textAlign: 'center', maxWidth: 320, lineHeight: 1.6 }}>
+                First-time maps take ~2 minutes to compute.<br />This view refreshes automatically — no need to reload.
+              </div>
+              <div style={{ fontSize: 10, color: 'rgba(245,235,200,0.3)', fontFamily: 'DM Mono,monospace' }}>
+                {fmtElapsed(Date.now() - building)} elapsed · checking every {Math.round(BUILD_POLL_MS / 1000)}s
+              </div>
             </div>
           )}
           {error && graph && (
