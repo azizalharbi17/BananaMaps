@@ -25,10 +25,15 @@ const markSbFailed = (op: string, e: unknown) => {
   sbFailedAt = Date.now();
 };
 
+// RLS only allows writes from the service role (20260714_lock_cache_writes.sql).
+// Without that key, skip write attempts entirely — a doomed anon write would trip
+// the shared failure cooldown and needlessly degrade READS to the memory fallback.
+const canWrite = () => !!process.env.SUPABASE_SERVICE_ROLE_KEY;
+
 function supa(): SupabaseClient | null {
   if (sb !== undefined) return sb;
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  // Prefer the service-role key for server-side writes; anon works if RLS allows.
+  // Prefer the service-role key for server-side writes; anon still reads.
   const k = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   sb = url && k
     ? createClient(url, k, {
@@ -107,7 +112,7 @@ export async function setWalletLabels(chain: string, rows: WalletLabelRow[]): Pr
   if (!rows.length) return;
   for (const r of rows) memLabels.set(key(chain, r.address), r);
   const client = supa();
-  if (!client || !sbHealthy()) return;
+  if (!client || !sbHealthy() || !canWrite()) return;
   try {
     const { error } = await client
       .from('wallet_labels')
@@ -122,7 +127,7 @@ export async function setCachedGraph(chain: string, address: string, graph: Toke
   const entry: CachedGraph = { graph, computedAt: graph.computedAt };
   memCache.set(key(chain, address), entry);
   const client = supa();
-  if (!client || !sbHealthy()) return;
+  if (!client || !sbHealthy() || !canWrite()) return;
   try {
     const { error } = await client
       .from('token_graphs')
