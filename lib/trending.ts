@@ -12,7 +12,7 @@ export interface TrendingToken {
 }
 
 // GeckoTerminal network slugs → our chain codes.
-export const TRENDING_NETWORKS: [string, string][] = [['eth', 'eth'], ['bsc', 'bsc'], ['base', 'base'], ['solana', 'sol']];
+export const TRENDING_NETWORKS: [string, string][] = [['eth', 'eth'], ['bsc', 'bsc'], ['base', 'base'], ['solana', 'sol'], ['robinhood', 'robinhood']];
 
 // Wrapped natives / stables trend constantly but their holder maps are noise
 const SKIP_SYMBOLS = new Set(['WETH', 'WBNB', 'WSOL', 'SOL', 'WBTC', 'USDC', 'USDT', 'DAI', 'CBBTC']);

@@ -22,12 +22,15 @@ const MORALIS_KEY = process.env.MORALIS_API_KEY!;
 const SOLSCAN_KEY = process.env.SOLSCAN_API_KEY || '';
 const VYBE_KEY = process.env.VYBE_API_KEY || '';
 
-// Keyless public RPCs verified to accept ≥100-element eth_getCode batches.
+// Keyless public RPCs verified to accept ≥50-element eth_getCode batches.
+// The Robinhood endpoint 403s non-browser User-Agents — postJson sends one.
 const EVM_RPC: Record<string, string> = {
   eth: 'https://ethereum-rpc.publicnode.com',
   bsc: 'https://bsc-rpc.publicnode.com',
   base: 'https://base-rpc.publicnode.com',
+  robinhood: 'https://rpc.mainnet.chain.robinhood.com',
 };
+const BROWSER_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36';
 
 const SYSTEM_PROGRAM = '11111111111111111111111111111111';
 // Program owners we can name when a graph node turns out to be a program-owned account.
@@ -50,7 +53,7 @@ async function postJson(url: string, body: unknown, timeoutMs = 12_000): Promise
   try {
     const res = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'User-Agent': BROWSER_UA },
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(timeoutMs),
     });

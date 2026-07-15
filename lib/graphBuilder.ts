@@ -12,12 +12,20 @@ const MORALIS_SOL = 'https://solana-gateway.moralis.io';
 const HELIUS_TX = 'https://api.helius.xyz/v0';
 
 export const MORALIS_CHAIN: Record<string, string> = { eth: '0x1', bsc: '0x38', base: '0x2105' };
-export const CHAIN_LABEL: Record<string, string> = { eth: 'Ethereum', bsc: 'BSC', sol: 'Solana', base: 'Base' };
+export const CHAIN_LABEL: Record<string, string> = { eth: 'Ethereum', bsc: 'BSC', sol: 'Solana', base: 'Base', robinhood: 'Robinhood Chain' };
+
+// Robinhood Chain (Arbitrum Orbit L2, chain id 4663 / 0x1237) — Moralis doesn't
+// index it, so holders/transfers come from its Blockscout explorer API instead.
+const BLOCKSCOUT_BASE: Record<string, string> = {
+  robinhood: 'https://robinhoodchain.blockscout.com/api/v2',
+};
+// Blockscout (and the Robinhood RPC) 403 non-browser User-Agents.
+const BROWSER_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36';
 
 const TOP_HOLDERS = 150;
 const TRANSFER_PAGES_PER_WALLET = 1; // 100 transfers per holder
-const CONCURRENCY: Record<string, number> = { sol: 3, evm: 3 };
-const BATCH_DELAY_MS: Record<string, number> = { sol: 400, evm: 350 };
+const CONCURRENCY: Record<string, number> = { sol: 3, evm: 3, blockscout: 3 };
+const BATCH_DELAY_MS: Record<string, number> = { sol: 400, evm: 350, blockscout: 200 };
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 const FETCH_TIMEOUT_MS = 15_000;
@@ -219,6 +227,137 @@ async function fetchMetaEVM(token: string, chain: string, holderCount: number): 
   };
 }
 
+// ---------- Blockscout chains (Robinhood Chain) ----------
+
+/**
+ * Blockscout API v2 GET with the browser UA it requires and a generous timeout
+ * (p99 ≈ 7s with rare 20s outliers observed under load). `params` are appended
+ * verbatim — pagination works by echoing back next_page_params unchanged.
+ */
+async function blockscoutJson(base: string, path: string, params: Record<string, any> = {}): Promise<any> {
+  const qs = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== null && v !== undefined) qs.set(k, String(v));
+  }
+  const url = `${base}${path}${qs.size ? `?${qs}` : ''}`;
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const res = await fetch(url, { headers: { 'User-Agent': BROWSER_UA }, signal: AbortSignal.timeout(30_000) });
+      if (res.status === 429 || res.status >= 500) {
+        if (attempt >= 2) throw new UpstreamError(`HTTP ${res.status}`);
+        await sleep(1000 * (attempt + 1));
+        continue;
+      }
+      if (!res.ok) return null;
+      return await res.json();
+    } catch (e) {
+      if (e instanceof UpstreamError) throw e;
+      if (attempt >= 2) throw new UpstreamError(String(e));
+      await sleep(800 * (attempt + 1));
+    }
+  }
+}
+
+function classifyBlockscoutAddress(name: string | null | undefined, isContract: boolean): AddrLabel | null {
+  if (name && /pool|router|swap|vault|pair|amm/i.test(name)) return { label: name, labelType: 'dex' };
+  if (name && CEX_NAME_RE.test(name)) return { label: name, labelType: 'cex' };
+  if (isContract) return { label: name || 'Contract', labelType: 'contract' };
+  if (name) return { label: name };
+  return null;
+}
+
+async function fetchHoldersBlockscout(token: string, chain: string): Promise<HolderFetch> {
+  const base = BLOCKSCOUT_BASE[chain];
+  const holders: RawHolder[] = [];
+  const labels = new Map<string, AddrLabel>();
+
+  const info = await blockscoutJson(base, `/tokens/${token}`);
+  const totalSupply = Number(info?.total_supply);
+  const decimals = Number(info?.decimals ?? 18);
+  if (!Number.isFinite(totalSupply) || totalSupply <= 0) return { holders, labels };
+
+  let pageParams: Record<string, any> = {};
+  while (holders.length < TOP_HOLDERS) {
+    const data = await blockscoutJson(base, `/tokens/${token}/holders`, pageParams);
+    if (!data?.items?.length) break;
+    for (const item of data.items) {
+      const addr = String(item.address?.hash || '').toLowerCase();
+      if (!addr) continue;
+      const value = Number(item.value) || 0;
+      holders.push({
+        address: addr,
+        balanceFormatted: value / Math.pow(10, decimals),
+        pct: (value / totalSupply) * 100,
+      });
+      const known = getExchangeInfo(addr, chain);
+      const fromApi = classifyBlockscoutAddress(item.address?.name, !!item.address?.is_contract);
+      if (known) labels.set(addr, { label: known.name, labelType: known.type });
+      else if (fromApi) labels.set(addr, fromApi);
+    }
+    if (!data.next_page_params) break;
+    pageParams = data.next_page_params;
+    await sleep(250);
+  }
+  return { holders: holders.slice(0, TOP_HOLDERS), labels };
+}
+
+async function fetchTransfersBlockscout(
+  token: string, chain: string, holders: RawHolder[], labels: Map<string, AddrLabel>,
+): Promise<TransferFetch> {
+  const base = BLOCKSCOUT_BASE[chain];
+  const tokenLower = token.toLowerCase();
+  const out = new Map<string, RawTransfer[]>();
+  let failedWallets = 0;
+  await batched(holders, CONCURRENCY.blockscout, BATCH_DELAY_MS.blockscout, async (h) => {
+    const transfers: RawTransfer[] = [];
+    try {
+      // One page (50 transfers) per holder, matching the other chains' depth.
+      // NOTE: the filter param must be `token=` — token_contract_address_hash
+      // silently returns empty. A silently-failed filter also returns empty, so
+      // we sanity-check each item's token address before trusting it.
+      const data = await blockscoutJson(base, `/addresses/${h.address}/token-transfers`, { token });
+      for (const item of data?.items || []) {
+        if (String(item.token?.address_hash || item.token?.address || '').toLowerCase() !== tokenLower) continue;
+        const from = String(item.from?.hash || '').toLowerCase();
+        const to = String(item.to?.hash || '').toLowerCase();
+        if (!from || !to) continue;
+        transfers.push({ from, to, id: `${item.transaction_hash}:${item.log_index}` });
+        for (const [addr, meta] of [[from, item.from], [to, item.to]] as [string, any][]) {
+          if (labels.has(addr)) continue;
+          const known = getExchangeInfo(addr, chain);
+          if (known) { labels.set(addr, { label: known.name, labelType: known.type }); continue; }
+          const fromApi = classifyBlockscoutAddress(meta?.name, !!meta?.is_contract);
+          if (fromApi) labels.set(addr, fromApi);
+        }
+      }
+    } catch {
+      failedWallets++;
+    }
+    out.set(h.address, transfers);
+  });
+  return { transfers: out, failedWallets };
+}
+
+async function fetchMetaBlockscout(token: string, chain: string, holderCount: number): Promise<TokenMeta> {
+  const base = BLOCKSCOUT_BASE[chain];
+  const [info, dex] = await Promise.all([
+    blockscoutJson(base, `/tokens/${token}`).catch(() => null),
+    tryFetchJson(`https://api.dexscreener.com/latest/dex/tokens/${token}`),
+  ]);
+  const pair = bestPair(dex?.pairs, token, chain);
+  return {
+    name: info?.name || pair?.baseToken?.name || '',
+    symbol: info?.symbol || pair?.baseToken?.symbol || '',
+    logo: pair?.info?.imageUrl || info?.icon_url || '',
+    price: firstFinite(pair?.priceUsd, info?.exchange_rate),
+    priceChange24h: firstFinite(pair?.priceChange?.h24),
+    marketCap: firstFinite(pair?.marketCap, pair?.fdv, info?.circulating_market_cap),
+    volume24h: sumVolume24h(dex?.pairs, token, chain),
+    totalHolders: firstFinite(info?.holders_count),
+    holderCount,
+  };
+}
+
 // ---------- Solana (Moralis solana-gateway + Helius Enhanced Transactions) ----------
 
 async function fetchHoldersSOL(mint: string): Promise<HolderFetch> {
@@ -395,7 +534,7 @@ async function fetchMetaSOL(mint: string, holderCount: number): Promise<TokenMet
 
 // ---------- DexScreener helpers ----------
 
-const DEX_CHAIN_TO_OURS: Record<string, string> = { ethereum: 'eth', bsc: 'bsc', base: 'base', solana: 'sol' };
+const DEX_CHAIN_TO_OURS: Record<string, string> = { ethereum: 'eth', bsc: 'bsc', base: 'base', solana: 'sol', robinhood: 'robinhood' };
 
 /**
  * Pairs on our chain where the token is the BASE. DexScreener's /tokens/{addr}
@@ -458,25 +597,31 @@ export async function resolveTokenInput(input: string, chainHint: string): Promi
     return { address: q, chain: 'sol' };
   }
 
-  // Ticker → DexScreener search, grouped by (chain, address), scored by max liquidity.
-  // Symbol match is case-insensitive and tolerates a "$" prefix (e.g. $WIF).
+  // Ticker → DexScreener search, grouped by (chain, address). Symbol match is
+  // case-insensitive and tolerates a "$" prefix (e.g. $WIF). Groups are scored by
+  // the GEOMETRIC MEAN of liquidity and 24h volume, not liquidity alone: scam
+  // copycats fake enormous liquidity but can't fake volume (regression case: the
+  // top-liquidity "CASHCAT" on Robinhood Chain shows $81M liquidity and $0.03
+  // volume — the real token has $10M/$30M and must win).
   const search = await fetchJson(`https://api.dexscreener.com/latest/dex/search?q=${encodeURIComponent(q)}`);
   const pairs = (search?.pairs || []).filter((p: any) => DEX_CHAIN_TO_OURS[p.chainId]);
   const want = q.toLowerCase().replace(/^\$/, '');
-  const groups = new Map<string, { chain: string; address: string; liq: number; symbolMatch: boolean }>();
+  const groups = new Map<string, { chain: string; address: string; liq: number; vol: number; symbolMatch: boolean }>();
   for (const p of pairs) {
     const sym = (p.baseToken?.symbol || '').toLowerCase().replace(/^\$/, '');
     const name = (p.baseToken?.name || '').toLowerCase();
     const key = `${p.chainId}:${p.baseToken?.address}`;
     const liq = p.liquidity?.usd || 0;
+    const vol = Number(p.volume?.h24) || 0;
     const symbolMatch = sym === want || name === want;
     const g = groups.get(key);
-    if (!g) groups.set(key, { chain: DEX_CHAIN_TO_OURS[p.chainId], address: p.baseToken?.address, liq, symbolMatch });
-    else { g.liq = Math.max(g.liq, liq); g.symbolMatch = g.symbolMatch || symbolMatch; }
+    if (!g) groups.set(key, { chain: DEX_CHAIN_TO_OURS[p.chainId], address: p.baseToken?.address, liq, vol, symbolMatch });
+    else { g.liq = Math.max(g.liq, liq); g.vol += vol; g.symbolMatch = g.symbolMatch || symbolMatch; }
   }
+  const score = (g: { liq: number; vol: number }) => Math.sqrt(Math.max(g.liq, 1) * Math.max(g.vol, 1));
   const ranked = [...groups.values()]
     .filter(g => g.address && g.liq > 10_000)
-    .sort((a, b) => (Number(b.symbolMatch) - Number(a.symbolMatch)) || (b.liq - a.liq));
+    .sort((a, b) => (Number(b.symbolMatch) - Number(a.symbolMatch)) || (score(b) - score(a)));
   if (!ranked.length) return null;
   return { address: ranked[0].address, chain: ranked[0].chain };
 }
@@ -492,9 +637,14 @@ export interface ComputeResult {
 export async function computeTokenGraph(address: string, chain: string): Promise<ComputeResult | null> {
   const t0 = Date.now();
   const isSol = chain === 'sol';
+  const isBlockscout = chain in BLOCKSCOUT_BASE;
 
   // Holder fetch failures throw UpstreamError (surfaces as 500, not a bogus "not found").
-  const { holders, labels } = isSol ? await fetchHoldersSOL(address) : await fetchHoldersEVM(address, chain);
+  const { holders, labels } = isSol
+    ? await fetchHoldersSOL(address)
+    : isBlockscout
+      ? await fetchHoldersBlockscout(address, chain)
+      : await fetchHoldersEVM(address, chain);
   console.log(`[graph] ${chain}:${address} holders=${holders.length} (${Date.now() - t0}ms)`);
   if (!holders.length) {
     // "Not found" is only true if DexScreener has never seen the address either —
@@ -508,13 +658,19 @@ export async function computeTokenGraph(address: string, chain: string): Promise
 
   const { transfers, failedWallets } = isSol
     ? await fetchTransfersSOL(address, holders, labels)
-    : await fetchTransfersEVM(address, chain, holders, labels);
+    : isBlockscout
+      ? await fetchTransfersBlockscout(address, chain, holders, labels)
+      : await fetchTransfersEVM(address, chain, holders, labels);
   let transferCount = 0;
   for (const t of transfers.values()) transferCount += t.length;
   const partial = failedWallets > holders.length * 0.2;
   console.log(`[graph] ${chain}:${address} transfers=${transferCount} across ${transfers.size} wallets, ${failedWallets} failed${partial ? ' (PARTIAL — will not cache)' : ''} (${Date.now() - t0}ms)`);
 
-  const meta = isSol ? await fetchMetaSOL(address, holders.length) : await fetchMetaEVM(address, chain, holders.length);
+  const meta = isSol
+    ? await fetchMetaSOL(address, holders.length)
+    : isBlockscout
+      ? await fetchMetaBlockscout(address, chain, holders.length)
+      : await fetchMetaEVM(address, chain, holders.length);
 
   const computedAt = new Date().toISOString();
   // Pass 1 determines the final ≤500-node set; the label resolver then works that

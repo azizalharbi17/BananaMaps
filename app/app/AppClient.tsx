@@ -7,8 +7,8 @@ import { calculateRugScore, RugScoreResult } from '@/lib/rugScore';
 import { supabase } from '@/lib/supabase';
 import AddressList, { EXPLORER } from './AddressList';
 
-const CC: Record<string, string> = { eth: '#627EEA', bsc: '#F3BA2F', sol: '#9945FF', base: '#0052FF' };
-const CL: Record<string, string> = { eth: 'Ethereum', bsc: 'BSC', sol: 'Solana', base: 'Base' };
+const CC: Record<string, string> = { eth: '#627EEA', bsc: '#F3BA2F', sol: '#9945FF', base: '#0052FF', robinhood: '#00C805' };
+const CL: Record<string, string> = { eth: 'Ethereum', bsc: 'BSC', sol: 'Solana', base: 'Base', robinhood: 'Robinhood' };
 
 function fmtPrice(p: number): string {
   if (!p) return '—';
@@ -597,7 +597,7 @@ function AppContent({ embed = false }: { embed?: boolean }) {
         </a>
         {!isMobile && (
           <div style={{ display: 'flex', gap: 4 }}>
-            {(['eth', 'bsc', 'sol', 'base'] as const).map(c => (
+            {(['eth', 'bsc', 'sol', 'base', 'robinhood'] as const).map(c => (
               <button key={c} onClick={() => setChain(c)} style={{ background: chain === c ? 'rgba(245,200,66,0.08)' : 'transparent', border: `1px solid ${chain === c ? CC[c] : 'rgba(255,255,255,0.08)'}`, color: chain === c ? CC[c] : 'rgba(255,255,255,0.35)', borderRadius: 6, padding: '4px 8px', fontSize: 10, cursor: 'pointer', fontFamily: 'inherit' }}>
                 <span style={{ display: 'inline-block', width: 5, height: 5, borderRadius: '50%', background: CC[c], marginRight: 4 }} />{c.toUpperCase()}
               </button>
@@ -607,7 +607,7 @@ function AppContent({ embed = false }: { embed?: boolean }) {
         <div style={{ flex: 1, maxWidth: 700, display: 'flex', alignItems: 'center', background: 'rgba(245,200,66,0.04)', border: '1px solid rgba(245,200,66,0.12)', borderRadius: 8, padding: '0 10px', gap: 6 }}>
           {isMobile && (
             <select value={chain} onChange={e => setChain(e.target.value)} style={{ background: 'transparent', border: 'none', outline: 'none', color: CC[chain], fontSize: 11, cursor: 'pointer' }}>
-              {['eth', 'bsc', 'sol', 'base'].map(c => <option key={c} value={c} style={{ background: '#0a0a18' }}>{c.toUpperCase()}</option>)}
+              {['eth', 'bsc', 'sol', 'base', 'robinhood'].map(c => <option key={c} value={c} style={{ background: '#0a0a18' }}>{c.toUpperCase()}</option>)}
             </select>
           )}
           <input value={search} onChange={e => setSearch(e.target.value)} onKeyDown={e => e.key === 'Enter' && doSearch()} placeholder="Token name or contract address..." style={{ flex: 1, background: 'none', border: 'none', outline: 'none', color: '#f5f0e8', fontSize: 13, padding: '9px 0', minWidth: 0 }} />

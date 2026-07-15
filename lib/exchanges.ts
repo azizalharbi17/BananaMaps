@@ -31,6 +31,7 @@ const CHAIN_MAP: Record<string, Record<string, ExchangeInfo>> = {
   eth: EVM,
   bsc: { ...EVM, ...toInfoMap(wallets.bsc || {}) },
   base: { ...EVM, ...toInfoMap(wallets.base || {}) },
+  robinhood: { ...EVM, ...toInfoMap(wallets.robinhood || {}) },
   sol: toInfoMap(wallets.sol || {}),
 };
 

@@ -4,7 +4,7 @@ import { lookupCachedGraphForToken } from '@/lib/tokenLookup';
 
 export const dynamic = 'force-dynamic';
 
-const CHAIN_LABEL: Record<string, string> = { eth: 'Ethereum', bsc: 'BSC', sol: 'Solana', base: 'Base' };
+const CHAIN_LABEL: Record<string, string> = { eth: 'Ethereum', bsc: 'BSC', sol: 'Solana', base: 'Base', robinhood: 'Robinhood Chain' };
 // Same saturated palette as the map
 const RING_COLORS = ['#E040FB', '#7C4DFF', '#FFD600', '#1DE9B6', '#FF6D00', '#2979FF'];
 

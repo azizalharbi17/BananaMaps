@@ -8,6 +8,7 @@ const EXPLORER: Record<string, string> = {
   bsc: 'https://bscscan.com/address',
   base: 'https://basescan.org/address',
   eth: 'https://etherscan.io/address',
+  robinhood: 'https://robinhoodchain.blockscout.com/address',
 };
 
 function EyeIcon({ off }: { off: boolean }) {
