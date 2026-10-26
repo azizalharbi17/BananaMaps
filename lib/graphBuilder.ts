@@ -4,9 +4,11 @@ import { TokenGraph } from './graphTypes';
 import { buildGraph, normAddr, RawHolder, RawTransfer, AddrLabel, TokenMeta } from './graphCore';
 import { getExchangeInfo } from './exchanges';
 import { resolveWalletLabels } from './labelResolver';
+import { recordProviderCall } from './providerMeter';
 
 const MORALIS_KEY = process.env.MORALIS_API_KEY!;
 const HELIUS_KEY = process.env.HELIUS_API_KEY!;
+const VYBE_KEY = process.env.VYBE_API_KEY || '';
 const MORALIS_BASE = 'https://deep-index.moralis.io/api/v2.2';
 const MORALIS_SOL = 'https://solana-gateway.moralis.io';
 const HELIUS_TX = 'https://api.helius.xyz/v0';
@@ -16,13 +18,13 @@ export const CHAIN_LABEL: Record<string, string> = { eth: 'Ethereum', bsc: 'BSC'
 
 // Robinhood Chain (Arbitrum Orbit L2, chain id 4663 / 0x1237) — Moralis doesn't
 // index it, so holders/transfers come from its Blockscout explorer API instead.
-const BLOCKSCOUT_BASE: Record<string, string> = {
+export const BLOCKSCOUT_BASE: Record<string, string> = {
   robinhood: 'https://robinhoodchain.blockscout.com/api/v2',
 };
 // Blockscout (and the Robinhood RPC) 403 non-browser User-Agents.
-const BROWSER_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36';
+export const BROWSER_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36';
 
-const TOP_HOLDERS = 150;
+export const TOP_HOLDERS = 150;
 const TRANSFER_PAGES_PER_WALLET = 1; // 100 transfers per holder
 const CONCURRENCY: Record<string, number> = { sol: 3, evm: 3, blockscout: 3 };
 const BATCH_DELAY_MS: Record<string, number> = { sol: 400, evm: 350, blockscout: 200 };
@@ -42,9 +44,10 @@ export class NotIndexedError extends Error {}
  * Throws UpstreamError for persistent 401/403/429/5xx/network failures so callers
  * can distinguish "token not found" from "our data source is down".
  */
-async function fetchJson(url: string, init?: RequestInit, retries = 2): Promise<any> {
+export async function fetchJson(url: string, init?: RequestInit, retries = 2): Promise<any> {
   for (let attempt = 0; ; attempt++) {
     try {
+      recordProviderCall(url);
       const res = await fetch(url, { ...init, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
       if (res.status === 429 || res.status >= 500) {
         if (attempt >= retries) {
@@ -75,7 +78,7 @@ async function fetchJson(url: string, init?: RequestInit, retries = 2): Promise<
 }
 
 /** Variant for best-effort calls (metadata enrichment): never throws, just returns null. */
-async function tryFetchJson(url: string, init?: RequestInit): Promise<any> {
+export async function tryFetchJson(url: string, init?: RequestInit): Promise<any> {
   try {
     return await fetchJson(url, init, 1);
   } catch {
@@ -83,7 +86,7 @@ async function tryFetchJson(url: string, init?: RequestInit): Promise<any> {
   }
 }
 
-const moralisHeaders = { headers: { 'X-API-Key': MORALIS_KEY } };
+export const moralisHeaders = { headers: { 'X-API-Key': MORALIS_KEY } };
 
 /** Run tasks with bounded concurrency + inter-batch delay (rate-limit courtesy). */
 async function batched<T, R>(items: T[], size: number, delayMs: number, fn: (item: T) => Promise<R>): Promise<R[]> {
@@ -98,14 +101,14 @@ async function batched<T, R>(items: T[], size: number, delayMs: number, fn: (ite
 
 // ---------- EVM (Moralis) ----------
 
-interface HolderFetch {
+export interface HolderFetch {
   holders: RawHolder[];
   labels: Map<string, AddrLabel>;
 }
 
 const CEX_NAME_RE = /binance|coinbase|kraken|okx|bybit|upbit|kucoin|gate\.?io|huobi|htx|bitget|mexc|crypto\.com|bitfinex|gemini|robinhood|bithumb|korbit|paribu|bitvavo|coinone|bitflyer|coincheck|bitso|btcturk|bitstamp|okcoin|poloniex|wazirx|indodax|exchange/i;
 
-function classifyMoralisLabel(label: string | null, entity: string | null, isContract: boolean): AddrLabel | null {
+export function classifyMoralisLabel(label: string | null, entity: string | null, isContract: boolean): AddrLabel | null {
   const name = entity || label;
   if (name && CEX_NAME_RE.test(name)) return { label: name, labelType: 'cex' };
   if (name && /uniswap|pancake|sushiswap|1inch|curve|balancer|aerodrome|router|\bdex\b/i.test(name)) return { label: name, labelType: 'dex' };
@@ -116,7 +119,7 @@ function classifyMoralisLabel(label: string | null, entity: string | null, isCon
   return null;
 }
 
-async function fetchHoldersEVM(token: string, chain: string): Promise<HolderFetch> {
+export async function fetchHoldersEVM(token: string, chain: string): Promise<HolderFetch> {
   const chainId = MORALIS_CHAIN[chain] || '0x1';
   const holders: RawHolder[] = [];
   const labels = new Map<string, AddrLabel>();
@@ -151,13 +154,13 @@ async function fetchHoldersEVM(token: string, chain: string): Promise<HolderFetc
   return { holders: holders.slice(0, TOP_HOLDERS), labels };
 }
 
-interface TransferFetch {
+export interface TransferFetch {
   transfers: Map<string, RawTransfer[]>;
   /** Wallets whose history fetch errored (vs. genuinely having no transfers). */
   failedWallets: number;
 }
 
-async function fetchTransfersEVM(
+export async function fetchTransfersEVM(
   token: string, chain: string, holders: RawHolder[], labels: Map<string, AddrLabel>,
 ): Promise<TransferFetch> {
   const chainId = MORALIS_CHAIN[chain] || '0x1';
@@ -206,7 +209,7 @@ function firstFinite(...vals: unknown[]): number {
   return 0;
 }
 
-async function fetchMetaEVM(token: string, chain: string, holderCount: number): Promise<TokenMeta> {
+export async function fetchMetaEVM(token: string, chain: string, holderCount: number): Promise<TokenMeta> {
   const chainId = MORALIS_CHAIN[chain] || '0x1';
   const [price, dex, holderStats] = await Promise.all([
     tryFetchJson(`${MORALIS_BASE}/erc20/${token}/price?chain=${chainId}&include=percent_change`, moralisHeaders),
@@ -224,6 +227,7 @@ async function fetchMetaEVM(token: string, chain: string, holderCount: number): 
     volume24h: sumVolume24h(dex?.pairs, token, chain),
     totalHolders: firstFinite(holderStats?.totalHolders),
     holderCount,
+    liquidityUsd: firstFinite(pair?.liquidity?.usd),
   };
 }
 
@@ -234,7 +238,7 @@ async function fetchMetaEVM(token: string, chain: string, holderCount: number): 
  * (p99 ≈ 7s with rare 20s outliers observed under load). `params` are appended
  * verbatim — pagination works by echoing back next_page_params unchanged.
  */
-async function blockscoutJson(base: string, path: string, params: Record<string, any> = {}): Promise<any> {
+export async function blockscoutJson(base: string, path: string, params: Record<string, any> = {}): Promise<any> {
   const qs = new URLSearchParams();
   for (const [k, v] of Object.entries(params)) {
     if (v !== null && v !== undefined) qs.set(k, String(v));
@@ -242,11 +246,19 @@ async function blockscoutJson(base: string, path: string, params: Record<string,
   const url = `${base}${path}${qs.size ? `?${qs}` : ''}`;
   for (let attempt = 0; ; attempt++) {
     try {
+      recordProviderCall(url);
       const res = await fetch(url, { headers: { 'User-Agent': BROWSER_UA }, signal: AbortSignal.timeout(30_000) });
       if (res.status === 429 || res.status >= 500) {
         if (attempt >= 2) throw new UpstreamError(`HTTP ${res.status}`);
         await sleep(1000 * (attempt + 1));
         continue;
+      }
+      // Cloudflare's managed challenge (observed on robinhoodchain.blockscout.com
+      // since 2026-09) answers 403 with an HTML interstitial. That is an outage of
+      // the data source, not "no data for this token" — surface it as such so
+      // callers don't report a live token as unindexed.
+      if (res.status === 403 && (res.headers.get('cf-mitigated') === 'challenge' || (res.headers.get('content-type') || '').includes('text/html'))) {
+        throw new UpstreamError('blockscout: blocked by Cloudflare challenge');
       }
       if (!res.ok) return null;
       return await res.json();
@@ -266,7 +278,7 @@ function classifyBlockscoutAddress(name: string | null | undefined, isContract: 
   return null;
 }
 
-async function fetchHoldersBlockscout(token: string, chain: string): Promise<HolderFetch> {
+export async function fetchHoldersBlockscout(token: string, chain: string): Promise<HolderFetch> {
   const base = BLOCKSCOUT_BASE[chain];
   const holders: RawHolder[] = [];
   const labels = new Map<string, AddrLabel>();
@@ -301,7 +313,7 @@ async function fetchHoldersBlockscout(token: string, chain: string): Promise<Hol
   return { holders: holders.slice(0, TOP_HOLDERS), labels };
 }
 
-async function fetchTransfersBlockscout(
+export async function fetchTransfersBlockscout(
   token: string, chain: string, holders: RawHolder[], labels: Map<string, AddrLabel>,
 ): Promise<TransferFetch> {
   const base = BLOCKSCOUT_BASE[chain];
@@ -338,7 +350,7 @@ async function fetchTransfersBlockscout(
   return { transfers: out, failedWallets };
 }
 
-async function fetchMetaBlockscout(token: string, chain: string, holderCount: number): Promise<TokenMeta> {
+export async function fetchMetaBlockscout(token: string, chain: string, holderCount: number): Promise<TokenMeta> {
   const base = BLOCKSCOUT_BASE[chain];
   const [info, dex] = await Promise.all([
     blockscoutJson(base, `/tokens/${token}`).catch(() => null),
@@ -355,40 +367,50 @@ async function fetchMetaBlockscout(token: string, chain: string, holderCount: nu
     volume24h: sumVolume24h(dex?.pairs, token, chain),
     totalHolders: firstFinite(info?.holders_count),
     holderCount,
+    liquidityUsd: firstFinite(pair?.liquidity?.usd),
   };
 }
 
 // ---------- Solana (Moralis solana-gateway + Helius Enhanced Transactions) ----------
 
-async function fetchHoldersSOL(mint: string): Promise<HolderFetch> {
+// Vybe's owner-level labels ("Binance Exchange 1", "Raydium AMM Authority") are a
+// bonus label source; classify them the same way Moralis entities are.
+function classifyVybeOwnerName(name: string | null | undefined): AddrLabel | null {
+  if (!name) return null;
+  const short = name.replace(/\s*(hot\s*|cold\s*)?wallet\s*\d*$/i, '').replace(/\s+\d+$/, '').trim() || name;
+  if (CEX_NAME_RE.test(name)) return { label: short, labelType: 'cex' };
+  if (/raydium|orca|meteora|jupiter|pump\.?fun|pumpswap|amm|pool|vault|liquidity|dex|whirlpool|phoenix|openbook/i.test(name)) return { label: name, labelType: 'dex' };
+  if (/burn|incinerat/i.test(name)) return { label: name, labelType: 'burn' };
+  return { label: name };
+}
+
+/**
+ * Solana top holders. Moralis removed its solana-gateway top-holders endpoint on
+ * 2026-07-31 (every request now 404s), so the ranked list comes from Vybe
+ * (/v4/tokens/{mint}/top-holders — on the free key, 150 holders in one call),
+ * with the Helius token-account scan as the fallback for tokens Vybe hasn't
+ * indexed yet.
+ */
+export async function fetchHoldersSOL(mint: string): Promise<HolderFetch> {
   const holders: RawHolder[] = [];
   const labels = new Map<string, AddrLabel>();
-  let cursor = '';
-  while (holders.length < TOP_HOLDERS) {
-    const url = `${MORALIS_SOL}/token/mainnet/${mint}/top-holders?limit=100${cursor ? `&cursor=${cursor}` : ''}`;
-    let data;
-    try {
-      data = await fetchJson(url, moralisHeaders);
-    } catch (e) {
-      if (!holders.length) throw e; // first page down = source down; later pages degrade
-      break;
-    }
-    if (!data?.result?.length) break;
-    for (const h of data.result) {
+  if (VYBE_KEY) {
+    const url = `https://api.vybenetwork.xyz/v4/tokens/${mint}/top-holders?limit=${TOP_HOLDERS}&page=0`;
+    const data = await fetchJson(url, { headers: { 'X-API-KEY': VYBE_KEY } });
+    for (const h of data?.data || []) {
       const addr = h.ownerAddress;
+      if (!addr) continue;
       holders.push({
         address: addr,
-        balanceFormatted: Number(h.balanceFormatted),
-        pct: Number(h.percentageRelativeToTotalSupply) || 0,
-        usdValue: Number(h.usdValue) || undefined,
+        balanceFormatted: Number(h.balance) || 0,
+        pct: Number(h.percentageOfSupplyHeld) || 0,
+        usdValue: Number(h.valueUsd) || undefined,
       });
       const known = getExchangeInfo(addr, 'sol');
+      const fromApi = classifyVybeOwnerName(h.ownerName);
       if (known) labels.set(addr, { label: known.name, labelType: known.type });
-      else if (h.isContract) labels.set(addr, { label: 'Contract', labelType: 'contract' });
+      else if (fromApi) labels.set(addr, fromApi);
     }
-    cursor = data.cursor || '';
-    if (!cursor) break;
-    await sleep(250);
   }
   if (!holders.length) {
     // Brand-new tokens (pump.fun launches etc.) lag Moralis indexing. For small
@@ -471,7 +493,7 @@ async function fetchHoldersSOLFallback(mint: string): Promise<HolderFetch | null
   return { holders, labels };
 }
 
-async function fetchTransfersSOL(
+export async function fetchTransfersSOL(
   mint: string, holders: RawHolder[], labels: Map<string, AddrLabel>,
 ): Promise<TransferFetch> {
   const out = new Map<string, RawTransfer[]>();
@@ -508,7 +530,7 @@ async function fetchTransfersSOL(
   return { transfers: out, failedWallets };
 }
 
-async function fetchMetaSOL(mint: string, holderCount: number): Promise<TokenMeta> {
+export async function fetchMetaSOL(mint: string, holderCount: number): Promise<TokenMeta> {
   const [meta, dex, asset] = await Promise.all([
     tryFetchJson(`${MORALIS_SOL}/token/mainnet/${mint}/metadata`, moralisHeaders),
     tryFetchJson(`https://api.dexscreener.com/latest/dex/tokens/${mint}`),
@@ -529,6 +551,7 @@ async function fetchMetaSOL(mint: string, holderCount: number): Promise<TokenMet
     marketCap: firstFinite(pair?.marketCap, pair?.fdv, meta?.marketCap),
     volume24h: sumVolume24h(dex?.pairs, mint, 'sol'),
     holderCount,
+    liquidityUsd: firstFinite(pair?.liquidity?.usd),
   };
 }
 
@@ -553,7 +576,7 @@ function chainPairs(pairs: any[] | undefined, token: string, chain?: string): an
   return out;
 }
 
-function bestPair(pairs: any[] | undefined, token: string, chain?: string): any | null {
+export function bestPair(pairs: any[] | undefined, token: string, chain?: string): any | null {
   const candidates = chainPairs(pairs, token, chain);
   if (!candidates.length) return null;
   // Pairs are NOT sorted by liquidity — pick max explicitly.
@@ -561,7 +584,7 @@ function bestPair(pairs: any[] | undefined, token: string, chain?: string): any 
 }
 
 /** Token 24h DEX volume = sum across the chain's base-side pairs. */
-function sumVolume24h(pairs: any[] | undefined, token: string, chain?: string): number {
+export function sumVolume24h(pairs: any[] | undefined, token: string, chain?: string): number {
   return chainPairs(pairs, token, chain).reduce((s, p) => s + (Number(p.volume?.h24) || 0), 0);
 }
 
@@ -624,6 +647,28 @@ export async function resolveTokenInput(input: string, chainHint: string): Promi
     .sort((a, b) => (Number(b.symbolMatch) - Number(a.symbolMatch)) || (score(b) - score(a)));
   if (!ranked.length) return null;
   return { address: ranked[0].address, chain: ranked[0].chain };
+}
+
+// ---------- Chain dispatchers (shared with the background worker) ----------
+
+export const isBlockscoutChain = (chain: string) => chain in BLOCKSCOUT_BASE;
+
+export function fetchHolders(chain: string, address: string): Promise<HolderFetch> {
+  if (chain === 'sol') return fetchHoldersSOL(address);
+  if (isBlockscoutChain(chain)) return fetchHoldersBlockscout(address, chain);
+  return fetchHoldersEVM(address, chain);
+}
+
+export function fetchTransfers(chain: string, address: string, holders: RawHolder[], labels: Map<string, AddrLabel>): Promise<TransferFetch> {
+  if (chain === 'sol') return fetchTransfersSOL(address, holders, labels);
+  if (isBlockscoutChain(chain)) return fetchTransfersBlockscout(address, chain, holders, labels);
+  return fetchTransfersEVM(address, chain, holders, labels);
+}
+
+export function fetchTokenMeta(chain: string, address: string, holderCount: number): Promise<TokenMeta> {
+  if (chain === 'sol') return fetchMetaSOL(address, holderCount);
+  if (isBlockscoutChain(chain)) return fetchMetaBlockscout(address, chain, holderCount);
+  return fetchMetaEVM(address, chain, holderCount);
 }
 
 // ---------- Entry point ----------

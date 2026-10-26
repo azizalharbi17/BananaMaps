@@ -5,6 +5,7 @@ import { MIN_COMPAT_VERSION, TokenGraph } from '@/lib/graphTypes';
 import { checkBuildAllowed, clientIp } from '@/lib/buildGuard';
 import { runBuild, isBuildInFlight, BuildSlotsBusy } from '@/lib/buildRunner';
 import { KNOWN_TOKENS } from '@/lib/constants';
+import { lookupRegistered, requestSync, workerAlive } from '@/lib/registry';
 
 // Full builds fetch ~150 wallet histories; background refreshes need the same window.
 export const maxDuration = 300;
@@ -43,6 +44,22 @@ const OUTCOME_TTL_MS = 10 * 60_000;
 const resolvedInputs: Map<string, { address: string; chain: string; at: number }> =
   ((globalThis as any).__graphResolvedInputs ||= new Map());
 const RESOLVE_TTL_MS = 10 * 60_000;
+
+// Registered tokens are kept fresh by the background worker (worker/). A refresh
+// click or a stale serve just flags the row for a priority sync; this throttle
+// keeps poll loops from writing that flag on every probe.
+const lastSyncRequest: Map<string, number> =
+  ((globalThis as any).__graphSyncRequests ||= new Map());
+const SYNC_REQUEST_THROTTLE_MS = 60_000;
+async function flagForWorker(flightKey: string, chain: string, addrKey: string) {
+  const last = lastSyncRequest.get(flightKey) || 0;
+  if (Date.now() - last < SYNC_REQUEST_THROTTLE_MS) return;
+  lastSyncRequest.set(flightKey, Date.now());
+  if (lastSyncRequest.size > 1000) {
+    for (const [k, v] of lastSyncRequest) if (Date.now() - v >= SYNC_REQUEST_THROTTLE_MS) lastSyncRequest.delete(k);
+  }
+  await requestSync(chain, addrKey);
+}
 
 function recordOutcome(flightKey: string, outcome: BuildOutcome) {
   // Bound memory: partial graphs are large, so sweep expired entries as we write
@@ -111,16 +128,44 @@ export async function GET(req: NextRequest) {
     const addrKey = normAddr(address, chain);
     const flightKey = `${chain}:${addrKey}`;
 
-    const cached = await getCachedGraph(chain, addrKey);
+    // Registry lookup rides alongside the cache read (one PK read each). A
+    // registered token is the worker's responsibility: this route serves the DB
+    // snapshot and never spends Vercel/provider budget rebuilding it.
+    const [cached, registered] = await Promise.all([getCachedGraph(chain, addrKey), lookupRegistered(chain, addrKey)]);
     const age = cached ? Date.now() - new Date(cached.computedAt).getTime() : Infinity;
+    // The worker is only trusted with a token when it can actually act on it:
+    // enabled, not backed off after errors, and alive (fresh heartbeat). For a
+    // token with no snapshot yet, a sync the worker already deferred (never
+    // synced, pushed into the future) or that errored also falls through to the
+    // on-demand build so a user is never left polling a build nobody will run.
+    const backedOff = !!registered?.backoff_until && new Date(registered.backoff_until).getTime() > Date.now();
+    const registeredActive = !!registered?.enabled && !backedOff;
+    const indexed = registeredActive && (await workerAlive());
+    const workerDeferred = !!registered && !registered.last_synced_at && (
+      (registered.consecutive_errors || 0) > 0
+      || (!!registered.next_sync_at && new Date(registered.next_sync_at).getTime() > Date.now() + 60_000)
+    );
     // Note: production Supabase has only ever held v3+ snapshots, so a sub-compat
     // row is a dev-cache curiosity — still served in stale paths, never fresh ones.
     const fresh = cached && cached.graph.version >= MIN_COMPAT_VERSION && age < STALE_MS;
     const refreshCoolingDown = refresh && cached && age < REFRESH_COOLDOWN_MS;
 
     // 2. Fresh snapshot (or a refresh inside the cooldown) → serve as-is
-    if (cached && ((!refresh && fresh) || refreshCoolingDown)) {
-      return NextResponse.json({ graph: cached.graph, cachedAt: cached.computedAt, fromCache: true });
+    if (cached && ((!refresh && fresh) || (refreshCoolingDown && !indexed))) {
+      return NextResponse.json({ graph: cached.graph, cachedAt: cached.computedAt, fromCache: true, indexed });
+    }
+
+    // 2b. Registered token with a snapshot: refresh clicks and stale serves both
+    //     queue a priority sync for the worker and hand back the current snapshot.
+    //     The client polls briefly for the newer computedAt (see AppClient). A
+    //     snapshot the worker has let go very stale (2× the stale window) falls
+    //     through to the app's own revalidation as a safety net.
+    if (cached && indexed && age < 2 * STALE_MS) {
+      after(() => flagForWorker(flightKey, chain, addrKey));
+      return NextResponse.json({
+        graph: cached.graph, cachedAt: cached.computedAt, fromCache: true, indexed: true,
+        revalidating: true, stale: !fresh, etaSeconds: 90,
+      });
     }
 
     // 3. Stale / outdated-version snapshot → serve instantly, revalidate after the
@@ -156,9 +201,19 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ error: outcome.error }, { status: outcome.status });
       }
       return NextResponse.json(
-        { building: true, inFlight: isBuildInFlight(chain, addrKey) },
+        { building: true, inFlight: isBuildInFlight(chain, addrKey), indexed },
         { status: 202 },
       );
+    }
+
+    // 4b. Registered but not built yet (trending enrollment, or the on-demand
+    //     build's cache write hasn't landed). While the worker is alive, hand the
+    //     first build to it instead of spending a Vercel build slot; the client's
+    //     existing 202 polling picks the snapshot up. A dead worker falls through
+    //     to the on-demand path below so users are never stranded.
+    if (indexed && !refresh && !workerDeferred) {
+      after(() => flagForWorker(flightKey, chain, addrKey));
+      return NextResponse.json({ building: true, etaSeconds: 120, indexed: true }, { status: 202 });
     }
 
     // 5. Non-blocking first build: same guard + IP charge as an inline build, but

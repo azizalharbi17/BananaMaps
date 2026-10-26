@@ -29,6 +29,10 @@ function fmtPrice(p: number): string {
 const BUILD_POLL_MS = 20_000;
 const BUILD_REKICK_MS = 330_000;
 const BUILD_GIVE_UP_MS = 510_000;
+// Refresh on a worker-indexed token: the API queues a priority sync and returns
+// the current snapshot; poll briefly for the newer one before giving up quietly.
+const INDEXED_REFRESH_POLL_MS = 10_000;
+const INDEXED_REFRESH_POLLS = 9;
 
 function fmtElapsed(ms: number): string {
   const s = Math.max(0, Math.floor(ms / 1000));
@@ -348,6 +352,20 @@ function AppContent({ embed = false }: { embed?: boolean }) {
       let res = await fetch(`/api/graph?${params}`);
       let data = await res.json();
       if (reqSeqRef.current !== myReq) return;
+      if (opts?.refresh && res.ok && data.graph && data.indexed && data.revalidating) {
+        const prevAt = data.cachedAt;
+        for (let i = 0; i < INDEXED_REFRESH_POLLS; i++) {
+          await new Promise(r => setTimeout(r, INDEXED_REFRESH_POLL_MS));
+          if (!aliveRef.current || reqSeqRef.current !== myReq) return;
+          try {
+            const p = baseParams();
+            p.set('poll', '1');
+            const r2 = await fetch(`/api/graph?${p}`);
+            const d2 = await r2.json();
+            if (r2.ok && d2.graph && d2.cachedAt !== prevAt) { res = r2; data = d2; break; }
+          } catch { /* transient — keep polling */ }
+        }
+      }
       if (res.status === 202 && data.building) {
         setLoading(false);
         const started = Date.now();

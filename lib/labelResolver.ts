@@ -13,6 +13,7 @@
 import { AddrLabel } from './graphCore';
 import { getExchangeInfo } from './exchanges';
 import { getWalletLabels, setWalletLabels, WalletLabelRow } from './graphCache';
+import { recordProviderCall } from './providerMeter';
 
 const HELIUS_KEY = process.env.HELIUS_API_KEY!;
 const MORALIS_KEY = process.env.MORALIS_API_KEY!;
@@ -51,6 +52,7 @@ const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
 async function postJson(url: string, body: unknown, timeoutMs = 12_000): Promise<any> {
   try {
+    recordProviderCall(url);
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'User-Agent': BROWSER_UA },
@@ -66,6 +68,7 @@ async function postJson(url: string, body: unknown, timeoutMs = 12_000): Promise
 
 async function getJson(url: string, headers: Record<string, string> = {}, timeoutMs = 12_000): Promise<any> {
   try {
+    recordProviderCall(url);
     const res = await fetch(url, { headers, signal: AbortSignal.timeout(timeoutMs) });
     if (!res.ok) return null;
     return await res.json();
@@ -98,6 +101,7 @@ async function vybeLookup(addresses: string[]): Promise<WalletLabelRow[]> {
   for (const address of addresses) {
     let data;
     try {
+      recordProviderCall('https://api.vybenetwork.xyz/v4/wallets/labeled-accounts');
       const res = await fetch(
         `https://api.vybenetwork.xyz/v4/wallets/labeled-accounts?accountAddress=${address}`,
         { headers: { 'X-API-KEY': VYBE_KEY }, signal: AbortSignal.timeout(12_000) },
@@ -107,7 +111,7 @@ async function vybeLookup(addresses: string[]): Promise<WalletLabelRow[]> {
         vybeUsable = false;
         return rows;
       }
-      data = res.ok ? await res.json() : null;
+      data = res.ok ? ((await res.json()) as any) : null;
     } catch {
       data = null;
     }

@@ -6,6 +6,7 @@
 import { computeTokenGraph, ComputeResult } from './graphBuilder';
 import { setCachedGraph } from './graphCache';
 import { tryClaimBuildSlot, recordBuildEnd, recordIpBuild } from './buildGuard';
+import { enrollToken } from './registry';
 
 /** Thrown when every concurrent build slot is taken at the moment of starting. */
 export class BuildSlotsBusy extends Error {}
@@ -25,6 +26,9 @@ export async function runBuild(address: string, chain: string, addrKey: string, 
       .then(async (result) => {
         if (result && !result.partial) {
           await setCachedGraph(chain, addrKey, result.graph);
+          // Registry enrollment: from here on the background worker (worker/) owns
+          // this token's freshness; /api/graph never rebuilds a registered token.
+          await enrollToken({ chain, address: addrKey, source: 'on-demand', symbol: result.graph.symbol, name: result.graph.name });
         }
         return result;
       })

@@ -1,0 +1,58 @@
+// Registry population: seed from every cached graph, enroll GeckoTerminal
+// trending tokens per chain, manual enrollment. Insert-if-missing everywhere —
+// an existing row's schedule and state are never disturbed.
+import { fetchTrendingChain, TRENDING_NETWORKS } from '../../lib/trending';
+import { normAddr } from '../../lib/graphCore';
+import { cfg, Tier } from './config';
+import { log, errMsg } from './log';
+import { budget } from './budget';
+import type { Store } from './store';
+import type { GraphRepo } from './graphs';
+import { computeTier } from './tiers';
+
+export async function seedFromGraphs(store: Store, graphs: GraphRepo): Promise<{ inserted: number; total: number }> {
+  const keys = await graphs.listKeys();
+  // Stagger first syncs across the first hour so boot doesn't stampede the providers.
+  const rows = keys.map((k, i) => ({
+    chain: k.chain, address: normAddr(k.address, k.chain), symbol: k.symbol || null, name: k.name || null,
+    enrolled_from: 'seed', volume_24h_usd: k.volume24h || null,
+    tier: computeTier({ volume24h: k.volume24h }),
+    needs_full_build: true,
+    next_sync_at: new Date(Date.now() + (i % 60) * 60_000).toISOString(),
+  }));
+  const inserted = await store.insertMissing(rows);
+  log.info('registry seeded from cached graphs', { graphs: rows.length, inserted });
+  return { inserted, total: rows.length };
+}
+
+export async function enrollTrending(store: Store): Promise<{ inserted: number; candidates: number }> {
+  if (!budget.canSpend('geckoterminal', TRENDING_NETWORKS.length)) {
+    log.warn('trending enrollment skipped: geckoterminal budget');
+    return { inserted: 0, candidates: 0 };
+  }
+  const lists = await Promise.all(TRENDING_NETWORKS.map(([net, chain]) => fetchTrendingChain(net, chain, cfg.trending.perChain).catch(() => [])));
+  const rows = lists.flat().map(t => ({
+    chain: t.chain, address: normAddr(t.address, t.chain), symbol: t.symbol || null, name: t.name || null,
+    enrolled_from: 'trending', volume_24h_usd: t.volume24h || null,
+    tier: computeTier({ volume24h: t.volume24h }),
+    needs_full_build: true,
+  }));
+  try {
+    const inserted = await store.insertMissing(rows);
+    log.info('trending enrollment', { candidates: rows.length, inserted });
+    return { inserted, candidates: rows.length };
+  } catch (e) {
+    log.error('trending enrollment failed', { error: errMsg(e) });
+    return { inserted: 0, candidates: rows.length };
+  }
+}
+
+export async function enrollManual(store: Store, chain: string, address: string, tier?: Tier): Promise<boolean> {
+  const n = await store.insertMissing([{
+    chain, address: normAddr(address, chain), enrolled_from: 'manual', tier: tier || 'warm', needs_full_build: true,
+    ...(tier ? { tier_override: tier } : {}),
+    sync_requested_at: new Date().toISOString(),
+  }]);
+  if (!n) await store.updateToken(chain, normAddr(address, chain), { sync_requested_at: new Date().toISOString(), ...(tier ? { tier_override: tier } : {}) });
+  return n > 0;
+}

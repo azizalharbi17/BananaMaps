@@ -32,6 +32,8 @@ export interface TokenMeta {
   volume24h?: number;
   totalHolders?: number;
   holderCount?: number;
+  /** Best pair's DEX liquidity (USD). Tiering input for the background worker; not part of TokenGraph. */
+  liquidityUsd?: number;
 }
 
 const MAX_NODES = 500;

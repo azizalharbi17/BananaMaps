@@ -1,0 +1,27 @@
+{
+  "name": "bananamaps-worker",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Continuous background indexer for BananaMaps token graphs (standalone Node service, pm2-managed).",
+  "main": "dist/worker/src/index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "start": "node dist/worker/src/index.js run",
+    "once": "node dist/worker/src/index.js once",
+    "dev": "tsx src/index.ts run",
+    "dev:once": "tsx src/index.ts once",
+    "sync": "tsx src/index.ts sync",
+    "seed": "tsx src/index.ts seed",
+    "status": "tsx src/index.ts status"
+  },
+  "engines": { "node": ">=20.12" },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.100.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "tsx": "^4.19.0",
+    "typescript": "^5"
+  }
+}

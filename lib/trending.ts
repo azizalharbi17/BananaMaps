@@ -1,5 +1,6 @@
 // Trending tokens via GeckoTerminal (keyless, 30 req/min limit — we make 4/hour).
 // Shared by /api/trending (discovery grid) and the daily seed cron.
+import { recordProviderCall } from './providerMeter';
 
 export interface TrendingToken {
   chain: string;
@@ -19,12 +20,13 @@ const SKIP_SYMBOLS = new Set(['WETH', 'WBNB', 'WSOL', 'SOL', 'WBTC', 'USDC', 'US
 
 export async function fetchTrendingChain(net: string, chain: string, limit = 3): Promise<TrendingToken[]> {
   try {
+    recordProviderCall('https://api.geckoterminal.com/api/v2/networks/trending_pools');
     const res = await fetch(
       `https://api.geckoterminal.com/api/v2/networks/${net}/trending_pools?include=base_token`,
       { signal: AbortSignal.timeout(10_000) },
     );
     if (!res.ok) return [];
-    const data = await res.json();
+    const data: any = await res.json();
     if (!Array.isArray(data?.data)) return []; // transient errors return a body without `data`
     const tokens = new Map<string, any>();
     for (const inc of data.included || []) {

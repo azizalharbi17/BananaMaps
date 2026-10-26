@@ -30,6 +30,15 @@ const markSbFailed = (op: string, e: unknown) => {
 // the shared failure cooldown and needlessly degrade READS to the memory fallback.
 const canWrite = () => !!process.env.SUPABASE_SERVICE_ROLE_KEY;
 
+/** Shared Supabase client (service role when configured). Null when unconfigured or cooling down after a failure. */
+export function getServiceClient(): SupabaseClient | null {
+  const c = supa();
+  return c && sbHealthy() ? c : null;
+}
+
+/** True when server-side writes are possible (service-role key present). */
+export const hasServiceRole = () => canWrite();
+
 function supa(): SupabaseClient | null {
   if (sb !== undefined) return sb;
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
