@@ -107,6 +107,10 @@ export const cfg = {
   skipLabeledHistory: bool('SKIP_LABELED_HISTORY', true),
 
   healthPort: num('HEALTH_PORT', 8787),
+  /** Bind address for /health. Loopback by default: the firewall is not the only control. */
+  healthHost: env('HEALTH_HOST', '127.0.0.1'),
+  /** Dead-man's-switch URL (UptimeRobot Heartbeat / Healthchecks.io) pinged after every completed loop. */
+  heartbeatUrl: env('HEARTBEAT_URL', ''),
   logFormat: env('LOG_FORMAT', 'json') === 'pretty' ? 'pretty' : 'json',
 };
 

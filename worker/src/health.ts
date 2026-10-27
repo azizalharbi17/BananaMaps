@@ -8,7 +8,7 @@ export interface HealthProvider {
   tokens(): Promise<Record<string, unknown>>;
 }
 
-export function startHealthServer(port: number, provider: HealthProvider): http.Server {
+export function startHealthServer(port: number, host: string, provider: HealthProvider): http.Server {
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url || '/', 'http://localhost');
     res.setHeader('Content-Type', 'application/json');
@@ -28,6 +28,6 @@ export function startHealthServer(port: number, provider: HealthProvider): http.
     }
   });
   server.on('error', e => log.error('health server error', { error: e.message }));
-  server.listen(port, () => log.info('health endpoint listening', { port, paths: ['/health', '/tokens'] }));
+  server.listen(port, host, () => log.info('health endpoint listening', { host, port, paths: ['/health', '/tokens'] }));
   return server;
 }

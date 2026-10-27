@@ -51,7 +51,9 @@ export class Worker implements SyncContext {
 
   async start() {
     log.info('worker starting', { instance: this.instanceId, store: this.store.kind, graphSink: this.graphs.kind, dryRun: this.graphs.dryRun, envFile: cfg.envFile });
-    startHealthServer(cfg.healthPort, { status: () => this.status(), tokens: () => this.tokensReport() });
+    startHealthServer(cfg.healthPort, cfg.healthHost, { status: () => this.status(), tokens: () => this.tokensReport() });
+    if (cfg.heartbeatUrl) log.info('external heartbeat enabled', { url: cfg.heartbeatUrl.replace(/([?&]|\/)[A-Za-z0-9_-]{16,}/g, '$1***') });
+    else log.info('external heartbeat disabled (set HEARTBEAT_URL for a dead-man\'s-switch monitor)');
     try {
       const hb = await this.store.getHeartbeat(HEARTBEAT_ID);
       budget.restore((hb?.stats as any)?.budgetCounters);
@@ -180,6 +182,26 @@ export class Worker implements SyncContext {
   private async heartbeat(final = false) {
     this.lastHeartbeatAt = Date.now();
     await this.store.heartbeat(HEARTBEAT_ID, this.startedAt, { ...this.stats(), budgetCounters: budget.persist(), stopping: final });
+    // Only after the loop completed AND the store write succeeded: the external
+    // monitor's silence then means "worker dead, host down, loop stalled, or
+    // Supabase unreachable" — every failure class in one signal.
+    if (cfg.heartbeatUrl && !final && !this.status().body.stalled) await this.pingExternal();
+  }
+
+  private externalPingFailures = 0;
+  private async pingExternal() {
+    try {
+      const res = await fetch(cfg.heartbeatUrl, { method: 'GET', signal: AbortSignal.timeout(10_000), headers: { 'User-Agent': 'bananamaps-worker' } });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (this.externalPingFailures) log.info('external heartbeat recovered', { afterFailures: this.externalPingFailures });
+      this.externalPingFailures = 0;
+    } catch (e) {
+      this.externalPingFailures++;
+      // Log the first failure and then every 10th, so a dead monitor URL can't flood the log.
+      if (this.externalPingFailures === 1 || this.externalPingFailures % 10 === 0) {
+        log.warn('external heartbeat ping failed', { failures: this.externalPingFailures, error: errMsg(e) });
+      }
+    }
   }
 
   private async checkStall() {

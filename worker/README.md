@@ -68,7 +68,14 @@ Per-provider circuit breaker: 5 errors in 5 min pauses the provider for 5 min.
 Per-token exponential backoff (`10 min × 2^n`, max 24 h) on errors; a token
 "not found" three times in a row is disabled.
 
-**Ops.** `GET http://localhost:8787/health` (503 when stalled) and `/tokens`.
+**Ops.** `GET http://localhost:8787/health` (503 when stalled) and `/tokens`,
+bound to loopback (`HEALTH_HOST`) — reach them over SSH, never expose them.
+For alerting use a push monitor instead of an inbound check: set
+`HEARTBEAT_URL` to an UptimeRobot Heartbeat or Healthchecks.io ping URL and the
+worker GETs it once a minute, only after a loop completed and the Supabase
+heartbeat write succeeded, so the monitor's silence covers a dead process, a
+down host, a stalled loop and an unreachable database alike (give the monitor
+a ~5 min grace period for restarts and reboots).
 Heartbeat row `worker_heartbeat.id='indexer'` every minute (the app uses it to
 decide whether to trust the worker with a first build). JSON logs on stdout.
 `worker_alerts` rows for `loop_stalled` (>30 min without a completed loop),
