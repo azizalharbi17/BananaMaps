@@ -80,6 +80,32 @@ export async function enrollToken(input: { chain: string; address: string; sourc
   }
 }
 
+/**
+ * Hand a token the app can't build itself (log replay too large for a request)
+ * to the worker: enroll it if new, and re-arm the row — due now, flagged, not
+ * backed off, enabled — so a row parked by an earlier failure is picked up too.
+ * Returns false when the registry isn't writable from here.
+ */
+export async function handOffToWorker(chain: string, address: string): Promise<boolean> {
+  const client = getServiceClient();
+  if (!client || !hasServiceRole() || missing()) return false;
+  const enrolled = await enrollToken({ chain, address, source: 'on-demand' });
+  if (!enrolled) return false;
+  try {
+    const now = new Date().toISOString();
+    const { error } = await client
+      .from('indexed_tokens')
+      .update({ sync_requested_at: now, last_requested_at: now, next_sync_at: now, backoff_until: null, enabled: true })
+      .eq('chain', chain)
+      .eq('address', address);
+    if (error) throw error;
+    return true;
+  } catch (e) {
+    noteError(e);
+    return false;
+  }
+}
+
 /** Ask the worker to sync this token at the front of its queue (user refresh / stale serve). */
 export async function requestSync(chain: string, address: string): Promise<void> {
   const client = getServiceClient();

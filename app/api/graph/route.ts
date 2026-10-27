@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse, after } from 'next/server';
-import { resolveTokenInput, normAddr, CHAIN_LABEL, UpstreamError, NotIndexedError } from '@/lib/graphBuilder';
+import { resolveTokenInput, normAddr, CHAIN_LABEL, UpstreamError, NotIndexedError, HeavyTokenError, isLogChain } from '@/lib/graphBuilder';
 import { getCachedGraph } from '@/lib/graphCache';
 import { MIN_COMPAT_VERSION, TokenGraph } from '@/lib/graphTypes';
 import { checkBuildAllowed, clientIp } from '@/lib/buildGuard';
@@ -32,7 +32,7 @@ const guardDeniedMsg = (reason: string) => reason === 'ip-limit'
 // within one cycle instead of spinning to the client-side timeout. In-memory, so
 // a poll routed to another instance just keeps polling; the client timeout is the
 // cross-instance backstop.
-interface BuildOutcome { at: number; error?: string; status?: number; graph?: TokenGraph }
+interface BuildOutcome { at: number; error?: string; status?: number; graph?: TokenGraph; deferred?: boolean }
 const lastBuildOutcome: Map<string, BuildOutcome> =
   ((globalThis as any).__graphBuildOutcomes ||= new Map());
 const OUTCOME_TTL_MS = 10 * 60_000;
@@ -71,8 +71,12 @@ function recordOutcome(flightKey: string, outcome: BuildOutcome) {
   lastBuildOutcome.set(flightKey, outcome);
 }
 
+const HEAVY_ETA_SECONDS = 300;
+const workerDownMsg = 'This token has a very large history and the background indexer is offline — try again later';
+
 function buildErrorOutcome(e: unknown): BuildOutcome {
   if (e instanceof NotIndexedError) return { at: Date.now(), error: e.message, status: 404 };
+  if (e instanceof HeavyTokenError) return e.handedOff ? { at: Date.now(), deferred: true } : { at: Date.now(), error: workerDownMsg, status: 503 };
   if (e instanceof BuildSlotsBusy) return { at: Date.now(), error: 'High demand right now — try again in a minute', status: 429 };
   const error = e instanceof UpstreamError
     ? 'Data source temporarily unavailable — try again shortly'
@@ -174,6 +178,10 @@ export async function GET(req: NextRequest) {
     if (!refresh && cached) {
       after(async () => {
         try {
+          // A registered log-replay token is the worker's even while the worker is
+          // down or the row is backed off: an on-demand rebuild here would just spend
+          // the request's call budget and bail out with HeavyTokenError every 30 min.
+          if (registered && isLogChain(chain)) return;
           const lastAttempt = lastRevalidateAttempt.get(flightKey) || 0;
           if (Date.now() - lastAttempt < REVALIDATE_RETRY_MS) return;
           if (isBuildInFlight(chain, addrKey)) return; // already rebuilding
@@ -194,6 +202,11 @@ export async function GET(req: NextRequest) {
     if (!refresh && poll) {
       const outcome = lastBuildOutcome.get(flightKey);
       if (outcome && Date.now() - outcome.at < OUTCOME_TTL_MS && !isBuildInFlight(chain, addrKey)) {
+        if (outcome.deferred) {
+          // Handed to the worker: keep the client polling while it is alive.
+          if (await workerAlive()) return NextResponse.json({ building: true, indexed: true, etaSeconds: HEAVY_ETA_SECONDS }, { status: 202 });
+          return NextResponse.json({ error: workerDownMsg }, { status: 503 });
+        }
         if (outcome.graph) {
           // Partial build: served once like the inline path would, never cached
           return NextResponse.json({ graph: outcome.graph, cachedAt: outcome.graph.computedAt, fromCache: false, partial: true });
@@ -211,9 +224,13 @@ export async function GET(req: NextRequest) {
     //     first build to it instead of spending a Vercel build slot; the client's
     //     existing 202 polling picks the snapshot up. A dead worker falls through
     //     to the on-demand path below so users are never stranded.
-    if (indexed && !refresh && !workerDeferred) {
+    //     Log-replay chains stay with the worker even after a deferral: a token
+    //     that got here through a heavy hand-off can only fail the same way on
+    //     demand, and the worker's full-build deferral is a 15-minute wait, not a
+    //     refusal.
+    if (indexed && !refresh && (!workerDeferred || isLogChain(chain))) {
       after(() => flagForWorker(flightKey, chain, addrKey));
-      return NextResponse.json({ building: true, etaSeconds: 120, indexed: true }, { status: 202 });
+      return NextResponse.json({ building: true, etaSeconds: isLogChain(chain) ? HEAVY_ETA_SECONDS : 120, indexed: true }, { status: 202 });
     }
 
     // 5. Non-blocking first build: same guard + IP charge as an inline build, but
@@ -283,6 +300,12 @@ export async function GET(req: NextRequest) {
   } catch (e) {
     if (e instanceof NotIndexedError) {
       return NextResponse.json({ error: e.message }, { status: 404 });
+    }
+    if (e instanceof HeavyTokenError) {
+      // Enrolled + flagged by runBuild; the worker's full build publishes the snapshot
+      // and the client's 202 polling picks it up (poll probes answer from the cache).
+      if (e.handedOff && (await workerAlive())) return NextResponse.json({ building: true, indexed: true, etaSeconds: HEAVY_ETA_SECONDS }, { status: 202 });
+      return NextResponse.json({ error: workerDownMsg }, { status: 503 });
     }
     console.error('[api/graph]', e);
     const msg = e instanceof UpstreamError

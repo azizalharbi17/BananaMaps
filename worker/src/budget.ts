@@ -6,6 +6,8 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { cfg } from './config';
 import { log } from './log';
 import { setProviderCallListener, Provider } from '../../lib/providerMeter';
+import { setRobinhoodCallGate, currentRobinhoodProvider } from '../../lib/robinhoodRpc';
+import { UpstreamError } from '../../lib/errors';
 
 export type ProviderName = Provider;
 
@@ -148,6 +150,13 @@ class Budget {
 }
 
 export const budget = new Budget();
+
+// A Robinhood log replay can run hundreds of getLogs calls: stop it the moment the
+// day's cap (or an open circuit) says no instead of discovering that afterwards.
+setRobinhoodCallGate(() => {
+  const p = currentRobinhoodProvider();
+  if (!budget.canSpend(p, 1)) throw new UpstreamError(`${p}: daily budget exhausted or circuit open`);
+});
 
 /** Run a provider-bound step, attributing thrown errors to that provider. */
 export async function withProvider<T>(p: ProviderName, fn: () => Promise<T>): Promise<T> {

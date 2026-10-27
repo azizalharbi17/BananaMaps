@@ -86,8 +86,8 @@ export const cfg = {
     helius: num('BUDGET_HELIUS_PER_DAY', 20_000),
     vybe: num('BUDGET_VYBE_PER_DAY', 1_500),
     solscan: num('BUDGET_SOLSCAN_PER_DAY', 500),
-    blockscout: num('BUDGET_BLOCKSCOUT_PER_DAY', 2_000),
     'robinhood-rpc': num('BUDGET_ROBINHOOD_RPC_PER_DAY', 20_000),
+    'robinhood-node': num('BUDGET_ROBINHOOD_NODE_PER_DAY', 1_000_000),
     publicnode: num('BUDGET_PUBLICNODE_PER_DAY', 2_000),
     dexscreener: num('BUDGET_DEXSCREENER_PER_DAY', 5_000),
     geckoterminal: num('BUDGET_GECKOTERMINAL_PER_DAY', 200),
@@ -103,7 +103,12 @@ export const cfg = {
   maxCpPerHolder: num('MAX_CP_PER_HOLDER', 300),
   solMaxSigPages: num('SOL_MAX_SIG_PAGES', 3),
   solIdleBackoffMax: num('SOL_IDLE_BACKOFF_MAX', 12),
-  rhHistoryBlocks: num('RH_HISTORY_BLOCKS', 2_000_000),
+  /** Robinhood: most recent transfers fetched for a holder that newly enters the top set. */
+  rhHistoryMaxLogs: num('RH_HISTORY_MAX_LOGS', 3000),
+  /** Robinhood: non-zero balances kept in the per-token ledger before dust is evicted. */
+  rhLedgerMaxEntries: num('RH_LEDGER_MAX_ENTRIES', 50_000),
+  /** Robinhood: minimum spacing between attempts to acquire a ledger (replay full build) for a ledger-less state. */
+  rhLedgerRetryMs: num('RH_LEDGER_RETRY_MS', 3 * H),
   skipLabeledHistory: bool('SKIP_LABELED_HISTORY', true),
 
   healthPort: num('HEALTH_PORT', 8787),

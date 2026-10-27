@@ -5,9 +5,13 @@
 // Three independent brakes, all env-overridable:
 //   1. per-IP build allowance (in-memory per instance — a brake, not a wall)
 //   2. global concurrent-build cap per instance
-//   3. daily build budget, derived from token_graphs.computed_at timestamps in
-//      Supabase so it holds across serverless instances (in-memory fallback).
+//   3. daily build budget per chain group (EVM/Moralis, Solana/Helius, log-replay
+//      chains/public RPC), derived from on-demand enrollments in indexed_tokens so
+//      it holds across serverless instances (in-memory fallback). It must NOT be
+//      derived from token_graphs timestamps: the background worker rewrites those
+//      every few minutes, which would exhaust the cap by itself.
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { LOG_CHAINS } from './graphBuilder';
 
 const num = (v: string | undefined, d: number) => {
   const n = Number(v);
@@ -19,6 +23,13 @@ const IP_BUILDS_PER_DAY = num(process.env.GUARD_IP_BUILDS_PER_DAY, 20);
 const MAX_CONCURRENT_BUILDS = num(process.env.GUARD_MAX_CONCURRENT_BUILDS, 3);
 const EVM_BUILDS_PER_DAY = num(process.env.GUARD_EVM_BUILDS_PER_DAY, 25);
 const SOL_BUILDS_PER_DAY = num(process.env.GUARD_SOL_BUILDS_PER_DAY, 100);
+// Log-replay chains (Robinhood) cost public-RPC calls, not Moralis CU: ≤80 paced
+// getLogs calls per build (bigger tokens are handed to the worker).
+const LOG_BUILDS_PER_DAY = num(process.env.GUARD_LOG_BUILDS_PER_DAY, 40);
+
+type Group = 'evm' | 'sol' | 'log';
+const groupOf = (chain: string): Group => chain === 'sol' ? 'sol' : LOG_CHAINS.has(chain) ? 'log' : 'evm';
+const capOf: Record<Group, number> = { evm: EVM_BUILDS_PER_DAY, sol: SOL_BUILDS_PER_DAY, log: LOG_BUILDS_PER_DAY };
 
 // A build can never legitimately outlive the route's maxDuration — leases older
 // than this are expired, so a leaked slot (crash, dev-reload edge case) self-heals
@@ -28,8 +39,8 @@ const SLOT_LEASE_MS = 360_000;
 interface IpWindow { hour: number[]; day: number[] }
 const ipWindows: Map<string, IpWindow> =
   ((globalThis as any).__guardIpWindows ||= new Map());
-const state: { leases: number[]; dayStamp: string; evmBuilds: number; solBuilds: number } =
-  ((globalThis as any).__guardState2 ||= { leases: [], dayStamp: '', evmBuilds: 0, solBuilds: 0 });
+const state: { leases: number[]; dayStamp: string; builds: Record<Group, number> } =
+  ((globalThis as any).__guardState3 ||= { leases: [], dayStamp: '', builds: { evm: 0, sol: 0, log: 0 } });
 
 const activeBuilds = () => {
   const cutoff = Date.now() - SLOT_LEASE_MS;
@@ -57,19 +68,23 @@ function rollDay() {
   const today = new Date().toISOString().slice(0, 10);
   if (state.dayStamp !== today) {
     state.dayStamp = today;
-    state.evmBuilds = 0;
-    state.solBuilds = 0;
+    state.builds = { evm: 0, sol: 0, log: 0 };
   }
 }
 
-/** Builds completed in the last 24h, from snapshot timestamps (cross-instance). */
-async function persistedBuildsToday(chain: string): Promise<number | null> {
+/**
+ * On-demand builds in the last 24h, cross-instance: every first build (or heavy
+ * hand-off) enrolls its token with enrolled_from = 'on-demand', one row per token.
+ */
+async function persistedBuildsToday(group: Group): Promise<number | null> {
   const client = supa();
   if (!client) return null;
   try {
     const since = new Date(Date.now() - 24 * 3600_000).toISOString();
-    let q = client.from('token_graphs').select('*', { count: 'exact', head: true }).gte('computed_at', since);
-    q = chain === 'sol' ? q.eq('chain', 'sol') : q.neq('chain', 'sol');
+    const logList = `(${[...LOG_CHAINS].map(c => `"${c}"`).join(',')})`;
+    let q = client.from('indexed_tokens').select('*', { count: 'exact', head: true })
+      .eq('enrolled_from', 'on-demand').gte('enrolled_at', since);
+    q = group === 'sol' ? q.eq('chain', 'sol') : group === 'log' ? q.in('chain', [...LOG_CHAINS]) : q.neq('chain', 'sol').not('chain', 'in', logList);
     const { count, error } = await q;
     if (error) throw error;
     return count ?? null;
@@ -104,13 +119,14 @@ export async function checkBuildAllowed(chain: string, ip: string | null, opts?:
     }
   }
 
-  let cap = chain === 'sol' ? SOL_BUILDS_PER_DAY : EVM_BUILDS_PER_DAY;
+  const group = groupOf(chain);
+  let cap = capOf[group];
   if (opts?.background) cap = Math.floor(cap * 0.7);
-  // The persisted count only sees completed distinct tokens (a refresh updates one
-  // row in place), so take the max of it and the in-memory attempt counter — the
-  // memory side is what stops same-token refresh spam.
-  const persisted = await persistedBuildsToday(chain);
-  const memory = chain === 'sol' ? state.solBuilds : state.evmBuilds;
+  // The persisted count only sees distinct tokens (a refresh of an unregistered
+  // token enrolls nothing new), so take the max of it and the in-memory attempt
+  // counter — the memory side is what stops same-token refresh spam.
+  const persisted = await persistedBuildsToday(group);
+  const memory = state.builds[group];
   if (Math.max(persisted ?? 0, memory) >= cap) {
     return { allowed: false, reason: 'daily-budget' };
   }
@@ -128,8 +144,7 @@ export function tryClaimBuildSlot(chain: string): boolean {
   rollDay();
   if (activeBuilds() >= MAX_CONCURRENT_BUILDS) return false;
   state.leases.push(Date.now());
-  if (chain === 'sol') state.solBuilds++;
-  else state.evmBuilds++;
+  state.builds[groupOf(chain)]++;
   return true;
 }
 

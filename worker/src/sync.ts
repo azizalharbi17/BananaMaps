@@ -2,9 +2,10 @@
 // graph), full build, or incremental delta application; assembles and publishes
 // the graph; persists state; schedules the next run; applies backoff on errors.
 import {
-  fetchHolders, fetchTokenMeta, fetchTransfersEVM, fetchTransfersSOL, fetchTransfersBlockscout,
-  tryFetchJson, bestPair, sumVolume24h, UpstreamError, NotIndexedError, isBlockscoutChain,
+  fetchHolders, fetchTokenMeta, fetchTransfersEVM, fetchTransfersSOL,
+  tryFetchJson, bestPair, sumVolume24h, UpstreamError, NotIndexedError, isLogChain, TOP_HOLDERS,
 } from '../../lib/graphBuilder';
+import { balancesOf, tokenInfo, currentRobinhoodProvider, ZERO_ADDR } from '../../lib/robinhoodRpc';
 import type { AddrLabel, RawHolder } from '../../lib/graphCore';
 import { cfg, familyOf, Tier } from './config';
 import { log, errMsg } from './log';
@@ -13,6 +14,7 @@ import type { Store, TokenRow, TokenPatch } from './store';
 import type { GraphRepo } from './graphs';
 import {
   SyncState, applyTransfer, bootstrapFromGraph, cursorSummary, ingestHistory, pruneHistories, rerankHolders, replaceHolders,
+  ledgerApply, ledgerSet, ledgerHolderCount, rerankFromLedger,
 } from './state';
 import { assembleGraph } from './assemble';
 import {
@@ -92,25 +94,24 @@ async function initHolderHistories(state: SyncState, added: string[], labels: Ma
     for (const h of raws) ingestHistory(state, h.address, transfers.get(h.address) || []);
     return;
   }
-  if (isBlockscoutChain(chain)) {
-    try {
-      const { transfers } = await withProvider('blockscout', () => fetchTransfersBlockscout(state.address, chain, raws, labels));
-      for (const h of raws) ingestHistory(state, h.address, transfers.get(h.address) || []);
-      return;
-    } catch (e) {
-      log.warn('blockscout history unavailable; using RPC log window', { chain, error: errMsg(e) });
-    }
-    if (hasRpc(chain) && state.cursor.kind === 'rpc') {
-      const head = state.cursor.block;
-      const decimals = state.decimals ?? 18;
-      for (const h of raws) {
-        try {
-          const list = await withProvider('robinhood-rpc', () => rpcHolderHistory(chain, state.address, h.address, Math.max(0, head - cfg.rhHistoryBlocks), head, decimals));
-          ingestHistory(state, h.address, list.slice(0, 100));
-        } catch (e) {
-          log.warn('rpc holder history failed', { chain, holder: h.address, error: errMsg(e) });
-          ingestHistory(state, h.address, []); // synced with an empty history; deltas accumulate from here
-        }
+  if (isLogChain(chain)) {
+    // The holder's transfers of this token, newest first, scanned back from the
+    // cursor to the token's first block (≈ 1 getLogs call per 10M blocks and
+    // direction on the public RPC; the ledger knows where the token started).
+    if (state.cursor.kind !== 'rpc') return;
+    const toBlock = state.cursor.block - 1;
+    const fromBlock = state.ledger?.firstBlock ?? 1;
+    const rh = currentRobinhoodProvider();
+    // Two reverse scans (sent / received) of ≤10M blocks each on the public RPC.
+    const perHolder = Math.ceil(Math.max(1, toBlock - fromBlock) / 10_000_000) * 2 + 2;
+    for (const h of raws) {
+      if (!budget.canSpend(rh, perHolder)) { log.warn('holder history deferred: budget', { chain, holder: h.address, estimatedCalls: perHolder }); break; }
+      try {
+        const list = await withProvider(rh, () => rpcHolderHistory(chain, state.address, h.address, fromBlock, toBlock, cfg.rhHistoryMaxLogs));
+        ingestHistory(state, h.address, list);
+      } catch (e) {
+        log.warn('rpc holder history failed', { chain, holder: h.address, error: errMsg(e) });
+        ingestHistory(state, h.address, []); // synced with an empty history; deltas accumulate from here
       }
     }
     return;
@@ -125,8 +126,9 @@ async function captureCursor(state: SyncState, labels: Map<string, AddrLabel>): 
     state.cursor = { kind: 'sol', syncs: 0 };
     await solInitCursors(state, state.holders.map(h => h.address), labels);
   } else if (hasRpc(chain)) {
-    const head = await withProvider('robinhood-rpc', () => rpcHead(chain));
-    state.decimals = await withProvider('robinhood-rpc', () => rpcDecimals(chain, state.address));
+    const rh = currentRobinhoodProvider();
+    const head = await withProvider(rh, () => rpcHead(chain));
+    state.decimals = await withProvider(rh, () => rpcDecimals(chain, state.address));
     state.cursor = { kind: 'rpc', block: head + 1 };
   } else {
     state.cursor = await withProvider('moralis', () => evmHeadCursor(chain, state.address));
@@ -150,13 +152,28 @@ async function incremental(state: SyncState, tier: Tier): Promise<IncrementalRes
     deltaTransfers = r.deltas.length;
     truncated = r.truncated;
   } else if (state.cursor.kind === 'rpc') {
-    if (state.decimals === undefined) state.decimals = await withProvider('robinhood-rpc', () => rpcDecimals(chain, state.address));
+    const rh = currentRobinhoodProvider();
+    if (state.decimals === undefined) state.decimals = await withProvider(rh, () => rpcDecimals(chain, state.address));
     const from = state.cursor.block;
-    const r = await withProvider('robinhood-rpc', () => rpcFetchDeltas(chain, state.address, from, state.decimals!));
-    for (const d of r.deltas) applyTransfer(state, d.from, d.to, d.value);
+    const r = await withProvider(rh, () => rpcFetchDeltas(chain, state.address, from, state.decimals!));
+    for (const d of r.deltas) {
+      if (state.ledger) {
+        // Balances live in the ledger (every address, raw units); applyTransfer only counts edges.
+        ledgerApply(state, d.from, d.to, d.raw, cfg.rhLedgerMaxEntries);
+        if (d.from !== ZERO_ADDR && d.to !== ZERO_ADDR) applyTransfer(state, d.from, d.to, 0, { edges: true });
+      } else {
+        applyTransfer(state, d.from, d.to, d.value);
+      }
+    }
     // Load-balanced public RPCs can answer from a lagging node: never rewind the cursor.
     state.cursor = { kind: 'rpc', block: Math.max(from, r.head + 1) };
     deltaTransfers = r.deltas.length;
+    if (state.ledger) {
+      state.ledger.head = Math.max(state.ledger.head, r.head);
+      // Exact top set from the ledger, no provider call; entrants need their history.
+      const { added, removed } = rerankFromLedger(state, TOP_HOLDERS);
+      if (added.length || removed.length) log.info('holder set changed', { chain, address: state.address, added: added.length, removed: removed.length });
+    }
   } else {
     state.cursor.syncs++;
     const syncs = state.cursor.syncs;
@@ -210,7 +227,39 @@ async function incremental(state: SyncState, tier: Tier): Promise<IncrementalRes
   let newHolders = 0;
   let holdersRefreshed = false;
   const hp = holderProvider(chain);
-  if (olderThan(state.lastHoldersRefreshAt, holdersRefreshMs(tier)) && budget.canSpend(hp, 3)) {
+  if (state.ledger) {
+    // The top set is already exact (ledger). On the tier cadence: confirm the top
+    // balances on-chain (fee/rebase tokens drift from their Transfer logs), refresh
+    // name/symbol if missing, market data and the true holder count.
+    if (olderThan(state.ledger.lastVerifiedAt, holdersRefreshMs(tier)) && budget.canSpend(hp, 8)) {
+      try {
+        // Pinned to the block the ledger is exact at (this sync's delta head): a
+        // 'latest' read would already include transfers the next sync applies again.
+        const ledger = state.ledger;
+        const onchain = await withProvider(hp, () => balancesOf(state.address, state.holders.map(h => h.address), ledger.head));
+        if (onchain.size) {
+          ledgerSet(state, onchain, cfg.rhLedgerMaxEntries);
+          rerankFromLedger(state, TOP_HOLDERS);
+          holdersRefreshed = true;
+        } else {
+          log.warn('ledger verification: balanceOf unavailable at ledger head; keeping replayed balances', { chain, address: state.address, block: ledger.head });
+        }
+        ledger.lastVerifiedAt = nowIso();
+        if (!state.meta?.name || !state.meta?.symbol) {
+          const info = await withProvider(hp, () => tokenInfo(state.address));
+          state.meta = { ...(state.meta || { name: '', symbol: '', logo: '', price: 0, priceChange24h: 0 }), name: state.meta?.name || info.name, symbol: state.meta?.symbol || info.symbol };
+        }
+        if (budget.canSpend('dexscreener', 1)) await refreshPrice(state);
+        if (state.meta) { state.meta.totalHolders = ledgerHolderCount(state.ledger); state.meta.holderCount = state.holders.length; }
+      } catch (e) {
+        log.warn('ledger verification failed; continuing with replayed balances', { chain, address: state.address, error: errMsg(e) });
+      }
+    }
+  } else if (isLogChain(chain)) {
+    // No ledger yet (state bootstrapped from a cached graph): a holder refresh would
+    // be a full replay — the scheduler runs that as a proper full build instead.
+    log.debug('holder refresh skipped until the log replay full build runs', { chain, address: state.address });
+  } else if (olderThan(state.lastHoldersRefreshAt, holdersRefreshMs(tier)) && budget.canSpend(hp, 3)) {
     try {
       const { holders, labels } = await withProvider(hp, () => fetchHolders(chain, state.address));
       if (holders.length) {
@@ -230,13 +279,13 @@ async function incremental(state: SyncState, tier: Tier): Promise<IncrementalRes
   }
   // Holders whose initial history was deferred by a budget cap (or a failed
   // fetch) are retried here so they don't stay edge-less until the next refresh.
-  const unsynced = Object.entries(state.hist).filter(([, h]) => !h.synced && !h.skipped).map(([a]) => a);
+  const unsynced = Object.entries(state.hist).filter(([, h]) => !h.synced && !h.skipped && !h.parked).map(([a]) => a);
   if (unsynced.length && budget.canSpend(historyProvider(chain), unsynced.length + 2)) {
     try { await initHolderHistories(state, unsynced, harvested); newHolders += unsynced.length; }
     catch (e) { log.warn('deferred holder histories failed', { chain, address: state.address, holders: unsynced.length, error: errMsg(e) }); }
   }
   if (!holdersRefreshed) {
-    rerankHolders(state);
+    if (!state.ledger) rerankHolders(state); // ledger states are already ranked exactly
     if (budget.canSpend('dexscreener', 1)) {
       try { await refreshPrice(state); } catch (e) { log.debug('price refresh failed', { error: errMsg(e) }); }
     }
@@ -249,7 +298,7 @@ async function incremental(state: SyncState, tier: Tier): Promise<IncrementalRes
 function estimateIncremental(state: SyncState): { provider: string; calls: number } {
   const p = deltaProvider(state.chain);
   if (state.cursor.kind === 'evm') return { provider: p, calls: 3 };
-  if (state.cursor.kind === 'rpc') return { provider: p, calls: 2 };
+  if (state.cursor.kind === 'rpc') return { provider: p, calls: rpcDeltaEstimate() };
   let due = 0;
   const syncs = state.cursor.syncs + 1;
   for (const h of Object.values(state.hist)) if (!h.skipped && h.synced) for (const a of h.accounts || []) if (a.nextPollAt <= syncs) due++;
@@ -291,7 +340,13 @@ export async function syncToken(ctx: SyncContext, row: TokenRow, opts: SyncOptio
         // from the worker's own capped graph would be lossy); falls back to
         // bootstrap below only when a rebuild is unaffordable right now.
         || (!state && !!row.last_synced_at && row.needs_full_build && opts.force !== 'incremental')
-        || (!!state && (row.needs_full_build || olderThan(state.lastFullBuildAt, cfg.fullRebuildEveryMs)) && opts.force !== 'incremental');
+        || (!!state && (row.needs_full_build || olderThan(state.lastFullBuildAt, cfg.fullRebuildEveryMs)) && opts.force !== 'incremental')
+        // Log-replay chains: a state without a ledger (bootstrapped from a cached
+        // graph, or built before ledgers existed) can't rank holders exactly — one
+        // replay fixes that for good.
+        // Paced by lastFullBuildAt (a failed attempt stamps it) so a replay that keeps
+        // failing can't re-run every sync and drain the day's budget.
+        || (!!state && isLogChain(chain) && !state.ledger && olderThan(state.lastFullBuildAt, cfg.rhLedgerRetryMs) && opts.force !== 'incremental');
 
       if (fullWanted && opts.force !== 'full' && (!canAffordFullBuild(chain) || ctx.fullBuildsThisHour() >= cfg.maxFullBuildsPerHour)) {
         if (!state && !(await ctx.graphs.get(chain, address))) {

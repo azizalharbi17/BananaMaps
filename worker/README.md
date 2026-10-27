@@ -7,8 +7,8 @@ demand. Plain Node/TypeScript, no Next.js; runs 24/7 under pm2 on a VPS.
 ```
   GeckoTerminal trending ─┐                         ┌─ Moralis  (EVM: token-wide transfers since block N)
   token_graphs (seed)     ├─▶ indexed_tokens ─▶ sync ├─ Helius   (SOL: signatures after cursor, per holder account)
-  /api/graph on-demand ───┘    (registry)       loop ├─ Robinhood RPC (eth_getLogs since block N)
-                                                     └─ Vybe / Blockscout / DexScreener (holders, prices)
+  /api/graph on-demand ───┘    (registry)       loop ├─ Robinhood RPC (eth_getLogs since block N → ledger)
+                                                     └─ Vybe / DexScreener (holders, prices)
                                                           │
                                         token_sync_state ◀┴▶ token_graphs  ◀── /api/graph (DB-first)
 ```
@@ -32,7 +32,7 @@ hot every 10 min, warm hourly, cold daily. A token a user requested in the last
 |---|---|---|
 | eth / bsc / base | Moralis `GET /erc20/{token}/transfers?from_block=N&order=ASC` (token-wide, oldest first, contiguous: a backlog larger than `MAX_DELTA_PAGES` drains over several syncs, nothing is skipped) | 1–3 calls |
 | sol | Helius `getSignaturesForAddress(tokenAccount, until=lastSig)` per holder account, idle accounts polled every 2^n syncs; new signatures parsed 100/call via `POST /v0/transactions`. Balances follow every movement of the mint (swaps included); edges keep the wallet-to-wallet (TRANSFER) filter | ~15–40 RPC requests + 0–few parse calls |
-| robinhood | public RPC `eth_getLogs(Transfer topic, fromBlock=N)` | 1–2 calls |
+| robinhood | RPC `eth_getLogs(Transfer topic, fromBlock=N)` applied to a per-token **ledger** (every address's raw balance) → exact top 150 with no holder call | 2–3 calls |
 
 Deltas update **per-holder edge counts** (`cp[counterparty] = [out, in]`) and
 **holder balances** (transfer values, re-ranked and re-percented from supply).
@@ -81,6 +81,55 @@ decide whether to trust the worker with a first build). JSON logs on stdout.
 `worker_alerts` rows for `loop_stalled` (>30 min without a completed loop),
 `provider_budget_exhausted`; stall alerts auto-resolve when the loop resumes.
 
+## Robinhood Chain: log replay instead of an explorer API (2026-10-27)
+
+Robinhood Chain has no Moralis coverage and its Blockscout API is behind a
+Cloudflare challenge, so the chain is indexed from ERC-20 `Transfer` logs alone
+(`lib/robinhoodRpc.ts`, shared with the Next.js app):
+
+- **Full build = replay from genesis.** Address-filtered `eth_getLogs` over the
+  whole chain in adaptively sized chunks (the public RPC allows 10M blocks per
+  call and 10k logs per response; the range grows while responses are sparse and
+  shrinks toward ~6k logs/call). The pass yields every address's balance (the
+  ledger), the exact top 150, each holder's counterparty counts (graph edges),
+  the supply and the true holder count; the top set is then confirmed with
+  batched `balanceOf` (fee/rebase tokens), and the cursor lands at replay head + 1.
+  Measured 2026-10-27 on the public RPC: a day-old token 456 transfers → 11
+  calls / 9 s; ARROW 583k transfers → 186 calls / 5 min; CHUMP 698k → 233 calls /
+  2 min; CASHCAT 13.1M transfers, 326k addresses → 4,007 calls / 38 min at a
+  192 MB heap peak. On-demand builds therefore cap at `RH_ONDEMAND_MAX_CALLS`
+  (80) and hand anything bigger to the worker (`HeavyTokenError` → enrolled +
+  flagged → the app answers 202 while the client polls). A multi-hour replay
+  holds the Robinhood concurrency slot (`CONCURRENCY_ROBINHOOD=1`) for its
+  duration and is lost (and later retried) if the process is restarted mid-way,
+  so avoid deploying while `replay progress` lines are being logged.
+- **Incremental = the same stream.** Every Transfer since the cursor moves raw
+  balances in the ledger (mints/burns move the supply) and counts edges; the top
+  150 is re-ranked from the ledger on every sync for free. A wallet entering the
+  top set gets its history from two reverse `eth_getLogs` scans (single-value
+  topic filters: OR-lists cap the public RPC at 100k blocks); one leaving the set
+  is parked for a week (history kept, still receiving deltas) so rank-150
+  flapping doesn't refetch. On the tier cadence the top balances are re-read
+  with `balanceOf` and the market data refreshed.
+- **Ledger bound.** `RH_LEDGER_MAX_ENTRIES` (50k ≈ 3.5 MB of state) caps the per-token state;
+  beyond it the smallest balances are evicted (an evicted address that receives
+  again restarts from 0 — understated by at most `evictedBelow`, far below the
+  top-150 threshold). States without a ledger (bootstrapped from a cached graph,
+  or built before 2026-10-27) are scheduled for one replay full build.
+- **Endpoints.** `ROBINHOOD_RPC_URLS` is an ordered list: our own Nitro node
+  first, the public RPC last (appended automatically). Calls go to the first
+  endpoint that is healthy and within `RH_RPC_MAX_LAG_BLOCKS` of the others;
+  with a fallback configured, an endpoint that errors is skipped for 2 minutes
+  (a lone endpoint is never skipped — requests back off and retry). Public-RPC
+  calls are paced (`RH_RPC_MIN_INTERVAL_MS`, 500 ms; it 429s at ~4-5 req/s) and
+  batched 25 at a time; our node is unpaced and budgeted separately
+  (`robinhood-node`). Scans stop `RH_HEAD_MARGIN_BLOCKS` (20; the lag tolerance
+  when several endpoints are configured) below the head because load-balanced
+  nodes clamp `toBlock` to their own head silently; `balanceOf` checks are pinned
+  to the block the ledger is exact at. The budget gate aborts a replay the moment
+  the day's cap is reached. The app side has one extra knob, `RH_ONDEMAND_MAX_CALLS`
+  (80) — set it in the Vercel environment if needed.
+
 ## Known provider state (2026-10-21)
 
 - **Moralis Solana top-holders was removed on 2026-07-31** (404 everywhere).
@@ -89,10 +138,9 @@ decide whether to trust the worker with a first build). JSON logs on stdout.
   token-account scan remains the fallback for tokens Vybe hasn't indexed.
 - **Blockscout for Robinhood Chain** (`robinhoodchain.blockscout.com`) answers
   every API call with a Cloudflare managed challenge (403, `cf-mitigated:
-  challenge`) — holders and per-wallet histories for *new* Robinhood tokens are
-  unavailable until that changes. Tokens that already have a cached graph keep
-  syncing through the RPC log stream (balances via transfer deltas; holder list
-  refresh resumes automatically once Blockscout is reachable again).
+  challenge`, still the case 2026-10-27). It is no longer used: see "Robinhood
+  Chain: log replay" above. The explorer *website* still serves the address
+  links in the UI.
 
 ## Local development
 
@@ -170,13 +218,13 @@ Commands: `run` (loop), `once` (drain the due queue, exit), `sync`, `seed`,
    (`cat /root/.ssh/bananamaps_deploy.pub` → GitHub repo Settings → Deploy keys,
    read-only) and pull on the server:
    ```bash
-   cd /opt/bananamaps && git pull && cd worker && npm ci && npm run build && pm2 restart bananamaps-worker
+   cd /opt/bananamaps && git pull && cd worker && npm ci && npm run build && pm2 restart bananamaps-worker   # ecosystem.config.cjs changed? use: pm2 delete bananamaps-worker && pm2 start ecosystem.config.cjs && pm2 save
    ```
    or push straight from your machine into the server checkout (it is configured
    with `receive.denyCurrentBranch=updateInstead`; add the remote once with
    `git remote add hetzner ssh://bananamaps-hetzner/opt/bananamaps`):
    ```bash
-   git push hetzner main && ssh bananamaps-hetzner 'cd /opt/bananamaps/worker && npm ci && npm run build && pm2 restart bananamaps-worker'
+   git push hetzner main && ssh bananamaps-hetzner 'cd /opt/bananamaps/worker && npm ci && npm run build && pm2 restart bananamaps-worker   # ecosystem.config.cjs changed? use: pm2 delete bananamaps-worker && pm2 start ecosystem.config.cjs && pm2 save'
    ```
 
 Optional hardening: `ufw` so port 8787 is only reachable locally (`pm2` logs and

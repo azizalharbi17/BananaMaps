@@ -3,10 +3,10 @@
 // check-then-act gap), the cache upsert happens once inside the shared flight
 // (not per awaiter), and the visitor's IP is charged only when the call actually
 // starts a new build rather than joining an existing one.
-import { computeTokenGraph, ComputeResult } from './graphBuilder';
+import { computeTokenGraph, ComputeResult, HeavyTokenError } from './graphBuilder';
 import { setCachedGraph } from './graphCache';
 import { tryClaimBuildSlot, recordBuildEnd, recordIpBuild } from './buildGuard';
-import { enrollToken } from './registry';
+import { enrollToken, handOffToWorker } from './registry';
 
 /** Thrown when every concurrent build slot is taken at the moment of starting. */
 export class BuildSlotsBusy extends Error {}
@@ -31,6 +31,16 @@ export async function runBuild(address: string, chain: string, addrKey: string, 
           await enrollToken({ chain, address: addrKey, source: 'on-demand', symbol: result.graph.symbol, name: result.graph.name });
         }
         return result;
+      })
+      .catch(async (e) => {
+        // Too much history for a serverless request (Robinhood log replay): hand the
+        // first build to the worker — enrolled + flagged, it runs the unbounded
+        // replay and publishes the snapshot the client is already polling for.
+        if (e instanceof HeavyTokenError) {
+          e.handedOff = await handOffToWorker(chain, addrKey);
+          console.log(`[graph] ${flightKey} too large for an on-demand build (${e.calls} log calls) — ${e.handedOff ? 'handed off to the worker' : 'hand-off FAILED (registry not writable)'}`);
+        }
+        throw e;
       })
       .finally(() => { inFlight.delete(flightKey); recordBuildEnd(); });
     inFlight.set(flightKey, promise);

@@ -4,12 +4,27 @@
 // budget module) gets one event per call. No listener = zero overhead.
 
 export type Provider =
-  | 'moralis' | 'helius' | 'vybe' | 'solscan' | 'blockscout' | 'robinhood-rpc'
+  | 'moralis' | 'helius' | 'vybe' | 'solscan' | 'blockscout' | 'robinhood-rpc' | 'robinhood-node'
   | 'publicnode' | 'dexscreener' | 'geckoterminal' | 'other';
+
+type Listener = (provider: Provider, url: string) => void;
+const state: { listener: Listener | null; hosts: Map<string, Provider> } =
+  ((globalThis as any).__providerMeter ||= { listener: null, hosts: new Map() });
+
+/**
+ * Hosts configured at runtime (our own Robinhood Chain node, for example) can't
+ * be recognised by pattern — register them so their calls are attributed and
+ * budgeted under the right name.
+ */
+export function registerProviderHost(host: string, provider: Provider) {
+  state.hosts.set(host.toLowerCase(), provider);
+}
 
 export function providerOf(url: string): Provider {
   let host = '';
   try { host = new URL(url).hostname; } catch { return 'other'; }
+  const registered = state.hosts.get(host.toLowerCase());
+  if (registered) return registered;
   if (host.endsWith('moralis.io')) return 'moralis';
   if (host.endsWith('helius.xyz') || host.endsWith('helius-rpc.com')) return 'helius';
   if (host.endsWith('vybenetwork.xyz')) return 'vybe';
@@ -21,10 +36,6 @@ export function providerOf(url: string): Provider {
   if (host.endsWith('geckoterminal.com')) return 'geckoterminal';
   return 'other';
 }
-
-type Listener = (provider: Provider, url: string) => void;
-const state: { listener: Listener | null } =
-  ((globalThis as any).__providerMeter ||= { listener: null });
 
 export function setProviderCallListener(fn: Listener | null) {
   state.listener = fn;

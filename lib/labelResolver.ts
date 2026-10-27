@@ -14,6 +14,7 @@ import { AddrLabel } from './graphCore';
 import { getExchangeInfo } from './exchanges';
 import { getWalletLabels, setWalletLabels, WalletLabelRow } from './graphCache';
 import { recordProviderCall } from './providerMeter';
+import { contractsAmong } from './robinhoodRpc';
 
 const HELIUS_KEY = process.env.HELIUS_API_KEY!;
 const MORALIS_KEY = process.env.MORALIS_API_KEY!;
@@ -24,12 +25,12 @@ const SOLSCAN_KEY = process.env.SOLSCAN_API_KEY || '';
 const VYBE_KEY = process.env.VYBE_API_KEY || '';
 
 // Keyless public RPCs verified to accept ≥50-element eth_getCode batches.
-// The Robinhood endpoint 403s non-browser User-Agents — postJson sends one.
+// Robinhood Chain goes through lib/robinhoodRpc.ts instead (own node first,
+// public fallback, paced small batches — its public RPC 429s large batches).
 const EVM_RPC: Record<string, string> = {
   eth: 'https://ethereum-rpc.publicnode.com',
   bsc: 'https://bsc-rpc.publicnode.com',
   base: 'https://base-rpc.publicnode.com',
-  robinhood: 'https://rpc.mainnet.chain.robinhood.com',
 };
 const BROWSER_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36';
 
@@ -193,9 +194,18 @@ async function evmStatsHeuristic(chain: string, addresses: string[]): Promise<Wa
 // ---------- Contract detection (source 5) ----------
 
 async function evmContractCheck(chain: string, addresses: string[]): Promise<WalletLabelRow[]> {
-  const rpc = EVM_RPC[chain];
-  if (!rpc || !addresses.length) return [];
+  if (!addresses.length) return [];
   const rows: WalletLabelRow[] = [];
+  if (chain === 'robinhood') {
+    try {
+      for (const address of await contractsAmong(addresses)) rows.push({ address, name: 'Contract', type: 'contract', source: 'getcode' });
+    } catch (e) {
+      console.error('[labels] robinhood contract check failed:', e instanceof Error ? e.message : e);
+    }
+    return rows;
+  }
+  const rpc = EVM_RPC[chain];
+  if (!rpc) return [];
   for (let i = 0; i < addresses.length; i += 100) {
     const chunk = addresses.slice(i, i + 100);
     const batch = chunk.map((a, j) => ({ jsonrpc: '2.0', id: j, method: 'eth_getCode', params: [a, 'latest'] }));

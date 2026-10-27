@@ -5,6 +5,8 @@ import { buildGraph, normAddr, RawHolder, RawTransfer, AddrLabel, TokenMeta } fr
 import { getExchangeInfo } from './exchanges';
 import { resolveWalletLabels } from './labelResolver';
 import { recordProviderCall } from './providerMeter';
+import { UpstreamError, NotIndexedError, HeavyTokenError } from './errors';
+import { replayToken, emptyReplay, catchUpReplay, topHolders, historiesFor, balancesOf, tokenInfo, pctOf, formatUnits, rpcStats, Replay, ReplayOptions, TokenInfo } from './robinhoodRpc';
 
 const MORALIS_KEY = process.env.MORALIS_API_KEY!;
 const HELIUS_KEY = process.env.HELIUS_API_KEY!;
@@ -17,26 +19,23 @@ export const MORALIS_CHAIN: Record<string, string> = { eth: '0x1', bsc: '0x38', 
 export const CHAIN_LABEL: Record<string, string> = { eth: 'Ethereum', bsc: 'BSC', sol: 'Solana', base: 'Base', robinhood: 'Robinhood Chain' };
 
 // Robinhood Chain (Arbitrum Orbit L2, chain id 4663 / 0x1237) — Moralis doesn't
-// index it, so holders/transfers come from its Blockscout explorer API instead.
-export const BLOCKSCOUT_BASE: Record<string, string> = {
-  robinhood: 'https://robinhoodchain.blockscout.com/api/v2',
-};
-// Blockscout (and the Robinhood RPC) 403 non-browser User-Agents.
+// index it and its Blockscout API sits behind a Cloudflare challenge, so holders,
+// histories and supply are replayed from ERC-20 Transfer logs over JSON-RPC
+// (lib/robinhoodRpc.ts; own node first, public RPC as fallback).
+export const LOG_CHAINS = new Set(['robinhood']);
+export const isLogChain = (chain: string) => LOG_CHAINS.has(chain);
+// The Robinhood RPC 403s non-browser User-Agents.
 export const BROWSER_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36';
 
 export const TOP_HOLDERS = 150;
 const TRANSFER_PAGES_PER_WALLET = 1; // 100 transfers per holder
-const CONCURRENCY: Record<string, number> = { sol: 3, evm: 3, blockscout: 3 };
-const BATCH_DELAY_MS: Record<string, number> = { sol: 400, evm: 350, blockscout: 200 };
+const CONCURRENCY: Record<string, number> = { sol: 3, evm: 3 };
+const BATCH_DELAY_MS: Record<string, number> = { sol: 400, evm: 350 };
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 const FETCH_TIMEOUT_MS = 15_000;
 
-/** Upstream is broken (rate-limited, 5xx, network) — distinct from "no such token". */
-export class UpstreamError extends Error {}
-
-/** The token exists (DexScreener knows it) but holder data isn't indexed yet. */
-export class NotIndexedError extends Error {}
+export { UpstreamError, NotIndexedError, HeavyTokenError };
 
 /**
  * GET/POST JSON with timeout + retry.
@@ -231,144 +230,170 @@ export async function fetchMetaEVM(token: string, chain: string, holderCount: nu
   };
 }
 
-// ---------- Blockscout chains (Robinhood Chain) ----------
+// ---------- Log-replay chains (Robinhood Chain) ----------
+
+export interface LogSnapshot {
+  holders: RawHolder[];
+  labels: Map<string, AddrLabel>;
+  transfers: Map<string, RawTransfer[]>;
+  meta: TokenMeta;
+  replay: Replay;
+  info: TokenInfo;
+  /** Top-set balances confirmed on-chain (balanceOf) — false when that batch failed. */
+  verified: boolean;
+}
+
+export interface LogSnapshotOptions {
+  /** getLogs budget before giving up with HeavyTokenError (on-demand builds). Omit for unlimited (worker). */
+  maxCalls?: number;
+  topN?: number;
+  onProgress?: ReplayOptions['onProgress'];
+  /**
+   * Expand per-holder transfer lists for buildGraph (default). The worker keeps
+   * counterparty counts instead and passes false — on the chain's largest token
+   * the expansion is >5M objects (~250 MB) it would never read.
+   */
+  withTransfers?: boolean;
+}
 
 /**
- * Blockscout API v2 GET with the browser UA it requires and a generous timeout
- * (p99 ≈ 7s with rare 20s outliers observed under load). `params` are appended
- * verbatim — pagination works by echoing back next_page_params unchanged.
+ * getLogs budget of an on-demand (serverless) build. ~80 paced calls ≈ 1 minute
+ * and ≈ 400k transfers of history; anything bigger is handed to the worker.
  */
-export async function blockscoutJson(base: string, path: string, params: Record<string, any> = {}): Promise<any> {
-  const qs = new URLSearchParams();
-  for (const [k, v] of Object.entries(params)) {
-    if (v !== null && v !== undefined) qs.set(k, String(v));
+export const ONDEMAND_MAX_LOG_CALLS = Number(process.env.RH_ONDEMAND_MAX_CALLS) > 0 ? Number(process.env.RH_ONDEMAND_MAX_CALLS) : 80;
+
+const emptyMeta = (): TokenMeta => ({ name: '', symbol: '', logo: '', price: 0, priceChange24h: 0 });
+
+function prettyDex(id: string): string {
+  return id ? id.replace(/[-_]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : 'DEX';
+}
+
+/** DexScreener pairs on this chain → pool-contract labels (the hub node of every memecoin graph). */
+export function dexPoolLabels(pairs: any[] | undefined, chain: string): Map<string, AddrLabel> {
+  const out = new Map<string, AddrLabel>();
+  const slug = Object.entries(DEX_CHAIN_TO_OURS).find(([, v]) => v === chain)?.[0];
+  for (const p of pairs || []) {
+    if (slug && p.chainId !== slug) continue;
+    const addr = String(p.pairAddress || '').toLowerCase();
+    if (/^0x[0-9a-f]{40}$/.test(addr)) out.set(addr, { label: `${prettyDex(String(p.dexId || ''))} Pool`, labelType: 'dex' });
   }
-  const url = `${base}${path}${qs.size ? `?${qs}` : ''}`;
-  for (let attempt = 0; ; attempt++) {
-    try {
-      recordProviderCall(url);
-      const res = await fetch(url, { headers: { 'User-Agent': BROWSER_UA }, signal: AbortSignal.timeout(30_000) });
-      if (res.status === 429 || res.status >= 500) {
-        if (attempt >= 2) throw new UpstreamError(`HTTP ${res.status}`);
-        await sleep(1000 * (attempt + 1));
-        continue;
-      }
-      // Cloudflare's managed challenge (observed on robinhoodchain.blockscout.com
-      // since 2026-09) answers 403 with an HTML interstitial. That is an outage of
-      // the data source, not "no data for this token" — surface it as such so
-      // callers don't report a live token as unindexed.
-      if (res.status === 403 && (res.headers.get('cf-mitigated') === 'challenge' || (res.headers.get('content-type') || '').includes('text/html'))) {
-        throw new UpstreamError('blockscout: blocked by Cloudflare challenge');
-      }
-      if (!res.ok) return null;
-      return await res.json();
-    } catch (e) {
-      if (e instanceof UpstreamError) throw e;
-      if (attempt >= 2) throw new UpstreamError(String(e));
-      await sleep(800 * (attempt + 1));
-    }
-  }
+  return out;
 }
 
-function classifyBlockscoutAddress(name: string | null | undefined, isContract: boolean): AddrLabel | null {
-  if (name && /pool|router|swap|vault|pair|amm/i.test(name)) return { label: name, labelType: 'dex' };
-  if (name && CEX_NAME_RE.test(name)) return { label: name, labelType: 'cex' };
-  if (isContract) return { label: name || 'Contract', labelType: 'contract' };
-  if (name) return { label: name };
-  return null;
-}
-
-export async function fetchHoldersBlockscout(token: string, chain: string): Promise<HolderFetch> {
-  const base = BLOCKSCOUT_BASE[chain];
-  const holders: RawHolder[] = [];
-  const labels = new Map<string, AddrLabel>();
-
-  const info = await blockscoutJson(base, `/tokens/${token}`);
-  const totalSupply = Number(info?.total_supply);
-  const decimals = Number(info?.decimals ?? 18);
-  if (!Number.isFinite(totalSupply) || totalSupply <= 0) return { holders, labels };
-
-  let pageParams: Record<string, any> = {};
-  while (holders.length < TOP_HOLDERS) {
-    const data = await blockscoutJson(base, `/tokens/${token}/holders`, pageParams);
-    if (!data?.items?.length) break;
-    for (const item of data.items) {
-      const addr = String(item.address?.hash || '').toLowerCase();
-      if (!addr) continue;
-      const value = Number(item.value) || 0;
-      holders.push({
-        address: addr,
-        balanceFormatted: value / Math.pow(10, decimals),
-        pct: (value / totalSupply) * 100,
-      });
-      const known = getExchangeInfo(addr, chain);
-      const fromApi = classifyBlockscoutAddress(item.address?.name, !!item.address?.is_contract);
-      if (known) labels.set(addr, { label: known.name, labelType: known.type });
-      else if (fromApi) labels.set(addr, fromApi);
-    }
-    if (!data.next_page_params) break;
-    pageParams = data.next_page_params;
-    await sleep(250);
-  }
-  return { holders: holders.slice(0, TOP_HOLDERS), labels };
-}
-
-export async function fetchTransfersBlockscout(
-  token: string, chain: string, holders: RawHolder[], labels: Map<string, AddrLabel>,
-): Promise<TransferFetch> {
-  const base = BLOCKSCOUT_BASE[chain];
-  const tokenLower = token.toLowerCase();
-  const out = new Map<string, RawTransfer[]>();
-  let failedWallets = 0;
-  await batched(holders, CONCURRENCY.blockscout, BATCH_DELAY_MS.blockscout, async (h) => {
-    const transfers: RawTransfer[] = [];
-    try {
-      // One page (50 transfers) per holder, matching the other chains' depth.
-      // NOTE: the filter param must be `token=` — token_contract_address_hash
-      // silently returns empty. A silently-failed filter also returns empty, so
-      // we sanity-check each item's token address before trusting it.
-      const data = await blockscoutJson(base, `/addresses/${h.address}/token-transfers`, { token });
-      for (const item of data?.items || []) {
-        if (String(item.token?.address_hash || item.token?.address || '').toLowerCase() !== tokenLower) continue;
-        const from = String(item.from?.hash || '').toLowerCase();
-        const to = String(item.to?.hash || '').toLowerCase();
-        if (!from || !to) continue;
-        transfers.push({ from, to, id: `${item.transaction_hash}:${item.log_index}` });
-        for (const [addr, meta] of [[from, item.from], [to, item.to]] as [string, any][]) {
-          if (labels.has(addr)) continue;
-          const known = getExchangeInfo(addr, chain);
-          if (known) { labels.set(addr, { label: known.name, labelType: known.type }); continue; }
-          const fromApi = classifyBlockscoutAddress(meta?.name, !!meta?.is_contract);
-          if (fromApi) labels.set(addr, fromApi);
-        }
-      }
-    } catch {
-      failedWallets++;
-    }
-    out.set(h.address, transfers);
-  });
-  return { transfers: out, failedWallets };
-}
-
-export async function fetchMetaBlockscout(token: string, chain: string, holderCount: number): Promise<TokenMeta> {
-  const base = BLOCKSCOUT_BASE[chain];
+/**
+ * Everything a graph needs for a log-replay chain, from one pass over the token's
+ * Transfer logs since genesis: exact balances → top holders, counterparty counts →
+ * per-holder histories, supply and holder count, plus ERC-20 metadata (eth_call)
+ * and DexScreener market data. Replaces the Blockscout holders/transfers/meta trio.
+ */
+export async function fetchLogSnapshot(token: string, chain: string, opts: LogSnapshotOptions = {}): Promise<LogSnapshot> {
+  const t = token.toLowerCase();
+  const topN = opts.topN ?? TOP_HOLDERS;
+  const t0 = Date.now();
   const [info, dex] = await Promise.all([
-    blockscoutJson(base, `/tokens/${token}`).catch(() => null),
-    tryFetchJson(`https://api.dexscreener.com/latest/dex/tokens/${token}`),
+    tokenInfo(t),
+    tryFetchJson(`https://api.dexscreener.com/latest/dex/tokens/${t}`),
   ]);
-  const pair = bestPair(dex?.pairs, token, chain);
-  return {
-    name: info?.name || pair?.baseToken?.name || '',
-    symbol: info?.symbol || pair?.baseToken?.symbol || '',
-    logo: pair?.info?.imageUrl || info?.icon_url || '',
-    price: firstFinite(pair?.priceUsd, info?.exchange_rate),
+  const empty = (replay: Replay): LogSnapshot => ({ holders: [], labels: new Map(), transfers: new Map(), meta: emptyMeta(), replay, info, verified: false });
+  if (!info.exists) {
+    // Nothing ERC-20-shaped at this address (or the node can't see it): no holders.
+    return empty(emptyReplay(t));
+  }
+  const stats0 = rpcStats();
+  const replay = await replayToken(t, { maxCalls: opts.maxCalls, onProgress: opts.onProgress });
+  // The main scan of a large token takes minutes: bring the replay to a fresh safe
+  // head so the balances, the verification below and the worker's cursor all refer
+  // to the same block.
+  const caughtUp = await catchUpReplay(replay);
+  const stats1 = rpcStats();
+  const rpcNote = `${stats1.rateLimited - stats0.rateLimited} rate-limit retries, ${stats1.limitErrors - stats0.limitErrors} range splits`;
+  let holders = topHolders(replay, info.decimals, topN);
+  if (!holders.length) return empty(replay);
+
+  // Confirm the top set on-chain AT THE REPLAY HEAD: fee-on-transfer / rebasing
+  // tokens move balances without Transfer events, so balanceOf wins over the replay
+  // where they differ. Pinning the block keeps the values consistent with the
+  // cursor (a 'latest' read would already include deltas the worker applies next).
+  let verified = false;
+  try {
+    const asked = holders.length;
+    const onchain = await balancesOf(t, holders.map(h => h.address), replay.head);
+    if (onchain.size) {
+      let drift = 0;
+      for (const h of holders) {
+        const v = onchain.get(h.address);
+        if (v === undefined) continue;
+        if (v !== (replay.balances.get(h.address) ?? BigInt(0))) drift++;
+        replay.balances.set(h.address, v); // the ledger seeded from this replay must carry the confirmed values too
+        h.balanceFormatted = formatUnits(v, info.decimals);
+        h.pct = pctOf(v, replay.supply);
+      }
+      holders = holders.filter(h => h.balanceFormatted > 0).sort((a, b) => b.balanceFormatted - a.balanceFormatted);
+      verified = onchain.size >= asked * 0.8;
+      if (drift) console.log(`[graph] ${chain}:${t} balanceOf differs from the replay for ${drift}/${asked} top holders (fee/rebase token?)`);
+    } else {
+      console.warn(`[graph] ${chain}:${t} balanceOf at block ${replay.head} unavailable; keeping replayed balances`);
+    }
+  } catch (e) {
+    console.error(`[graph] ${chain}:${t} balanceOf verification failed: ${e instanceof Error ? e.message : e}`);
+  }
+
+  const labels = new Map<string, AddrLabel>();
+  for (const [addr, lb] of dexPoolLabels(dex?.pairs, chain)) labels.set(addr, lb);
+  for (const h of holders) {
+    const known = getExchangeInfo(h.address, chain);
+    if (known) labels.set(h.address, { label: known.name, labelType: known.type });
+    else if (h.address === t) labels.set(h.address, { label: 'Token Contract', labelType: 'contract' });
+  }
+  const transfers = opts.withTransfers === false ? new Map<string, RawTransfer[]>() : historiesFor(replay, holders.map(h => h.address));
+  const pair = bestPair(dex?.pairs, t, chain);
+  const meta: TokenMeta = {
+    name: info.name || pair?.baseToken?.name || '',
+    symbol: info.symbol || pair?.baseToken?.symbol || '',
+    logo: pair?.info?.imageUrl || '',
+    price: firstFinite(pair?.priceUsd),
     priceChange24h: firstFinite(pair?.priceChange?.h24),
-    marketCap: firstFinite(pair?.marketCap, pair?.fdv, info?.circulating_market_cap),
-    volume24h: sumVolume24h(dex?.pairs, token, chain),
-    totalHolders: firstFinite(info?.holders_count),
-    holderCount,
+    marketCap: firstFinite(pair?.marketCap, pair?.fdv),
+    volume24h: sumVolume24h(dex?.pairs, t, chain),
+    totalHolders: replay.holderCount || undefined,
+    holderCount: holders.length,
     liquidityUsd: firstFinite(pair?.liquidity?.usd),
   };
+  console.log(`[graph] ${chain}:${t} replayed ${replay.logCount} transfers in ${replay.calls} calls (first block ${replay.firstBlock ?? '-'}, head ${replay.head}, ${replay.holderCount} holders of ${replay.addressCount} addresses${replay.anomalies ? `, ${replay.anomalies} negative` : ''}${verified ? ', balances verified' : ''}; catch-up ${caughtUp}; ${rpcNote}) (${Date.now() - t0}ms)`);
+  return { holders, labels, transfers, meta, replay, info, verified };
+}
+
+// The holders/transfers/meta dispatchers below are three views of one snapshot:
+// a short-lived memo keeps a fetchHolders → fetchTransfers → fetchTokenMeta
+// sequence from replaying the chain three times.
+const snapshotMemo: Map<string, { at: number; p: Promise<LogSnapshot> }> =
+  ((globalThis as any).__logSnapshotMemo ||= new Map());
+const SNAPSHOT_MEMO_MS = 5 * 60_000;
+function memoSnapshot(chain: string, address: string): Promise<LogSnapshot> {
+  const key = `${chain}:${address.toLowerCase()}`;
+  const hit = snapshotMemo.get(key);
+  if (hit && Date.now() - hit.at < SNAPSHOT_MEMO_MS) return hit.p;
+  const p = fetchLogSnapshot(address, chain, { maxCalls: ONDEMAND_MAX_LOG_CALLS });
+  p.catch(() => snapshotMemo.delete(key));
+  snapshotMemo.set(key, { at: Date.now(), p });
+  if (snapshotMemo.size > 50) for (const [k, v] of snapshotMemo) if (Date.now() - v.at >= SNAPSHOT_MEMO_MS) snapshotMemo.delete(k);
+  return p;
+}
+
+export async function fetchHoldersLogs(token: string, chain: string): Promise<HolderFetch> {
+  const s = await memoSnapshot(chain, token);
+  return { holders: s.holders, labels: new Map(s.labels) };
+}
+
+export async function fetchTransfersLogs(token: string, chain: string, _holders: RawHolder[], labels: Map<string, AddrLabel>): Promise<TransferFetch> {
+  const s = await memoSnapshot(chain, token);
+  for (const [a, l] of s.labels) if (!labels.has(a)) labels.set(a, l);
+  return { transfers: s.transfers, failedWallets: 0 };
+}
+
+export async function fetchMetaLogs(token: string, chain: string, holderCount: number): Promise<TokenMeta> {
+  const s = await memoSnapshot(chain, token);
+  return { ...s.meta, holderCount };
 }
 
 // ---------- Solana (Moralis solana-gateway + Helius Enhanced Transactions) ----------
@@ -651,23 +676,21 @@ export async function resolveTokenInput(input: string, chainHint: string): Promi
 
 // ---------- Chain dispatchers (shared with the background worker) ----------
 
-export const isBlockscoutChain = (chain: string) => chain in BLOCKSCOUT_BASE;
-
 export function fetchHolders(chain: string, address: string): Promise<HolderFetch> {
   if (chain === 'sol') return fetchHoldersSOL(address);
-  if (isBlockscoutChain(chain)) return fetchHoldersBlockscout(address, chain);
+  if (isLogChain(chain)) return fetchHoldersLogs(address, chain);
   return fetchHoldersEVM(address, chain);
 }
 
 export function fetchTransfers(chain: string, address: string, holders: RawHolder[], labels: Map<string, AddrLabel>): Promise<TransferFetch> {
   if (chain === 'sol') return fetchTransfersSOL(address, holders, labels);
-  if (isBlockscoutChain(chain)) return fetchTransfersBlockscout(address, chain, holders, labels);
+  if (isLogChain(chain)) return fetchTransfersLogs(address, chain, holders, labels);
   return fetchTransfersEVM(address, chain, holders, labels);
 }
 
 export function fetchTokenMeta(chain: string, address: string, holderCount: number): Promise<TokenMeta> {
   if (chain === 'sol') return fetchMetaSOL(address, holderCount);
-  if (isBlockscoutChain(chain)) return fetchMetaBlockscout(address, chain, holderCount);
+  if (isLogChain(chain)) return fetchMetaLogs(address, chain, holderCount);
   return fetchMetaEVM(address, chain, holderCount);
 }
 
@@ -682,14 +705,19 @@ export interface ComputeResult {
 export async function computeTokenGraph(address: string, chain: string): Promise<ComputeResult | null> {
   const t0 = Date.now();
   const isSol = chain === 'sol';
-  const isBlockscout = chain in BLOCKSCOUT_BASE;
 
   // Holder fetch failures throw UpstreamError (surfaces as 500, not a bogus "not found").
-  const { holders, labels } = isSol
-    ? await fetchHoldersSOL(address)
-    : isBlockscout
-      ? await fetchHoldersBlockscout(address, chain)
-      : await fetchHoldersEVM(address, chain);
+  // Log-replay chains produce holders, histories and meta in one pass; a token too
+  // large for a serverless request throws HeavyTokenError (→ worker hand-off).
+  let holders: RawHolder[];
+  let labels: Map<string, AddrLabel>;
+  let snapshot: LogSnapshot | null = null;
+  if (isLogChain(chain)) {
+    snapshot = await fetchLogSnapshot(address, chain, { maxCalls: ONDEMAND_MAX_LOG_CALLS });
+    ({ holders, labels } = snapshot);
+  } else {
+    ({ holders, labels } = isSol ? await fetchHoldersSOL(address) : await fetchHoldersEVM(address, chain));
+  }
   console.log(`[graph] ${chain}:${address} holders=${holders.length} (${Date.now() - t0}ms)`);
   if (!holders.length) {
     // "Not found" is only true if DexScreener has never seen the address either —
@@ -701,20 +729,20 @@ export async function computeTokenGraph(address: string, chain: string): Promise
     return null;
   }
 
-  const { transfers, failedWallets } = isSol
-    ? await fetchTransfersSOL(address, holders, labels)
-    : isBlockscout
-      ? await fetchTransfersBlockscout(address, chain, holders, labels)
+  const { transfers, failedWallets } = snapshot
+    ? { transfers: snapshot.transfers, failedWallets: 0 }
+    : isSol
+      ? await fetchTransfersSOL(address, holders, labels)
       : await fetchTransfersEVM(address, chain, holders, labels);
   let transferCount = 0;
   for (const t of transfers.values()) transferCount += t.length;
   const partial = failedWallets > holders.length * 0.2;
   console.log(`[graph] ${chain}:${address} transfers=${transferCount} across ${transfers.size} wallets, ${failedWallets} failed${partial ? ' (PARTIAL — will not cache)' : ''} (${Date.now() - t0}ms)`);
 
-  const meta = isSol
-    ? await fetchMetaSOL(address, holders.length)
-    : isBlockscout
-      ? await fetchMetaBlockscout(address, chain, holders.length)
+  const meta = snapshot
+    ? snapshot.meta
+    : isSol
+      ? await fetchMetaSOL(address, holders.length)
       : await fetchMetaEVM(address, chain, holders.length);
 
   const computedAt = new Date().toISOString();

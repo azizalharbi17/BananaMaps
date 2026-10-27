@@ -10,6 +10,8 @@
 import type { TokenGraph } from '../../lib/graphTypes';
 import type { AddrLabel, RawHolder, RawTransfer, TokenMeta } from '../../lib/graphCore';
 import { normAddr } from '../../lib/graphCore';
+import { expandHistories, CpCounts } from '../../lib/histories';
+import { formatUnits, pctOf, ZERO_ADDR, Replay } from '../../lib/robinhoodRpc';
 
 export const STATE_VERSION = 1;
 
@@ -33,11 +35,17 @@ export interface SolAccountCursor {
 
 export interface HolderHistory {
   /** counterparty → [sent-to count, received-from count] */
-  cp: Record<string, [number, number]>;
+  cp: CpCounts;
   /** False until the holder's initial history has been fetched (new holders mid-stream). */
   synced: boolean;
   /** True for labeled (cex/dex/contract/burn) holders whose own stream is deliberately not polled. */
   skipped?: boolean;
+  /**
+   * Ledger chains: the holder dropped out of the top set at this time. Its history
+   * keeps receiving deltas and is restored without a refetch if it climbs back in;
+   * parked entries are dropped after PARK_MS.
+   */
+  parked?: string;
   firstSeenAt: string;
   /** Solana: watched token accounts (per-holder cursors live here). */
   accounts?: SolAccountCursor[];
@@ -48,6 +56,31 @@ export type Cursor =
   | { kind: 'rpc'; block: number }                           // eth_getLogs: next fromBlock
   | { kind: 'sol'; syncs: number };                          // per-holder cursors in hist[].accounts
 
+/**
+ * Log-replay chains (Robinhood): every address's raw balance, maintained from the
+ * same Transfer stream the deltas come from. Makes the top-N exact on every sync
+ * with zero provider calls and gives the true holder count. Bounded by eviction
+ * of dust balances (RH_LEDGER_MAX_ENTRIES) — an evicted address that receives
+ * tokens again restarts from 0, understating it by at most `evictedBelow`.
+ */
+export interface Ledger {
+  /** address → raw balance as a decimal string (positive balances only). */
+  balances: Record<string, string>;
+  /** Raw supply (minted − burned, seeded from the replay's positive-balance sum). */
+  supply: string;
+  /** Tracked non-zero balances. */
+  tracked: number;
+  /** Entries evicted so far (approximate extra holders beyond `tracked`). */
+  evicted: number;
+  evictedBelow?: string;
+  /** First block with a Transfer of this token (history scans for new holders start here). */
+  firstBlock: number | null;
+  /** Block the ledger is exact as of. */
+  head: number;
+  /** Last balanceOf confirmation of the top set. */
+  lastVerifiedAt?: string;
+}
+
 export interface SyncState {
   v: number;
   chain: string;
@@ -56,6 +89,7 @@ export interface SyncState {
   /** Token supply in formatted units (pct = balance / supply × 100). */
   supplyFormatted?: number;
   decimals?: number;
+  ledger?: Ledger;
   hist: Record<string, HolderHistory>;
   /** Resolved labels for node addresses; null = checked, nothing found (not re-checked until a full build). */
   labels: Record<string, AddrLabel | null>;
@@ -150,12 +184,12 @@ export function rerankHolders(state: SyncState) {
   invalidateHolderIndex(state);
 }
 
-/** Bound per-holder counterparty maps: keep the most-connected ones. Tracked holders are never pruned (≤150, the bound still holds). */
+/** Bound per-holder counterparty maps: keep the most-connected ones. Current holders are never pruned (≤150, the bound still holds); parked ex-holders are. */
 export function pruneHistories(state: SyncState, maxPerHolder: number) {
   for (const h of Object.values(state.hist)) {
     const keys = Object.keys(h.cp);
     if (keys.length <= maxPerHolder) continue;
-    const prunable = keys.filter(k => !state.hist[k]);
+    const prunable = keys.filter(k => !state.hist[k] || state.hist[k].parked);
     const keep = Math.max(0, maxPerHolder - (keys.length - prunable.length));
     if (prunable.length <= keep) continue;
     prunable.sort((a, b) => (h.cp[b][0] + h.cp[b][1]) - (h.cp[a][0] + h.cp[a][1]));
@@ -206,28 +240,104 @@ export function ingestHistory(state: SyncState, holder: string, transfers: RawTr
  * missed the transfer (a page window or pruning) while the other carries it.
  */
 export function toTransfersByHolder(state: SyncState): Map<string, RawTransfer[]> {
-  const out = new Map<string, RawTransfer[]>();
-  const syncedHolders = Object.entries(state.hist).filter(([, h]) => h.synced && !h.skipped).map(([a]) => a);
-  const syncedSet = new Set(syncedHolders);
-  for (const holder of syncedHolders) {
-    const h = state.hist[holder];
-    const list: RawTransfer[] = [];
-    // Non-holder counterparties: both directions straight from this holder's history.
-    for (const [cp, [outN, inN]] of Object.entries(h.cp)) {
-      if (syncedSet.has(cp)) continue;
-      for (let i = 0; i < outN; i++) list.push({ from: holder, to: cp });
-      for (let i = 0; i < inN; i++) list.push({ from: cp, to: holder });
-    }
-    // Holder→holder: emitted from the sender's list only, count = max(sender.out,
-    // receiver.in), so an edge survives even if only one side still records it.
-    for (const other of syncedHolders) {
-      if (other === holder) continue;
-      const n = Math.max(h.cp[other]?.[0] || 0, state.hist[other].cp[holder]?.[1] || 0);
-      for (let i = 0; i < n; i++) list.push({ from: holder, to: other });
-    }
-    out.set(holder, list);
+  const cpByHolder = new Map<string, CpCounts>();
+  for (const [a, h] of Object.entries(state.hist)) if (h.synced && !h.skipped && !h.parked) cpByHolder.set(a, h.cp);
+  return expandHistories(cpByHolder);
+}
+
+// ---------- ledger (log-replay chains) ----------
+
+const PARK_MS = 7 * 24 * 3600_000;
+const PARK_MAX = 150;
+const ZERO = BigInt(0);
+
+/** Decimal-string comparison for non-negative integers without leading zeros (no BigInt parsing). */
+const cmpDec = (a: string, b: string) => (a.length - b.length) || (a < b ? -1 : a > b ? 1 : 0);
+
+function setLedgerBalance(L: Ledger, addr: string, v: bigint, maxEntries: number) {
+  const had = addr in L.balances;
+  if (v <= ZERO) {
+    if (had) { delete L.balances[addr]; L.tracked--; }
+    return;
   }
-  return out;
+  L.balances[addr] = v.toString();
+  if (!had) {
+    L.tracked++;
+    if (L.tracked > maxEntries) evictDust(L, Math.floor(maxEntries * 2 / 3));
+  }
+}
+
+/** Drop the smallest balances until `keep` remain; remember the threshold. */
+export function evictDust(L: Ledger, keep: number) {
+  const entries = Object.entries(L.balances);
+  if (entries.length <= keep) return;
+  entries.sort((a, b) => cmpDec(b[1], a[1]));
+  const dropped = entries.slice(keep);
+  for (const [a] of dropped) delete L.balances[a];
+  L.tracked = keep;
+  L.evicted += dropped.length;
+  const threshold = dropped[0][1];
+  if (!L.evictedBelow || cmpDec(threshold, L.evictedBelow) > 0) L.evictedBelow = threshold;
+}
+
+export function ledgerFromReplay(replay: Replay, maxEntries: number): Ledger {
+  const L: Ledger = { balances: {}, supply: replay.supply.toString(), tracked: 0, evicted: 0, firstBlock: replay.firstBlock, head: replay.head };
+  for (const [a, v] of replay.balances) if (v > ZERO) { L.balances[a] = v.toString(); L.tracked++; }
+  if (L.tracked > maxEntries) evictDust(L, Math.floor(maxEntries * 2 / 3));
+  return L;
+}
+
+/** Apply one raw Transfer to the ledger (mints/burns move the supply). */
+export function ledgerApply(state: SyncState, from: string, to: string, raw: bigint, maxEntries: number) {
+  const L = state.ledger;
+  if (!L || raw <= ZERO || from === to) return;
+  if (from === ZERO_ADDR) L.supply = (BigInt(L.supply) + raw).toString();
+  else setLedgerBalance(L, from, BigInt(L.balances[from] || '0') - raw, maxEntries);
+  if (to === ZERO_ADDR) L.supply = (BigInt(L.supply) - raw).toString();
+  else setLedgerBalance(L, to, BigInt(L.balances[to] || '0') + raw, maxEntries);
+}
+
+/** Overwrite ledger balances with on-chain balanceOf results (fee/rebase drift correction). */
+export function ledgerSet(state: SyncState, balances: Map<string, bigint>, maxEntries: number) {
+  const L = state.ledger;
+  if (!L) return;
+  for (const [a, v] of balances) setLedgerBalance(L, a, v, maxEntries);
+}
+
+export const ledgerHolderCount = (L: Ledger) => L.tracked + L.evicted;
+
+/**
+ * Recompute the top-N holder set from the ledger. Holders leaving the set are
+ * parked (history kept, still receiving deltas) rather than deleted, so a wallet
+ * hovering around rank N doesn't trigger a history refetch every time it re-enters.
+ */
+export function rerankFromLedger(state: SyncState, n: number): { added: string[]; removed: string[] } {
+  const L = state.ledger!;
+  const decimals = state.decimals ?? 18;
+  const entries = Object.entries(L.balances).sort((a, b) => cmpDec(b[1], a[1])).slice(0, n);
+  const supply = BigInt(L.supply);
+  const now = new Date().toISOString();
+  const next: HolderRec[] = entries.map(([address, s]) => ({ address, balanceFormatted: formatUnits(s, decimals), pct: pctOf(BigInt(s), supply) }));
+  const nextSet = new Set(next.map(h => h.address));
+  const added: string[] = [];
+  const removed: string[] = [];
+  let parked = 0;
+  for (const [addr, h] of Object.entries(state.hist)) {
+    if (nextSet.has(addr)) { if (h.parked) delete h.parked; continue; }
+    if (!h.parked) { h.parked = now; removed.push(addr); }
+    else if (Date.now() - new Date(h.parked).getTime() > PARK_MS) { delete state.hist[addr]; continue; }
+    parked++;
+  }
+  if (parked > PARK_MAX) {
+    // Oldest parked entries go first.
+    const list = Object.entries(state.hist).filter(([, h]) => h.parked).sort((a, b) => a[1].parked!.localeCompare(b[1].parked!));
+    for (const [addr] of list.slice(0, parked - PARK_MAX)) delete state.hist[addr];
+  }
+  for (const h of next) if (!state.hist[h.address]) { state.hist[h.address] = newHistory(); added.push(h.address); }
+  state.holders = next;
+  state.supplyFormatted = formatUnits(supply, decimals);
+  invalidateHolderIndex(state);
+  return { added, removed };
 }
 
 export function toRawHolders(state: SyncState): RawHolder[] {

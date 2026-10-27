@@ -9,7 +9,9 @@ module.exports = {
       script: 'dist/worker/src/index.js',
       args: 'run',
       interpreter: 'node',
-      node_args: '--max-old-space-size=768',
+      // A Robinhood log replay holds every address's balance and counterparty counts in
+      // memory (the chain's largest token peaks around a few hundred MB); the box has 8 GB.
+      node_args: '--max-old-space-size=2048',
       instances: 1,            // exactly one: the registry lease protects against duplicates, but one is the design
       exec_mode: 'fork',
       autorestart: true,
@@ -17,7 +19,7 @@ module.exports = {
       restart_delay: 5000,     // crash-loop damper
       exp_backoff_restart_delay: 1000,
       kill_timeout: 100000,    // SIGTERM → graceful stop waits up to 90 s for in-flight syncs
-      max_memory_restart: '900M',
+      max_memory_restart: '2500M',
       env: {
         NODE_ENV: 'production',
         // Everything else (keys, budgets, intervals) comes from worker/.env — see .env.example.

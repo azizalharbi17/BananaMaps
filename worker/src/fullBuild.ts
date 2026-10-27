@@ -1,17 +1,22 @@
 // Full (re)build of a token's sync state from scratch: top holders + one page of
 // history per holder through the same lib fetchers the on-demand builder uses,
 // then a cursor positioned at "now" so the next sync is a pure delta.
+//
+// Log-replay chains (Robinhood) are different: one unbounded pass over the
+// token's Transfer logs since genesis yields exact balances for every address
+// (the ledger), the top set, every holder's counterparty counts and the supply,
+// and the cursor lands exactly at replay head + 1 — no overlap, no hole.
 import {
-  fetchHolders, fetchTransfers, fetchTokenMeta, tryFetchJson, NotIndexedError, UpstreamError, isBlockscoutChain,
+  fetchHolders, fetchTransfers, fetchTokenMeta, fetchLogSnapshot, tryFetchJson, NotIndexedError, UpstreamError, isLogChain,
 } from '../../lib/graphBuilder';
 import type { AddrLabel } from '../../lib/graphCore';
 import { normAddr } from '../../lib/graphCore';
+import { cpFor, currentRobinhoodProvider, formatUnits } from '../../lib/robinhoodRpc';
 import { cfg } from './config';
 import { log, errMsg } from './log';
 import { budget, withProvider, ProviderName } from './budget';
-import { SyncState, emptyState, replaceHolders, ingestHistory } from './state';
+import { SyncState, emptyState, replaceHolders, ingestHistory, ledgerFromReplay, pruneHistories } from './state';
 import { evmHeadCursor } from './providers/evm';
-import { rpcHead, rpcDecimals, hasRpc } from './providers/robinhood';
 import { solTokenAccounts, solNewestSignatures } from './providers/sol';
 
 export class PartialBuildError extends Error {}
@@ -19,24 +24,28 @@ export class NotFoundError extends Error {}
 
 export function holderProvider(chain: string): ProviderName {
   if (chain === 'sol') return process.env.VYBE_API_KEY ? 'vybe' : 'helius';
-  if (isBlockscoutChain(chain)) return 'blockscout';
+  if (isLogChain(chain)) return currentRobinhoodProvider();
   return 'moralis';
 }
 export function historyProvider(chain: string): ProviderName {
   if (chain === 'sol') return 'helius';
-  if (isBlockscoutChain(chain)) return 'blockscout';
+  if (isLogChain(chain)) return currentRobinhoodProvider();
   return 'moralis';
 }
 export function deltaProvider(chain: string): ProviderName {
   if (chain === 'sol') return 'helius';
-  if (hasRpc(chain)) return 'robinhood-rpc';
+  if (isLogChain(chain)) return currentRobinhoodProvider();
   return 'moralis';
 }
 
 /** Approximate provider calls a full build costs (admission control). */
 export function fullBuildEstimate(chain: string): Partial<Record<ProviderName, number>> {
   if (chain === 'sol') return { vybe: 1, helius: 150 + 2 * 15 + 10 };
-  if (isBlockscoutChain(chain)) return { blockscout: 160, 'robinhood-rpc': 2 };
+  // A replay is ~1 call per 3-6k transfers of history (+ ~10 empty genesis-side
+  // chunks): a brand-new token ~15 calls, mid-size tokens ~200, CASHCAT (13M
+  // transfers) ~4000 over 38 min. The call gate (budget.ts) stops an
+  // underestimated replay the moment the day's cap is reached.
+  if (isLogChain(chain)) return { [currentRobinhoodProvider()]: 300 };
   return { moralis: 160 };
 }
 
@@ -90,18 +99,61 @@ export async function solInitCursors(state: SyncState, holders: string[], labels
   return owners.length - failed;
 }
 
+async function notFoundOrNotIndexed(addr: string): Promise<never> {
+  const dex = await tryFetchJson(`https://api.dexscreener.com/latest/dex/tokens/${addr}`);
+  if (dex?.pairs?.length) throw new NotIndexedError('token exists but holder data is not indexed yet');
+  throw new NotFoundError('token not found on any source');
+}
+
+/** Robinhood & co: state straight from a full Transfer-log replay (see header). */
+async function fullBuildFromLogs(chain: string, addr: string): Promise<FullBuildResult> {
+  const t0 = Date.now();
+  const provider = currentRobinhoodProvider();
+  let lastLogged = 0;
+  const snap = await withProvider(provider, () => fetchLogSnapshot(addr, chain, {
+    maxCalls: Infinity,
+    withTransfers: false, // counts via cpFor below; the expanded lists are only for on-demand buildGraph calls
+    onProgress: p => {
+      if (p.calls - lastLogged >= 25) { lastLogged = p.calls; log.info('replay progress', { chain, address: addr, calls: p.calls, logs: p.logs, block: p.block, head: p.head }); }
+    },
+  }));
+  if (!snap.holders.length) await notFoundOrNotIndexed(addr);
+  const { replay, info } = snap;
+
+  const state = emptyState(chain, addr, { kind: 'rpc', block: replay.head + 1 });
+  state.decimals = info.decimals;
+  replaceHolders(state, snap.holders);
+  const cps = cpFor(replay, state.holders.map(h => h.address));
+  for (const h of state.holders) {
+    const hist = state.hist[h.address];
+    hist.cp = cps.get(h.address) || {};
+    hist.synced = true;
+  }
+  pruneHistories(state, cfg.maxCpPerHolder);
+  state.ledger = ledgerFromReplay(replay, cfg.rhLedgerMaxEntries);
+  state.ledger.lastVerifiedAt = snap.verified ? new Date().toISOString() : undefined;
+  state.supplyFormatted = formatUnits(replay.supply, info.decimals);
+  for (const [a, l] of snap.labels) if (l.labelType) state.labels[a] = l;
+  state.meta = snap.meta;
+  state.lastFullBuildAt = new Date().toISOString();
+
+  log.info('full build complete (log replay)', {
+    chain, address: addr, holders: state.holders.length, totalHolders: replay.holderCount, transfers: replay.logCount,
+    firstBlock: replay.firstBlock, head: replay.head, calls: replay.calls, verified: snap.verified,
+    ledgerEntries: state.ledger.tracked, evicted: state.ledger.evicted, ms: Date.now() - t0,
+  });
+  return { state, harvested: snap.labels, calls: { holders: replay.calls, histories: 0, cursor: 1 } };
+}
+
 export async function fullBuild(chain: string, address: string): Promise<FullBuildResult> {
   const t0 = Date.now();
   const addr = normAddr(address, chain);
+  if (isLogChain(chain)) return fullBuildFromLogs(chain, addr);
   const calls = { holders: 0, histories: 0, cursor: 0 };
 
   const { holders, labels } = await withProvider(holderProvider(chain), () => fetchHolders(chain, addr));
   calls.holders = 2;
-  if (!holders.length) {
-    const dex = await tryFetchJson(`https://api.dexscreener.com/latest/dex/tokens/${addr}`);
-    if (dex?.pairs?.length) throw new NotIndexedError('token exists but holder data is not indexed yet');
-    throw new NotFoundError('token not found on any source');
-  }
+  if (!holders.length) await notFoundOrNotIndexed(addr);
 
   // Cursor right after the holder snapshot and BEFORE the history pages: the
   // delta stream then applies exactly the transfers newer than the balances we
@@ -109,19 +161,12 @@ export async function fullBuild(chain: string, address: string): Promise<FullBui
   // may overlap the first delta window by a few transfers (edge counts only,
   // bounded by the fetch duration) — preferable to a permanent hole.
   let cursor: SyncState['cursor'];
-  let decimals: number | undefined;
   if (chain === 'sol') cursor = { kind: 'sol', syncs: 0 };
-  else if (hasRpc(chain)) {
-    const head = await withProvider('robinhood-rpc', () => rpcHead(chain));
-    decimals = await withProvider('robinhood-rpc', () => rpcDecimals(chain, addr));
-    cursor = { kind: 'rpc', block: head + 1 };
-    calls.cursor = 2;
-  } else {
+  else {
     cursor = await withProvider('moralis', () => evmHeadCursor(chain, addr));
     calls.cursor = 1;
   }
   const state = emptyState(chain, addr, cursor);
-  state.decimals = decimals;
   replaceHolders(state, holders);
   for (const [a, l] of labels) if (l.labelType) state.labels[a] = l;
   if (chain === 'sol') calls.cursor = await solInitCursors(state, state.holders.map(h => h.address), labels);
