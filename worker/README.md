@@ -159,9 +159,17 @@ Commands: `run` (loop), `once` (drain the due queue, exit), `sync`, `seed`,
    `select * from worker_heartbeat;`, `select * from worker_alerts where resolved_at is null;`.
    In the app, a registered token answers `/api/graph` with `"indexed": true`.
 
-6. **Update** after a `git pull`:
+6. **Update.** The repo is private, so either register the server's deploy key
+   (`cat /root/.ssh/bananamaps_deploy.pub` → GitHub repo Settings → Deploy keys,
+   read-only) and pull on the server:
    ```bash
    cd /opt/bananamaps && git pull && cd worker && npm ci && npm run build && pm2 restart bananamaps-worker
+   ```
+   or push straight from your machine into the server checkout (it is configured
+   with `receive.denyCurrentBranch=updateInstead`; add the remote once with
+   `git remote add hetzner ssh://bananamaps-hetzner/opt/bananamaps`):
+   ```bash
+   git push hetzner main && ssh bananamaps-hetzner 'cd /opt/bananamaps/worker && npm ci && npm run build && pm2 restart bananamaps-worker'
    ```
 
 Optional hardening: `ufw` so port 8787 is only reachable locally (`pm2` logs and
