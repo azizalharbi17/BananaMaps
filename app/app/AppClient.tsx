@@ -900,7 +900,7 @@ function AppContent({ embed = false }: { embed?: boolean }) {
                   </div>
                 )}
                 {([
-                  ['Holders', graph.totalHolders ? fAmt(graph.totalHolders) : holderCount, graph.totalHolders ? `top ${holderCount} mapped` : undefined],
+                  ['Holders', graph.totalHolders ? (graph.totalHolders >= 1000 ? fAmt(graph.totalHolders) : String(graph.totalHolders)) : holderCount, graph.totalHolders ? `top ${holderCount} mapped` : undefined],
                   ['Top 10', Math.round(top10pct) + '%', undefined],
                   ['Clusters', graph.clusters.length, undefined],
                   ...(graph.marketCap ? [['MCap', fUSD(graph.marketCap), undefined]] : []),
