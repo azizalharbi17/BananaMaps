@@ -106,6 +106,22 @@ export async function handOffToWorker(chain: string, address: string): Promise<b
   }
 }
 
+/** Record that someone is viewing this token (the worker runs recently viewed tokens on the hot cadence). */
+export async function touchViewed(chain: string, address: string): Promise<void> {
+  const client = getServiceClient();
+  if (!client || !hasServiceRole() || missing()) return;
+  try {
+    const { error } = await client
+      .from('indexed_tokens')
+      .update({ last_requested_at: new Date().toISOString() })
+      .eq('chain', chain)
+      .eq('address', address);
+    if (error) throw error;
+  } catch (e) {
+    noteError(e);
+  }
+}
+
 /** Ask the worker to sync this token at the front of its queue (user refresh / stale serve). */
 export async function requestSync(chain: string, address: string): Promise<void> {
   const client = getServiceClient();

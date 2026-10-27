@@ -5,7 +5,7 @@ import { MIN_COMPAT_VERSION, TokenGraph } from '@/lib/graphTypes';
 import { checkBuildAllowed, clientIp } from '@/lib/buildGuard';
 import { runBuild, isBuildInFlight, BuildSlotsBusy } from '@/lib/buildRunner';
 import { KNOWN_TOKENS } from '@/lib/constants';
-import { lookupRegistered, requestSync, workerAlive } from '@/lib/registry';
+import { lookupRegistered, requestSync, touchViewed, workerAlive } from '@/lib/registry';
 
 // Full builds fetch ~150 wallet histories; background refreshes need the same window.
 export const maxDuration = 300;
@@ -51,6 +51,21 @@ const RESOLVE_TTL_MS = 10 * 60_000;
 const lastSyncRequest: Map<string, number> =
   ((globalThis as any).__graphSyncRequests ||= new Map());
 const SYNC_REQUEST_THROTTLE_MS = 60_000;
+// Views of an indexed token are recorded (one write per token per 5 minutes) so
+// the worker can promote what people are actually looking at to the hot tier.
+const lastViewTouch: Map<string, number> =
+  ((globalThis as any).__graphViewTouches ||= new Map());
+const VIEW_TOUCH_THROTTLE_MS = 5 * 60_000;
+async function noteView(flightKey: string, chain: string, addrKey: string) {
+  const last = lastViewTouch.get(flightKey) || 0;
+  if (Date.now() - last < VIEW_TOUCH_THROTTLE_MS) return;
+  lastViewTouch.set(flightKey, Date.now());
+  if (lastViewTouch.size > 1000) {
+    for (const [k, v] of lastViewTouch) if (Date.now() - v >= VIEW_TOUCH_THROTTLE_MS) lastViewTouch.delete(k);
+  }
+  await touchViewed(chain, addrKey);
+}
+
 async function flagForWorker(flightKey: string, chain: string, addrKey: string) {
   const last = lastSyncRequest.get(flightKey) || 0;
   if (Date.now() - last < SYNC_REQUEST_THROTTLE_MS) return;
@@ -156,6 +171,7 @@ export async function GET(req: NextRequest) {
 
     // 2. Fresh snapshot (or a refresh inside the cooldown) → serve as-is
     if (cached && ((!refresh && fresh) || (refreshCoolingDown && !indexed))) {
+      if (registered && !poll) after(() => noteView(flightKey, chain, addrKey));
       return NextResponse.json({ graph: cached.graph, cachedAt: cached.computedAt, fromCache: true, indexed });
     }
 

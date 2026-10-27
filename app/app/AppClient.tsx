@@ -5,7 +5,7 @@ import { TokenGraph } from '@/lib/graphTypes';
 import { buildSim, drawGraph, findNodeAt, GraphSim, clusterColor } from '@/lib/mapEngine';
 import { calculateRugScore, RugScoreResult } from '@/lib/rugScore';
 import { supabase } from '@/lib/supabase';
-import AddressList, { EXPLORER } from './AddressList';
+import AddressList, { EXPLORER, TYPE_META, TypeIcon, shortAddr, fmtPct } from './AddressList';
 
 const CC: Record<string, string> = { eth: '#627EEA', bsc: '#F3BA2F', sol: '#9945FF', base: '#0052FF', robinhood: '#00C805' };
 const CL: Record<string, string> = { eth: 'Ethereum', bsc: 'BSC', sol: 'Solana', base: 'Base', robinhood: 'Robinhood' };
@@ -139,6 +139,10 @@ function AppContent({ embed = false }: { embed?: boolean }) {
   const [ageTick, setAgeTick] = useState(0); // re-render for the age pill
   const [hidden, setHidden] = useState<Set<string>>(new Set());
   const [selectedAddr, setSelectedAddr] = useState<string | null>(null);
+  const [hoveredAddr, setHoveredAddr] = useState<string | null>(null); // bubble under the cursor → list row highlight
+  const hoveredAddrRef = useRef<string | null>(null);
+  const [legendOpen, setLegendOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
   const [selectedPos, setSelectedPos] = useState({ x: 0, y: 0 });
   const [query, setQuery] = useState('');
   const [ungroup, setUngroup] = useState(false);
@@ -175,7 +179,7 @@ function AppContent({ embed = false }: { embed?: boolean }) {
   useEffect(() => {
     selectedIdxRef.current = selectedAddr !== null ? (addrToIdx.get(selectedAddr) ?? -1) : -1;
   }, [selectedAddr, addrToIdx]);
-  useEffect(() => {
+  const applyQueryHighlight = useCallback(() => {
     const q = query.trim().toLowerCase();
     if (!q || !graph) { highlightRef.current = new Set(); return; }
     highlightRef.current = new Set(
@@ -184,6 +188,14 @@ function AppContent({ embed = false }: { embed?: boolean }) {
         .map(n => n.address),
     );
   }, [query, graph]);
+  useEffect(() => { applyQueryHighlight(); }, [applyQueryHighlight]);
+  // Legend chip hover: light up that cluster's members on the map
+  function highlightCluster(id: number | null) {
+    const g = graphRef.current;
+    if (id === null || !g) { applyQueryHighlight(); return; }
+    const members = g.clusters.find(c => c.id === id)?.members || [];
+    highlightRef.current = new Set(members.map(i => g.nodes[i].address));
+  }
 
   // Auth state (unchanged behavior)
   useEffect(() => {
@@ -582,6 +594,8 @@ function AppContent({ embed = false }: { embed?: boolean }) {
     const wy = (e.clientY - rect.top - offsetRef.current.y) / scaleRef.current;
     hoveredIdxRef.current = findNodeAt(g, wx, wy, scaleRef.current);
     canvas.style.cursor = hoveredIdxRef.current >= 0 ? 'pointer' : 'grab';
+    const addr = hoveredIdxRef.current >= 0 ? graphRef.current?.nodes[hoveredIdxRef.current]?.address ?? null : null;
+    if (addr !== hoveredAddrRef.current) { hoveredAddrRef.current = addr; setHoveredAddr(addr); }
   }
   function handleMouseUp(e: React.MouseEvent<HTMLCanvasElement>) {
     isDraggingRef.current = false;
@@ -667,7 +681,7 @@ function AppContent({ embed = false }: { embed?: boolean }) {
     : 0;
 
   function getPopupStyle(): React.CSSProperties {
-    const W = 224, H = 165 + (connections.length ? Math.min(connections.length, 6) * 21 + 26 : 0);
+    const W = 272, H = 196 + (connections.length ? Math.min(connections.length, 6) * 26 + 30 : 0);
     const vw = typeof window !== 'undefined' ? window.innerWidth : 800;
     const vh = typeof window !== 'undefined' ? window.innerHeight : 600;
     let left = selectedPos.x + 16, top = selectedPos.y - H / 2;
@@ -675,7 +689,7 @@ function AppContent({ embed = false }: { embed?: boolean }) {
     if (top < 60) top = 60;
     if (top + H > vh - 20) top = vh - H - 20;
     const borderColor = selected?.cluster !== undefined ? clusterColor(selected.cluster) + '66' : 'rgba(245,200,66,0.2)';
-    return { position: 'fixed', top, left, width: W, background: 'rgba(15,12,0,0.97)', border: `1px solid ${borderColor}`, borderRadius: 10, padding: '10px 12px', zIndex: 200, boxShadow: '0 4px 20px rgba(0,0,0,0.8)' };
+    return { position: 'fixed', top, left, width: W, background: 'rgba(14,11,0,0.97)', border: `1px solid ${borderColor}`, borderRadius: 12, padding: '12px 14px', zIndex: 200, boxShadow: '0 10px 32px rgba(0,0,0,0.75)', backdropFilter: 'blur(8px)' };
   }
 
   void ageTick; // consumed for periodic re-render of the age pill
@@ -697,7 +711,7 @@ function AppContent({ embed = false }: { embed?: boolean }) {
             ))}
           </div>
         )}
-        <div style={{ flex: 1, maxWidth: 700, display: 'flex', alignItems: 'center', background: 'rgba(245,200,66,0.04)', border: '1px solid rgba(245,200,66,0.12)', borderRadius: 8, padding: '0 10px', gap: 6 }}>
+        <div style={{ flex: 1, minWidth: 0, maxWidth: 700, display: 'flex', alignItems: 'center', background: 'rgba(245,200,66,0.04)', border: '1px solid rgba(245,200,66,0.12)', borderRadius: 8, padding: '0 10px', gap: 6 }}>
           {isMobile && (
             <select value={chain} onChange={e => setChain(e.target.value)} style={{ background: 'transparent', border: 'none', outline: 'none', color: CC[chain], fontSize: 11, cursor: 'pointer' }}>
               {['eth', 'bsc', 'sol', 'base', 'robinhood'].map(c => <option key={c} value={c} style={{ background: '#0a0a18' }}>{c.toUpperCase()}</option>)}
@@ -772,7 +786,7 @@ function AppContent({ embed = false }: { embed?: boolean }) {
           </div>
         ) : (
           <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-            <button onClick={() => router.push('/login')} style={{
+            <button onClick={() => router.push('/login')} className="nav-hide-mobile" style={{
               background: 'none', border: '1px solid rgba(245,200,66,0.2)', borderRadius: 7, padding: '6px 14px',
               color: '#f5f0e8', fontSize: 11, cursor: 'pointer', fontWeight: 600,
             }}>Log in</button>
@@ -793,7 +807,7 @@ function AppContent({ embed = false }: { embed?: boolean }) {
         <div style={{ flex: 1, position: 'relative', background: '#0a0800' }}>
           <canvas ref={canvasRef}
             onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp}
-            onMouseLeave={() => { isDraggingRef.current = false; hoveredIdxRef.current = -1; }}
+            onMouseLeave={() => { isDraggingRef.current = false; hoveredIdxRef.current = -1; if (hoveredAddrRef.current) { hoveredAddrRef.current = null; setHoveredAddr(null); } }}
             style={{ width: '100%', height: '100%', display: 'block', cursor: 'grab', touchAction: 'none' }}
           />
           {!loading && building === null && !graph && (
@@ -868,10 +882,10 @@ function AppContent({ embed = false }: { embed?: boolean }) {
             </div>
           )}
           {graph && (
-            <div style={{ position: 'absolute', top: 10, left: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'stretch' }}>
-                <div style={{ background: 'rgba(0,0,0,0.75)', border: `1px solid ${CC[graph.chain]}44`, borderRadius: 16, padding: '4px 10px', fontSize: 10, color: CC[graph.chain], display: 'flex', alignItems: 'center', gap: 5 }}>
-                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: CC[graph.chain], display: 'inline-block' }} />{CL[graph.chain]}
+            <div style={{ position: 'absolute', top: 10, left: 10, right: isMobile ? 10 : 60, display: 'flex', flexDirection: 'column', gap: 6, pointerEvents: 'none' }}>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'stretch', pointerEvents: 'auto' }}>
+                <div style={{ background: 'rgba(8,6,0,0.8)', border: `1px solid ${CC[graph.chain]}55`, borderRadius: 10, padding: '6px 12px', fontSize: 12, fontWeight: 700, color: CC[graph.chain], display: 'flex', alignItems: 'center', gap: 7, backdropFilter: 'blur(6px)' }}>
+                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: CC[graph.chain], display: 'inline-block', boxShadow: `0 0 6px ${CC[graph.chain]}` }} />{CL[graph.chain]}
                 </div>
                 {(isMobile || isEmbed) && (
                   <div style={{ background: 'rgba(0,0,0,0.75)', border: '1px solid rgba(245,200,66,0.25)', borderRadius: 16, padding: '4px 10px', fontSize: 11, color: '#F5C842', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -892,50 +906,68 @@ function AppContent({ embed = false }: { embed?: boolean }) {
                   ...(graph.marketCap ? [['MCap', fUSD(graph.marketCap), undefined]] : []),
                   ...(graph.volume24h ? [['24h Vol', fUSD(graph.volume24h), undefined]] : []),
                 ] as [string, string | number, string | undefined][]).map(([l, v, tip]) => (
-                  <div key={l} title={tip} style={{ background: 'rgba(0,0,0,0.7)', border: '1px solid rgba(100,120,200,0.15)', borderRadius: 8, padding: '4px 10px', display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span style={{ fontSize: 9, color: 'rgba(245,200,66,0.4)', textTransform: 'uppercase', letterSpacing: '1px' }}>{l}</span>
-                    <span style={{ fontSize: 13, color: 'rgba(220,220,255,0.9)', fontWeight: 700 }}>{v}</span>
+                  <div key={l} title={tip} style={{ background: 'rgba(8,6,0,0.8)', border: '1px solid rgba(245,200,66,0.16)', borderRadius: 10, padding: '6px 12px', display: 'flex', alignItems: 'center', gap: 8, backdropFilter: 'blur(6px)' }}>
+                    <span style={{ fontSize: 10, color: 'rgba(245,200,66,0.7)', textTransform: 'uppercase', letterSpacing: '1.2px', fontWeight: 700 }}>{l}</span>
+                    <span style={{ fontSize: 15, color: '#F6F1E6', fontWeight: 800, fontFamily: 'DM Mono, monospace', letterSpacing: -0.2 }}>{v}</span>
                   </div>
                 ))}
                 {rugScore && (
-                  <div onClick={() => setShowRugDetails(!showRugDetails)} style={{ background: 'rgba(0,0,0,0.7)', border: `1px solid ${rugScore.color}55`, borderRadius: 8, padding: '4px 10px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}>
-                    <span style={{ width: 7, height: 7, borderRadius: '50%', background: rugScore.color, display: 'inline-block', boxShadow: `0 0 6px ${rugScore.color}66` }} />
-                    <span style={{ fontSize: 13, color: rugScore.color, fontWeight: 800 }}>{rugScore.score}</span>
-                    <span style={{ fontSize: 10, color: rugScore.color, opacity: 0.8, fontWeight: 600 }}>{rugScore.label}</span>
-                    <span style={{ fontSize: 8, color: rugScore.color, opacity: 0.6 }}>{showRugDetails ? '▲' : '▼'}</span>
+                  <div onClick={() => setShowRugDetails(!showRugDetails)} title="Risk score — click for the breakdown" style={{ background: 'rgba(8,6,0,0.8)', border: `1px solid ${rugScore.color}66`, borderRadius: 10, padding: '6px 12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 7, backdropFilter: 'blur(6px)' }}>
+                    <span style={{ fontSize: 10, color: 'rgba(245,200,66,0.7)', textTransform: 'uppercase', letterSpacing: '1.2px', fontWeight: 700 }}>Risk</span>
+                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: rugScore.color, display: 'inline-block', boxShadow: `0 0 8px ${rugScore.color}99` }} />
+                    <span style={{ fontSize: 15, color: rugScore.color, fontWeight: 800, fontFamily: 'DM Mono, monospace' }}>{rugScore.score}</span>
+                    <span style={{ fontSize: 12, color: rugScore.color, opacity: 0.9, fontWeight: 600 }}>{rugScore.label}</span>
+                    <span style={{ fontSize: 9, color: rugScore.color, opacity: 0.7 }}>{showRugDetails ? '▲' : '▼'}</span>
                   </div>
                 )}
               </div>
               {rugScore && showRugDetails && (
-                <div style={{ background: 'rgba(0,0,0,0.85)', border: `1px solid ${rugScore.color}33`, borderRadius: 10, padding: '12px', marginTop: 6, maxWidth: 360 }}>
+                <div style={{ background: 'rgba(8,6,0,0.92)', border: `1px solid ${rugScore.color}44`, borderRadius: 12, padding: '14px', marginTop: 6, maxWidth: 380, pointerEvents: 'auto', backdropFilter: 'blur(8px)' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                    <div style={{ fontSize: 13, fontWeight: 800, color: rugScore.color }}>Risk Analysis — {rugScore.score}/100</div>
+                    <div style={{ fontSize: 14, fontWeight: 800, color: rugScore.color }}>Risk analysis — {rugScore.score}/100</div>
                     <button onClick={() => setShowRugDetails(false)} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.3)', cursor: 'pointer', fontSize: 14, padding: 0, lineHeight: 1 }}>×</button>
                   </div>
                   {rugScore.factors.map(f => (
                     <div key={f.name} style={{ marginBottom: 8 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
-                        <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.6)' }}>{f.name}</span>
-                        <span style={{ fontSize: 10, color: f.score >= 70 ? '#2EE89A' : f.score >= 40 ? '#EAB308' : '#EF4444', fontWeight: 700 }}>{f.score}/100</span>
+                        <span style={{ fontSize: 12, color: 'rgba(243,238,226,0.85)', fontWeight: 600 }}>{f.name}</span>
+                        <span style={{ fontSize: 12, color: f.score >= 70 ? '#2EE89A' : f.score >= 40 ? '#EAB308' : '#EF4444', fontWeight: 700, fontFamily: 'DM Mono, monospace' }}>{f.score}/100</span>
                       </div>
                       <div style={{ height: 5, background: 'rgba(255,255,255,0.08)', borderRadius: 2, overflow: 'hidden' }}>
                         <div style={{ height: '100%', width: `${f.score}%`, background: f.score >= 70 ? '#2EE89A' : f.score >= 40 ? '#EAB308' : '#EF4444', borderRadius: 2, transition: 'width 0.5s' }} />
                       </div>
-                      <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', marginTop: 3 }}>{f.detail}</div>
+                      <div style={{ fontSize: 11, color: 'rgba(243,238,226,0.5)', marginTop: 4, lineHeight: 1.4 }}>{f.detail}</div>
                     </div>
                   ))}
-                  <div style={{ fontSize: 8, color: 'rgba(255,255,255,0.2)', marginTop: 8, lineHeight: 1.4 }}>This score is for informational purposes only and does not constitute financial advice. Always do your own research.</div>
+                  <div style={{ fontSize: 10, color: 'rgba(243,238,226,0.4)', marginTop: 10, lineHeight: 1.45 }}>This score is for informational purposes only and does not constitute financial advice. Always do your own research.</div>
                 </div>
               )}
             </div>
           )}
           {!isMobile && graph && graph.clusters.length > 0 && (
-            <div style={{ position: 'absolute', bottom: 52, left: 12, display: 'flex', gap: 5, flexWrap: 'wrap', maxWidth: 500 }}>
-              {graph.clusters.slice(0, 8).map(c => (
-                <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'rgba(0,0,0,0.65)', border: `1px solid ${clusterColor(c.id)}44`, borderRadius: 10, padding: '2px 8px', fontSize: 9, color: clusterColor(c.id) }}>
-                  <span style={{ width: 5, height: 5, borderRadius: '50%', background: clusterColor(c.id), display: 'inline-block' }} />Cluster {c.id + 1} · {c.pct.toFixed(1)}%
-                </div>
-              ))}
+            <div style={{ position: 'absolute', bottom: isEmbed ? 52 : 16, left: 12, display: 'flex', gap: 6, flexWrap: 'wrap', maxWidth: 600, alignItems: 'center' }}>
+              {graph.clusters.slice(0, legendOpen ? 30 : 6).map(c => {
+                const col = clusterColor(c.id);
+                const hid = c.members.every(i => hidden.has(graph.nodes[i].address));
+                return (
+                  <button key={c.id}
+                    onMouseEnter={() => highlightCluster(c.id)}
+                    onMouseLeave={() => highlightCluster(null)}
+                    onClick={() => { setExpanded(prev => new Set(prev).add(c.id)); const first = c.members[0]; if (first !== undefined) selectFromList(graph.nodes[first].address); }}
+                    title={`${c.members.length} wallets · click to locate`}
+                    style={{ display: 'flex', alignItems: 'center', gap: 7, background: 'rgba(8,6,0,0.8)', border: `1px solid ${col}66`, borderRadius: 10, padding: '5px 11px', fontSize: 11.5, fontWeight: 600, color: col, cursor: 'pointer', opacity: hid ? 0.45 : 1, backdropFilter: 'blur(6px)', fontFamily: 'inherit' }}>
+                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: col, display: 'inline-block', boxShadow: `0 0 6px ${col}aa` }} />
+                    Cluster {c.id + 1}
+                    <span style={{ color: 'rgba(243,238,226,0.75)', fontWeight: 500, fontFamily: 'DM Mono, monospace', fontSize: 11 }}>{c.pct.toFixed(c.pct < 1 ? 2 : 1)}% of supply</span>
+                  </button>
+                );
+              })}
+              {graph.clusters.length > 6 && (
+                <button onClick={() => setLegendOpen(v => !v)}
+                  style={{ background: 'rgba(8,6,0,0.8)', border: '1px solid rgba(245,200,66,0.2)', borderRadius: 10, padding: '5px 11px', fontSize: 11.5, fontWeight: 600, color: 'rgba(245,200,66,0.8)', cursor: 'pointer', fontFamily: 'inherit' }}>
+                  {legendOpen ? 'Show fewer' : `+${graph.clusters.length - 6} more`}
+                </button>
+              )}
             </div>
           )}
           {isEmbed && (
@@ -953,7 +985,7 @@ function AppContent({ embed = false }: { embed?: boolean }) {
             </button>
           )}
           {isEmbed && embedListOpen && graph && (
-            <div style={{ position: 'absolute', top: 0, right: 0, bottom: 0, width: 270, background: 'rgba(10,8,0,0.97)', borderLeft: '1px solid rgba(245,200,66,0.15)', zIndex: 160, display: 'flex', flexDirection: 'column' }}>
+            <div style={{ position: 'absolute', top: 0, right: 0, bottom: 0, width: 300, background: 'rgba(10,8,0,0.97)', borderLeft: '1px solid rgba(245,200,66,0.15)', zIndex: 160, display: 'flex', flexDirection: 'column' }}>
               <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '6px 8px 0' }}>
                 <button onClick={() => setEmbedListOpen(false)} style={{ background: 'rgba(255,255,255,0.05)', border: 'none', borderRadius: '50%', width: 24, height: 24, color: 'rgba(255,255,255,0.4)', cursor: 'pointer', fontSize: 14 }}>×</button>
               </div>
@@ -999,43 +1031,59 @@ function AppContent({ embed = false }: { embed?: boolean }) {
           )}
           {selected && (
             <div style={getPopupStyle()}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <div style={{ width: 7, height: 7, borderRadius: '50%', background: selected.cluster !== undefined ? clusterColor(selected.cluster) : 'rgba(160,170,220,0.9)' }} />
-                  <span style={{ fontSize: 10, color: 'rgba(180,180,220,0.5)', fontFamily: 'DM Mono,monospace' }}>{selected.rank !== undefined ? `#${selected.rank}` : 'counterparty'}</span>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0 }}>
+                  <span style={{ width: 9, height: 9, borderRadius: '50%', flexShrink: 0, background: selected.cluster !== undefined ? clusterColor(selected.cluster) : 'rgba(160,170,220,0.9)', boxShadow: selected.cluster !== undefined ? `0 0 8px ${clusterColor(selected.cluster)}99` : 'none' }} />
+                  <span style={{ fontSize: 12, color: 'rgba(243,238,226,0.6)', fontFamily: 'DM Mono, monospace', fontWeight: 600, flexShrink: 0 }}>{selected.rank !== undefined ? `#${selected.rank}` : 'counterparty'}</span>
                   {selected.cluster !== undefined && (
-                    <span style={{ fontSize: 9, color: clusterColor(selected.cluster), background: clusterColor(selected.cluster) + '15', padding: '1px 6px', borderRadius: 8, border: `1px solid ${clusterColor(selected.cluster)}33` }}>C{selected.cluster + 1}</span>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: clusterColor(selected.cluster), background: clusterColor(selected.cluster) + '18', padding: '2px 8px', borderRadius: 8, border: `1px solid ${clusterColor(selected.cluster)}44`, flexShrink: 0 }}>Cluster {selected.cluster + 1}</span>
                   )}
-                  {selected.label && <span style={{ fontSize: 9, color: '#B8BCC8' }}>{selected.label}</span>}
+                  {selected.labelType && (
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700, color: TYPE_META[selected.labelType].color, flexShrink: 0 }}>
+                      <TypeIcon type={selected.labelType} size={11} />{TYPE_META[selected.labelType].text}
+                    </span>
+                  )}
                 </div>
-                <button onClick={() => setSelectedAddr(null)} style={{ background: 'none', border: 'none', color: 'rgba(200,170,80,0.4)', cursor: 'pointer', fontSize: 16, lineHeight: 1, padding: 0 }}>×</button>
+                <button onClick={() => setSelectedAddr(null)} aria-label="Close" style={{ background: 'none', border: 'none', color: 'rgba(243,238,226,0.45)', cursor: 'pointer', fontSize: 18, lineHeight: 1, padding: '0 0 0 8px' }}>×</button>
               </div>
-              <div style={{ fontFamily: 'DM Mono,monospace', fontSize: 9, color: 'rgba(245,200,66,0.6)', marginBottom: 8, wordBreak: 'break-all' }}>{selected.address.slice(0, 10)}...{selected.address.slice(-8)}</div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 5, marginBottom: 8 }}>
-                {[['Supply', selected.pct ? selected.pct.toFixed(selected.pct < 0.01 ? 4 : 2) + '%' : '—', 'rgba(220,220,255,0.9)'], ['Amount', selected.balanceFormatted ? fAmt(selected.balanceFormatted) : '—', 'rgba(220,220,255,0.9)'], ['USD', selected.usdValue ? fUSD(selected.usdValue) : '—', '#2EE89A']].map(([l, v, c]) => (
-                  <div key={l as string} style={{ background: 'rgba(245,200,66,0.04)', borderRadius: 6, padding: '5px 6px' }}>
-                    <div style={{ fontSize: 7, color: 'rgba(200,170,80,0.4)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 3 }}>{l}</div>
-                    <div style={{ fontSize: 12, color: c as string, fontWeight: 700 }}>{v}</div>
+              {selected.label && <div style={{ fontSize: 14, fontWeight: 700, color: '#F6F1E6', marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{selected.label}</div>}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                <span title={selected.address} style={{ fontFamily: 'DM Mono, monospace', fontSize: 12.5, color: '#F5C842', letterSpacing: 0.2 }}>{shortAddr(selected.address, 10, 8)}</span>
+                <button onClick={() => { navigator.clipboard?.writeText(selected.address).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1200); }).catch(() => {}); }}
+                  title="Copy address" aria-label="Copy address"
+                  style={{ background: 'rgba(245,200,66,0.08)', border: '1px solid rgba(245,200,66,0.18)', borderRadius: 6, padding: '2px 7px', color: copied ? '#2EE89A' : 'rgba(245,200,66,0.8)', fontSize: 10.5, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+                  {copied ? 'Copied' : 'Copy'}
+                </button>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6, marginBottom: 12 }}>
+                {([
+                  ['Supply', selected.pct ? fmtPct(selected.pct) : '—', '#F6F1E6'],
+                  ['Amount', selected.balanceFormatted ? fAmt(selected.balanceFormatted) : '—', '#F6F1E6'],
+                  ['USD', (() => { const usd = selected.usdValue ?? (selected.balanceFormatted && graph?.price ? selected.balanceFormatted * graph.price : 0); return usd ? fUSD(usd) : '—'; })(), '#2EE89A'],
+                ] as [string, string, string][]).map(([l, v, c]) => (
+                  <div key={l} style={{ background: 'rgba(245,200,66,0.05)', border: '1px solid rgba(245,200,66,0.08)', borderRadius: 8, padding: '7px 8px' }}>
+                    <div style={{ fontSize: 9.5, color: 'rgba(245,200,66,0.65)', textTransform: 'uppercase', letterSpacing: '1.1px', fontWeight: 700, marginBottom: 4 }}>{l}</div>
+                    <div style={{ fontSize: 14, color: c, fontWeight: 700, fontFamily: 'DM Mono, monospace', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{v}</div>
                   </div>
                 ))}
               </div>
               {connections.length > 0 && (
-                <div style={{ marginBottom: 8 }}>
-                  <div style={{ fontSize: 8, color: 'rgba(200,170,80,0.45)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 4 }}>
+                <div style={{ marginBottom: 10 }}>
+                  <div style={{ fontSize: 9.5, color: 'rgba(245,200,66,0.65)', textTransform: 'uppercase', letterSpacing: '1.1px', fontWeight: 700, marginBottom: 5 }}>
                     Transfers with {connections.length} wallet{connections.length !== 1 ? 's' : ''}
                   </div>
-                  <div style={{ maxHeight: 6 * 21, overflowY: 'auto' }}>
+                  <div style={{ maxHeight: 6 * 26, overflowY: 'auto' }}>
                     {connections.slice(0, 12).map(c => (
                       <div key={c.node.address}
                         onClick={() => selectFromList(c.node.address)}
-                        style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '3px 4px', borderRadius: 4, cursor: 'pointer', fontSize: 9 }}
-                        onMouseEnter={e => (e.currentTarget.style.background = 'rgba(245,200,66,0.06)')}
+                        style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '4px 6px', borderRadius: 6, cursor: 'pointer', fontSize: 12, minHeight: 26 }}
+                        onMouseEnter={e => (e.currentTarget.style.background = 'rgba(245,200,66,0.07)')}
                         onMouseLeave={e => (e.currentTarget.style.background = 'none')}>
-                        <span style={{ width: 5, height: 5, borderRadius: '50%', flexShrink: 0, background: c.node.cluster !== undefined ? clusterColor(c.node.cluster) : 'rgba(140,150,190,0.7)' }} />
-                        <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'DM Mono,monospace', color: c.node.label ? '#B8BCC8' : 'rgba(245,235,200,0.7)' }}>
-                          {c.node.label || `${c.node.address.slice(0, 6)}...${c.node.address.slice(-4)}`}
+                        <span style={{ width: 7, height: 7, borderRadius: '50%', flexShrink: 0, background: c.node.cluster !== undefined ? clusterColor(c.node.cluster) : 'rgba(140,150,190,0.7)' }} />
+                        <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: c.node.label ? 'inherit' : 'DM Mono, monospace', fontWeight: c.node.label ? 600 : 400, color: '#F3EEE2' }}>
+                          {c.node.label || shortAddr(c.node.address)}
                         </span>
-                        <span style={{ color: 'rgba(180,180,220,0.5)', flexShrink: 0 }}>
+                        <span style={{ color: 'rgba(243,238,226,0.55)', flexShrink: 0, fontFamily: 'DM Mono, monospace', fontSize: 11.5 }}>
                           {c.out > 0 && c.in > 0 ? '⇄' : c.out > 0 ? '→' : '←'} {c.total}
                         </span>
                       </div>
@@ -1043,7 +1091,7 @@ function AppContent({ embed = false }: { embed?: boolean }) {
                   </div>
                 </div>
               )}
-              <button onClick={() => window.open(`${EXPLORER[graph?.chain || 'eth']}/${selected.address}`, '_blank')} style={{ width: '100%', background: 'rgba(245,200,66,0.04)', border: '1px solid rgba(245,200,66,0.12)', borderRadius: 6, padding: '5px', color: 'rgba(245,200,66,0.5)', fontSize: 10, cursor: 'pointer', fontWeight: 500 }}>
+              <button onClick={() => window.open(`${EXPLORER[graph?.chain || 'eth']}/${selected.address}`, '_blank')} style={{ width: '100%', background: 'rgba(245,200,66,0.06)', border: '1px solid rgba(245,200,66,0.18)', borderRadius: 8, padding: '7px', color: 'rgba(245,200,66,0.9)', fontSize: 12, cursor: 'pointer', fontWeight: 700, fontFamily: 'inherit' }}>
                 View on Explorer ↗
               </button>
             </div>
@@ -1051,13 +1099,14 @@ function AppContent({ embed = false }: { embed?: boolean }) {
         </div>
 
         {!isMobile && !isEmbed && (
-          <div style={{ width: 270, borderLeft: '1px solid rgba(245,200,66,0.08)', background: '#0a0800', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
+          <div style={{ width: 300, borderLeft: '1px solid rgba(245,200,66,0.08)', background: '#0a0800', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
             {graph ? (
               <AddressList
                 graph={graph}
                 hidden={hidden}
                 toggleHidden={toggleHidden}
                 selectedAddr={selectedAddr}
+                hoveredAddr={hoveredAddr}
                 onSelect={selectFromList}
                 onHoverAddr={addr => { hoveredIdxRef.current = addr !== null ? (addrToIdx.get(addr) ?? -1) : -1; }}
                 query={query}
@@ -1072,8 +1121,8 @@ function AppContent({ embed = false }: { embed?: boolean }) {
                 })}
               />
             ) : (
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 8, height: '100%', color: 'rgba(255,255,255,0.1)' }}>
-                <div style={{ fontSize: 28 }}>🍌</div><div style={{ fontSize: 11 }}>Select a token</div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 8, height: '100%', color: 'rgba(243,238,226,0.3)' }}>
+                <div style={{ fontSize: 28 }}>🍌</div><div style={{ fontSize: 13 }}>Select a token</div>
               </div>
             )}
           </div>

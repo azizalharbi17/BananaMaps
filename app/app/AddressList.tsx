@@ -11,9 +11,9 @@ const EXPLORER: Record<string, string> = {
   robinhood: 'https://robinhoodchain.blockscout.com/address',
 };
 
-function EyeIcon({ off }: { off: boolean }) {
+export function EyeIcon({ off, size = 16 }: { off: boolean; size?: number }) {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
       <circle cx="12" cy="12" r="3" />
       {off && <line x1="2" y1="2" x2="22" y2="22" stroke="currentColor" strokeWidth="2.4" />}
@@ -21,22 +21,44 @@ function EyeIcon({ off }: { off: boolean }) {
   );
 }
 
-function shortAddr(a: string) {
-  return `${a.slice(0, 6)}...${a.slice(-4)}`;
+/** Small monochrome glyphs for labeled entity types (tinted by TYPE_META.color). */
+export function TypeIcon({ type, size = 12 }: { type: NonNullable<GraphNode['labelType']>; size?: number }) {
+  const common = { width: size, height: size, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 2.2, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
+  switch (type) {
+    case 'cex': // bank / exchange building
+      return <svg {...common}><path d="M3 10h18M5 10v8M9 10v8M15 10v8M19 10v8M3 18h18M12 3l9 7H3l9-7z" /></svg>;
+    case 'dex': // swap arrows
+      return <svg {...common}><path d="M4 8h13l-3-3M20 16H7l3 3" /></svg>;
+    case 'burn': // flame
+      return <svg {...common}><path d="M12 3c1 4 5 5 5 10a5 5 0 0 1-10 0c0-2 1-3 2-4 0 2 1 3 2 3 0-4-1-6 1-9z" /></svg>;
+    default: // contract: code braces
+      return <svg {...common}><path d="M8 4c-2 0-3 1-3 3v3c0 1-1 2-2 2 1 0 2 1 2 2v3c0 2 1 3 3 3M16 4c2 0 3 1 3 3v3c0 1 1 2 2 2-1 0-2 1-2 2v3c0 2-1 3-3 3" /></svg>;
+  }
 }
 
-const TYPE_BADGE: Record<string, { text: string; color: string }> = {
-  cex: { text: 'CEX', color: '#627EEA' },
-  dex: { text: 'DEX', color: '#9945FF' },
-  burn: { text: 'Burn', color: '#EF4444' },
-  contract: { text: 'Contract', color: '#8B8FA3' },
+export const TYPE_META: Record<NonNullable<GraphNode['labelType']>, { text: string; color: string }> = {
+  cex: { text: 'CEX', color: '#7B8CFF' },
+  dex: { text: 'DEX', color: '#B388FF' },
+  burn: { text: 'Burn', color: '#FF6B6B' },
+  contract: { text: 'Contract', color: '#A3A8B8' },
 };
+
+export function shortAddr(a: string, head = 6, tail = 4) {
+  return a.length > head + tail + 3 ? `${a.slice(0, head)}…${a.slice(-tail)}` : a;
+}
+
+export function fmtPct(pct: number): string {
+  if (pct <= 0) return '0%';
+  if (pct < 0.01) return '<0.01%';
+  return pct.toFixed(2) + '%';
+}
 
 interface Props {
   graph: TokenGraph;
   hidden: Set<string>;
   toggleHidden: (addrs: string[]) => void;
   selectedAddr: string | null;
+  hoveredAddr?: string | null;
   onSelect: (addr: string | null) => void;
   onHoverAddr: (addr: string | null) => void;
   query: string;
@@ -50,6 +72,18 @@ interface Props {
 type RowItem =
   | { type: 'cluster'; id: number; size: number; pct: number }
   | { type: 'addr'; node: GraphNode; sub?: boolean };
+
+// Theme tokens for the list (kept local: the app screen uses literal colors throughout)
+const T = {
+  text: '#F3EEE2',
+  textDim: 'rgba(243,238,226,0.62)',
+  textMute: 'rgba(243,238,226,0.38)',
+  gold: '#F5C842',
+  goldDim: 'rgba(245,200,66,0.55)',
+  line: 'rgba(245,200,66,0.07)',
+  hover: 'rgba(245,200,66,0.06)',
+  selected: 'rgba(245,200,66,0.12)',
+};
 
 export default function AddressList(p: Props) {
   const { graph } = p;
@@ -97,45 +131,62 @@ export default function AddressList(p: Props) {
     return members.length > 0 && members.every(i => p.hidden.has(graph.nodes[i].address));
   };
 
+  const holderTotal = graph.nodes.filter(n => n.kind === 'holder').length;
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
-      <div style={{ padding: '10px 12px 8px', borderBottom: '1px solid rgba(245,200,66,0.08)' }}>
-        <div style={{ fontSize: 9, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'rgba(245,200,66,0.35)', marginBottom: 8 }}>
-          Address List
+    <div className="al-root" style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
+      <div style={{ padding: '12px 14px 10px', borderBottom: `1px solid ${T.line}` }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 10 }}>
+          <div style={{ fontSize: 11, letterSpacing: '1.6px', textTransform: 'uppercase', color: T.goldDim, fontWeight: 700 }}>Address list</div>
+          <div style={{ fontSize: 11, color: T.textMute, fontFamily: 'DM Mono, monospace' }}>top {holderTotal}</div>
         </div>
-        <input
-          value={p.query}
-          onChange={e => p.setQuery(e.target.value)}
-          placeholder="Search addresses"
-          style={{ width: '100%', background: 'rgba(245,200,66,0.04)', border: '1px solid rgba(245,200,66,0.12)', borderRadius: 6, padding: '6px 8px', color: '#f5f0e8', fontSize: 11, outline: 'none', boxSizing: 'border-box' }}
-        />
-        <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8, cursor: 'pointer', fontSize: 10, color: 'rgba(245,235,200,0.55)', userSelect: 'none' }}>
-          <input type="checkbox" checked={p.ungroup} onChange={e => p.setUngroup(e.target.checked)} style={{ accentColor: '#F5C842', width: 12, height: 12 }} />
+        <div style={{ position: 'relative' }}>
+          <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: T.textMute, fontSize: 14, pointerEvents: 'none' }}>⌕</span>
+          <input
+            value={p.query}
+            onChange={e => p.setQuery(e.target.value)}
+            placeholder="Search address or label"
+            spellCheck={false}
+            style={{ width: '100%', background: 'rgba(245,200,66,0.05)', border: '1px solid rgba(245,200,66,0.16)', borderRadius: 8, padding: '8px 10px 8px 30px', color: T.text, fontSize: 13, fontFamily: 'DM Mono, monospace', outline: 'none', boxSizing: 'border-box' }}
+          />
+        </div>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, cursor: 'pointer', fontSize: 12, color: T.textDim, userSelect: 'none' }}>
+          <input type="checkbox" checked={p.ungroup} onChange={e => p.setUngroup(e.target.checked)} style={{ accentColor: T.gold, width: 14, height: 14, margin: 0 }} />
           Ungroup clusters
         </label>
       </div>
+
       <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
-        {rows.map((it, i) => {
+        {rows.map(it => {
           if (it.type === 'cluster') {
             const color = clusterColor(it.id);
             const hid = clusterHidden(it.id);
+            const open = p.expanded.has(it.id);
             const members = graph.clusters.find(c => c.id === it.id)?.members || [];
             return (
               <div key={`c${it.id}`}
+                className="al-row"
                 onClick={() => p.toggleExpanded(it.id)}
-                style={{ padding: '8px 12px', borderBottom: '1px solid rgba(245,200,66,0.05)', display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', opacity: hid ? 0.45 : 1 }}>
-                <span style={{ width: 10, height: 10, borderRadius: '50%', background: color, flexShrink: 0, boxShadow: `0 0 6px ${color}66` }} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 11, color: '#f0ead8', fontWeight: 700 }}>
-                    Cluster {it.id + 1} <span style={{ color: 'rgba(245,235,200,0.4)', fontWeight: 500 }}>({it.size})</span>
-                  </div>
-                  <div style={{ fontSize: 9, color: 'rgba(200,180,100,0.45)', marginTop: 1 }}>{it.pct.toFixed(2)}% of supply</div>
+                onMouseEnter={() => p.onHoverAddr(graph.nodes[members[0]]?.address ?? null)}
+                onMouseLeave={() => p.onHoverAddr(null)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 10, padding: '0 10px 0 14px', minHeight: 44, cursor: 'pointer',
+                  borderBottom: `1px solid ${T.line}`, opacity: hid ? 0.45 : 1,
+                  background: open ? 'rgba(255,255,255,0.025)' : 'transparent',
+                }}>
+                <span style={{ width: 12, height: 12, borderRadius: '50%', background: color, flexShrink: 0, boxShadow: `0 0 8px ${color}80` }} />
+                <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                  <span style={{ fontSize: 13, color: T.text, fontWeight: 700, whiteSpace: 'nowrap' }}>Cluster {it.id + 1}</span>
+                  <span style={{ fontSize: 12, color: T.textMute, fontFamily: 'DM Mono, monospace' }}>({it.size})</span>
                 </div>
-                <span style={{ fontSize: 8, color: 'rgba(245,235,200,0.35)' }}>{p.expanded.has(it.id) ? '▼' : '▶'}</span>
+                <span style={{ fontSize: 12.5, color: color, fontFamily: 'DM Mono, monospace', fontWeight: 500, flexShrink: 0 }}>{fmtPct(it.pct)}</span>
+                <span style={{ width: 16, textAlign: 'center', fontSize: 10, color: T.textMute, flexShrink: 0, transform: open ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }}>▶</span>
                 <button
+                  className="al-eye"
                   onClick={e => { e.stopPropagation(); p.toggleHidden(members.map(m => graph.nodes[m].address)); }}
-                  title={hid ? 'Show cluster' : 'Hide cluster'}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: hid ? 'rgba(239,68,68,0.7)' : 'rgba(245,235,200,0.35)', padding: 2, display: 'flex' }}>
+                  title={hid ? 'Show cluster on map' : 'Hide cluster from map'}
+                  aria-label={hid ? 'Show cluster' : 'Hide cluster'}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: hid ? '#FF6B6B' : T.textMute, padding: 4, display: 'flex', flexShrink: 0, borderRadius: 6 }}>
                   <EyeIcon off={hid} />
                 </button>
               </div>
@@ -144,56 +195,77 @@ export default function AddressList(p: Props) {
           const n = it.node;
           const hid = p.hidden.has(n.address);
           const isSel = p.selectedAddr === n.address;
-          const badge = n.labelType ? TYPE_BADGE[n.labelType] : null;
+          const isHov = !isSel && p.hoveredAddr === n.address;
+          const meta = n.labelType ? TYPE_META[n.labelType] : null;
           const color = n.cluster !== undefined ? clusterColor(n.cluster) : undefined;
+          const pctText = n.pct > 0 ? fmtPct(n.pct) : n.kind === 'counterparty' ? '' : '0%';
           return (
             <div key={`${n.address}${it.sub ? '-s' : ''}`}
+              className="al-row"
               onClick={() => p.onSelect(isSel ? null : n.address)}
               onMouseEnter={() => p.onHoverAddr(n.address)}
               onMouseLeave={() => p.onHoverAddr(null)}
               data-addr-row={n.address}
               style={{
-                padding: it.sub ? '6px 12px 6px 28px' : '7px 12px',
-                borderBottom: '1px solid rgba(245,200,66,0.04)',
-                display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer',
-                background: isSel ? 'rgba(245,200,66,0.08)' : 'transparent',
-                opacity: hid ? 0.4 : 1,
+                display: 'flex', alignItems: 'center', gap: 10, minHeight: it.sub ? 38 : 44,
+                padding: it.sub ? '0 10px 0 14px' : '0 10px 0 14px',
+                borderBottom: `1px solid ${T.line}`, cursor: 'pointer',
+                background: isSel ? T.selected : isHov ? T.hover : 'transparent',
+                boxShadow: it.sub && color ? `inset 3px 0 0 ${color}` : isSel ? 'inset 3px 0 0 #F5C842' : 'none',
+                opacity: hid ? 0.42 : 1,
               }}>
+              {/* rank / cluster marker */}
               {n.rank !== undefined ? (
-                <div style={{
-                  width: 20, height: 20, borderRadius: '50%', flexShrink: 0,
-                  background: color ? color + '22' : 'rgba(245,200,66,0.06)',
-                  border: `1.5px solid ${color || (badge ? badge.color + '88' : 'rgba(245,200,66,0.25)')}`,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 8, fontWeight: 700, color: color || 'rgba(180,190,220,0.7)',
-                }}>{n.rank}</div>
+                <span style={{
+                  width: 26, flexShrink: 0, textAlign: 'right', fontSize: 11, fontWeight: 600, fontFamily: 'DM Mono, monospace',
+                  color: color || (meta ? meta.color : T.textMute),
+                }}>#{n.rank}</span>
               ) : (
-                <div style={{ width: 20, display: 'flex', justifyContent: 'center', flexShrink: 0 }}>
-                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: color || 'rgba(120,134,175,0.5)' }} />
-                </div>
+                <span style={{ width: 26, flexShrink: 0, display: 'flex', justifyContent: 'flex-end' }}>
+                  <span style={{ width: 7, height: 7, borderRadius: '50%', background: color || T.textMute }} />
+                </span>
               )}
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 10, color: badge ? '#B8BCC8' : 'rgba(245,235,200,0.75)', fontFamily: 'DM Mono,monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: n.label ? 700 : 400 }}>
-                  {n.label || shortAddr(n.address)}
-                </div>
-                <div style={{ fontSize: 9, color: 'rgba(200,180,100,0.35)', marginTop: 1, display: 'flex', gap: 6, alignItems: 'center' }}>
-                  {badge && <span style={{ color: badge.color, fontSize: 8, background: badge.color + '18', padding: '0 4px', borderRadius: 3 }}>{badge.text}</span>}
-                  <span>{n.pct > 0 ? n.pct.toFixed(n.pct < 0.01 ? 4 : 2) + '%' : n.kind === 'counterparty' ? 'counterparty' : '0%'}</span>
-                </div>
+              {/* name / address */}
+              <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 7 }}>
+                {meta && (
+                  <span title={meta.text} style={{ color: meta.color, display: 'flex', flexShrink: 0, opacity: 0.95 }}>
+                    <TypeIcon type={n.labelType!} />
+                  </span>
+                )}
+                {n.label ? (
+                  <span style={{ fontSize: 13, fontWeight: 650, color: hid ? T.textDim : T.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {n.label}
+                  </span>
+                ) : (
+                  <span style={{ fontSize: 13, fontFamily: 'DM Mono, monospace', color: T.text, letterSpacing: 0.2, whiteSpace: 'nowrap' }}>
+                    {shortAddr(n.address)}
+                  </span>
+                )}
               </div>
+              {/* supply share */}
+              <span style={{ fontSize: 12.5, fontFamily: 'DM Mono, monospace', color: n.pct > 0 ? T.textDim : T.textMute, flexShrink: 0, minWidth: 54, textAlign: 'right' }}>
+                {pctText}
+              </span>
               <button
+                className="al-eye"
                 onClick={e => { e.stopPropagation(); p.toggleHidden([n.address]); }}
                 title={hid ? 'Show on map' : 'Hide from map'}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: hid ? 'rgba(239,68,68,0.7)' : 'rgba(245,235,200,0.3)', padding: 2, display: 'flex', flexShrink: 0 }}>
+                aria-label={hid ? 'Show on map' : 'Hide from map'}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: hid ? '#FF6B6B' : T.textMute, padding: 4, display: 'flex', flexShrink: 0, borderRadius: 6 }}>
                 <EyeIcon off={hid} />
               </button>
             </div>
           );
         })}
         {rows.length === 0 && (
-          <div style={{ padding: 20, textAlign: 'center', fontSize: 10, color: 'rgba(255,255,255,0.2)' }}>No matches</div>
+          <div style={{ padding: 24, textAlign: 'center', fontSize: 12, color: T.textMute }}>No matches</div>
         )}
       </div>
+      <style>{`
+        .al-row:hover { background: ${T.hover} !important; }
+        .al-eye:hover { background: rgba(245,200,66,0.12); color: #F5C842 !important; }
+        .al-root input::placeholder { color: rgba(243,238,226,0.35); }
+      `}</style>
     </div>
   );
 }

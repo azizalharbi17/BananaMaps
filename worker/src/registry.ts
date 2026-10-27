@@ -1,7 +1,7 @@
 // Registry population: seed from every cached graph, enroll GeckoTerminal
 // trending tokens per chain, manual enrollment. Insert-if-missing everywhere —
 // an existing row's schedule and state are never disturbed.
-import { fetchTrendingChain, TRENDING_NETWORKS } from '../../lib/trending';
+import { fetchTrendingSnapshot, TrendingSnapshot, TrendingToken, TRENDING_NETWORKS, TRENDING_SNAPSHOT_ID } from '../../lib/trending';
 import { normAddr } from '../../lib/graphCore';
 import { cfg, Tier } from './config';
 import { log, errMsg } from './log';
@@ -25,12 +25,30 @@ export async function seedFromGraphs(store: Store, graphs: GraphRepo): Promise<{
   return { inserted, total: rows.length };
 }
 
-export async function enrollTrending(store: Store): Promise<{ inserted: number; candidates: number }> {
+/**
+ * Fetch GeckoTerminal's current trending lists and publish them as the
+ * `trending` heartbeat row (the homepage/API read it; GT is never called from
+ * the visitor path). A round that returns nothing (GT outage, budget) keeps the
+ * previous snapshot in place.
+ */
+export async function refreshTrendingSnapshot(store: Store): Promise<TrendingSnapshot | null> {
   if (!budget.canSpend('geckoterminal', TRENDING_NETWORKS.length)) {
-    log.warn('trending enrollment skipped: geckoterminal budget');
-    return { inserted: 0, candidates: 0 };
+    log.warn('trending snapshot skipped: geckoterminal budget');
+    return null;
   }
-  const lists = await Promise.all(TRENDING_NETWORKS.map(([net, chain]) => fetchTrendingChain(net, chain, cfg.trending.perChain).catch(() => [])));
+  const snap = await fetchTrendingSnapshot(cfg.trending.snapshotPerChain);
+  const total = Object.values(snap.byChain).reduce((n, l) => n + l.length, 0);
+  if (!total) { log.warn('trending snapshot empty; keeping the previous one'); return null; }
+  await store.heartbeat(TRENDING_SNAPSHOT_ID, snap.fetchedAt, snap as unknown as Record<string, unknown>);
+  log.info('trending snapshot published', { tokens: total, chains: Object.keys(snap.byChain).length });
+  return snap;
+}
+
+/** Enroll the top trending tokens per chain (from the given snapshot, or a fresh one). */
+export async function enrollTrending(store: Store, snapshot?: TrendingSnapshot | null): Promise<{ inserted: number; candidates: number }> {
+  const snap = snapshot ?? await refreshTrendingSnapshot(store);
+  if (!snap) return { inserted: 0, candidates: 0 };
+  const lists: TrendingToken[][] = TRENDING_NETWORKS.map(([, chain]) => (snap.byChain[chain] || []).slice(0, cfg.trending.perChain));
   const rows = lists.flat().map(t => ({
     chain: t.chain, address: normAddr(t.address, t.chain), symbol: t.symbol || null, name: t.name || null,
     enrolled_from: 'trending', volume_24h_usd: t.volume24h || null,

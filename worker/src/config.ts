@@ -72,7 +72,13 @@ export const cfg = {
   },
   fullRebuildEveryMs: num('FULL_REBUILD_EVERY_MS', 30 * 24 * H),
   maxFullBuildsPerHour: num('MAX_FULL_BUILDS_PER_HOUR', 6),
-  trending: { everyMs: num('TRENDING_EVERY_MS', 6 * H), perChain: num('TRENDING_PER_CHAIN', 4) },
+  trending: {
+    everyMs: num('TRENDING_EVERY_MS', 6 * H),
+    perChain: num('TRENDING_PER_CHAIN', 4),
+    /** Homepage/API trending snapshot cadence (5 GeckoTerminal calls per round). */
+    snapshotEveryMs: num('TRENDING_SNAPSHOT_EVERY_MS', 30 * 60_000),
+    snapshotPerChain: num('TRENDING_SNAPSHOT_PER_CHAIN', 8),
+  },
 
   tiers: {
     hotVol: num('TIER_HOT_VOLUME_USD', 1_000_000),
@@ -90,7 +96,7 @@ export const cfg = {
     'robinhood-node': num('BUDGET_ROBINHOOD_NODE_PER_DAY', 1_000_000),
     publicnode: num('BUDGET_PUBLICNODE_PER_DAY', 2_000),
     dexscreener: num('BUDGET_DEXSCREENER_PER_DAY', 5_000),
-    geckoterminal: num('BUDGET_GECKOTERMINAL_PER_DAY', 200),
+    geckoterminal: num('BUDGET_GECKOTERMINAL_PER_DAY', 400),
     other: num('BUDGET_OTHER_PER_DAY', 10_000),
   } as Record<string, number>,
 

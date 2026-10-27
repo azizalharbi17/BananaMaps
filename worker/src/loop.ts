@@ -8,7 +8,7 @@ import { budget } from './budget';
 import type { Store, TokenRow } from './store';
 import type { GraphRepo } from './graphs';
 import { syncToken, SyncOutcome, SyncContext } from './sync';
-import { seedFromGraphs, enrollTrending } from './registry';
+import { seedFromGraphs, enrollTrending, refreshTrendingSnapshot } from './registry';
 import { startHealthServer } from './health';
 import { tokenKey } from './store';
 import { deltaProvider } from './fullBuild';
@@ -30,6 +30,7 @@ export class Worker implements SyncContext {
   private fullBuildTimes: number[] = [];
   private lastHeartbeatAt = 0;
   private lastTrendingAt = 0;
+  private lastTrendingSnapshotAt = 0;
   private lastTokenSummaryAt = 0;
   private tokenSummary: Record<string, unknown> = {};
   private lastDueCount = 0;
@@ -59,7 +60,12 @@ export class Worker implements SyncContext {
       budget.restore((hb?.stats as any)?.budgetCounters);
     } catch (e) { log.warn('could not restore budget counters', { error: errMsg(e) }); }
     await this.safe('seed', () => seedFromGraphs(this.store, this.graphs));
-    await this.safe('trending', async () => { await enrollTrending(this.store); this.lastTrendingAt = Date.now(); });
+    await this.safe('trending', async () => {
+      const snap = await refreshTrendingSnapshot(this.store);
+      this.lastTrendingSnapshotAt = Date.now();
+      await enrollTrending(this.store, snap);
+      this.lastTrendingAt = Date.now();
+    });
     this.watchdog = setInterval(() => void this.checkStall(), 60_000);
     this.scheduleTick(0);
   }
@@ -95,9 +101,17 @@ export class Worker implements SyncContext {
   async tick(): Promise<void> {
     const t0 = Date.now();
     try {
-      if (Date.now() - this.lastTrendingAt >= cfg.trending.everyMs) {
-        this.lastTrendingAt = Date.now();
-        await this.safe('trending', () => enrollTrending(this.store));
+      // The snapshot (homepage data) refreshes often; enrollment of the top few per
+      // chain stays on its slower cadence and reuses the latest snapshot.
+      if (Date.now() - this.lastTrendingSnapshotAt >= cfg.trending.snapshotEveryMs) {
+        this.lastTrendingSnapshotAt = Date.now();
+        await this.safe('trending snapshot', async () => {
+          const snap = await refreshTrendingSnapshot(this.store);
+          if (snap && Date.now() - this.lastTrendingAt >= cfg.trending.everyMs) {
+            this.lastTrendingAt = Date.now();
+            await enrollTrending(this.store, snap);
+          }
+        });
       }
       await this.dispatch();
       if (Date.now() - this.lastHeartbeatAt >= HEARTBEAT_EVERY_MS) await this.safe('heartbeat', () => this.heartbeat());

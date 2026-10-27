@@ -111,6 +111,9 @@ export function buildGraph(
   const addNode = (n: GraphNode) => { idxOf.set(n.address, nodes.length); nodes.push(n); };
 
   let rank = 1;
+  // Moralis/Vybe report a per-wallet USD value; the log-replay chains don't, so
+  // derive it from the snapshot price (same number the header shows).
+  const usdOf = (h: RawHolder) => h.usdValue ?? (meta.price > 0 && h.balanceFormatted > 0 ? h.balanceFormatted * meta.price : undefined);
   for (const [addr, h] of holderSet) {
     const lb = labels.get(addr);
     addNode({
@@ -119,7 +122,7 @@ export function buildGraph(
       rank: rank++,
       pct: h.pct,
       balanceFormatted: h.balanceFormatted,
-      usdValue: h.usdValue,
+      usdValue: usdOf(h),
       label: lb?.label,
       labelType: lb?.labelType,
       degree: degree.get(addr) || 0,

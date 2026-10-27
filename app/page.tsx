@@ -2,12 +2,18 @@
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Ticker from './components/Ticker';
+import SiteNav from './components/SiteNav';
+import SiteFooter from './components/SiteFooter';
+import TrendingGrid from './components/TrendingGrid';
+
+type Banana = { id: number; left: number; top: number; size: number; delay: number; duration: number; rotate: number; opacity: number };
 
 export default function Home() {
   const [query, setQuery] = useState('');
   const router = useRouter();
 
-  const [bananas, setBananas] = useState<{id:number;left:number;top:number;size:number;delay:number;duration:number;rotate:number;opacity:number}[]>([]);
+  const [bananas, setBananas] = useState<Banana[]>([]);
 
   useEffect(() => {
     setBananas(Array.from({ length: 25 }, (_, i) => ({
@@ -29,19 +35,14 @@ export default function Home() {
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg)', display: 'flex', flexDirection: 'column' }}>
+    <div className="bm-page">
 
       {/* Grain overlay */}
-      <div style={{
-        position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 9999,
-        backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='1'/%3E%3C/svg%3E")`,
-        opacity: 0.025,
-      }} />
+      <div className="bm-grain" aria-hidden />
 
-      
       {/* Floating bananas */}
       {bananas.map((b) => (
-        <div key={b.id} style={{
+        <div key={b.id} aria-hidden style={{
           position: 'fixed',
           left: `${b.left}%`,
           top: `${b.top}%`,
@@ -54,149 +55,125 @@ export default function Home() {
         } as React.CSSProperties}>🍌</div>
       ))}
 
-      {/* Nav */}
-      <nav style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '14px max(12px, env(safe-area-inset-left)) 14px max(12px, env(safe-area-inset-right))', borderBottom: '1px solid var(--border)', flexShrink: 0,
-      }}>
-        <a href="/" style={{ display: 'flex', alignItems: 'center', gap: 8, fontFamily: "'Bricolage Grotesque', sans-serif", fontWeight: 800, fontSize: 19, cursor: 'pointer', textDecoration: 'none', color: 'inherit' }}>
-          <span style={{ fontSize: 22, display: 'inline-block', animation: 'wobble 4s ease-in-out infinite' }}>🍌</span>
-          <span style={{ color: 'var(--text)' }}>Banana<span style={{ color: 'var(--banana)' }}>Maps</span></span>
-        </a>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          
-          <button className="login-btn-home nav-hide-mobile" onClick={() => router.push("/login")}>Log in</button>
-          <button className="signup-btn-home nav-hide-mobile" onClick={() => router.push("/signup")}>Sign up</button>
-          <Link href="/app">
-            <button className="launch-btn-home">Launch App →</button>
-          </Link>
-        </div>
-      </nav>
+      <Ticker />
+      <SiteNav />
 
-      {/* Hero */}
-      <div style={{
-        flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center',
-        justifyContent: 'center', padding: '60px 24px 40px', textAlign: 'center', position: 'relative',
-      }}>
-        {/* Glow */}
-        <div style={{
-          position: 'absolute', width: 700, height: 700, borderRadius: '50%',
-          background: 'radial-gradient(circle,rgba(245,200,66,0.06) 0%,transparent 70%)',
-          top: '50%', left: '50%', transform: 'translate(-50%,-50%)', pointerEvents: 'none',
-        }} />
+      <main className="bm-main">
+        {/* Hero */}
+        <section className="hero">
+          <div className="hero-glow" aria-hidden />
 
-        <div style={{ fontSize: 60, marginBottom: 16, display: 'inline-block', animation: 'wobble 4s ease-in-out infinite' }}>🍌</div>
+          <div className="hero-banana" aria-hidden>🍌</div>
 
-        <h1 style={{
-          fontSize: 'clamp(32px, 5.5vw, 68px)', fontWeight: 800, letterSpacing: -2,
-          lineHeight: 1.1, marginBottom: 18, maxWidth: 780,
-        }}>
-          See Who Really<br /><span style={{ color: 'var(--banana)' }}>Holds the Bag</span>
-        </h1>
+          <h1 className="hero-title">
+            See Who Really<br /><span style={{ color: 'var(--banana)' }}>Holds the Bag</span>
+          </h1>
 
-        <p style={{ fontSize: 17, color: 'var(--text2)', maxWidth: 520, lineHeight: 1.65, marginBottom: 36 }}>
-          BananaMaps visualizes token holder distribution across Ethereum, BSC, Solana and Base — exposing clusters, whales, and suspicious wallet behaviour in seconds.
-        </p>
+          <p className="hero-sub">
+            BananaMaps visualizes token holder distribution across Ethereum, BSC, Solana, Base and Robinhood Chain — exposing clusters, whales, and suspicious wallet behaviour in seconds.
+          </p>
 
-        {/* Search */}
-        <div className="hero-search-wrap">
-          <div style={{
-            flex: 1, display: 'flex', alignItems: 'center', background: 'var(--surface)',
-            border: '1px solid var(--border2)', borderRadius: 10, padding: '0 16px', gap: 8,
-          }}>
-            <span style={{ color: 'var(--text3)', fontSize: 16 }}>⌕</span>
-            <input
-              value={query}
-              onChange={e => setQuery(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && launch()}
-              type="text"
-              placeholder="Token name or contract address..."
-              style={{
-                background: 'none', border: 'none', outline: 'none', color: 'var(--text)',
-                fontFamily: "'DM Mono', monospace", fontSize: 13, padding: '14px 0', width: '100%',
-              }}
-            />
-          </div>
-          <button onClick={() => launch()} className="analyze-btn">Search Token 🍌</button>
-        </div>
-
-        {/* Quick tokens */}
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center', marginBottom: 56 }}>
-          {['PEPE','SHIB','BONK','WIF','BRETT','CAKE'].map(t => (
-            <button key={t} onClick={() => launch(t)} className="ql-btn">{t}</button>
-          ))}
-        </div>
-
-        {/* Feature cards */}
-        <div className="feat-grid">
-          {[
-            { icon: '🐋', title: 'Whale Detection', desc: 'Top 150 holders mapped with real transfer flows between them.' },
-            { icon: '🔗', title: 'Cluster Analysis', desc: 'Connected-wallet clusters from on-chain transfers — classic rug setup, exposed.' },
-            { icon: '🏦', title: 'Exchange Labeling', desc: 'Binance, Bybit, Coinbase and 250+ known wallets identified and separated.' },
-            { icon: '⚡', title: 'Multi-Chain', desc: 'ETH, BSC, Solana and Base — snapshots refresh automatically.' },
-          ].map(card => (
-            <div key={card.title} className="feat-card">
-              <div style={{ fontSize: 26, marginBottom: 10 }}>{card.icon}</div>
-              <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 5 }}>{card.title}</div>
-              <div style={{ fontSize: 12, color: 'var(--text2)', lineHeight: 1.5 }}>{card.desc}</div>
+          {/* Search */}
+          <div className="hero-search-wrap">
+            <div className="hero-search">
+              <span style={{ color: 'var(--text3)', fontSize: 16 }} aria-hidden>⌕</span>
+              <input
+                value={query}
+                onChange={e => setQuery(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && launch()}
+                type="text"
+                placeholder="Token name or contract address..."
+                aria-label="Token name or contract address"
+                autoComplete="off"
+                spellCheck={false}
+              />
             </div>
-          ))}
-        </div>
+            <button type="button" onClick={() => launch()} className="analyze-btn">Search Token 🍌</button>
+          </div>
+
+          <p className="hero-hint">
+            Paste a contract address or search by name — or <a href="#trending" className="nowrap">pick a trending token ↓</a>
+          </p>
+        </section>
+
+        {/* Trending now — real data from /api/trending */}
+        <TrendingGrid />
 
         {/* CTA */}
-        <Link href="/app">
-          <button className="cta-btn">Launch App →</button>
-        </Link>
-        <p style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: 'var(--text3)', marginTop: 12 }}>
-          Free to use · No wallet required · Real on-chain data
-        </p>
-      </div>
+        <section className="home-cta">
+          <div className="home-cta-card">
+            <h2 className="home-cta-title">Ready to look under the hood?</h2>
+            <p className="home-cta-sub">Open any token and get an interactive map of its top holders, their transfers and their clusters.</p>
+            <Link href="/app" className="cta-btn">Launch App →</Link>
+            <p className="home-cta-note"><span className="nowrap">Free to use</span> · <span className="nowrap">No wallet required</span> · <span className="nowrap">Real on-chain data</span></p>
+            <p className="home-cta-more"><Link href="/about">How BananaMaps works →</Link></p>
+          </div>
+        </section>
+      </main>
 
-      {/* Footer */}
-      <footer style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '20px 40px', borderTop: '1px solid var(--border)',
-        fontFamily: "'DM Mono', monospace", fontSize: 11, color: 'var(--text3)',
-        flexWrap: 'wrap', gap: 8,
-      }}>
-        <div>© 2026 BananaMaps</div>
-        <div style={{ maxWidth: 520, textAlign: 'right', lineHeight: 1.5, opacity: 0.8 }}>
-          On-chain data for informational purposes only — not financial advice. Always do your own research.
-        </div>
-      </footer>
+      <SiteFooter />
 
       <style>{`
         @keyframes bobble {
           0%, 100% { transform: translateY(0px) rotate(var(--rot)) scale(1); }
           50% { transform: translateY(-20px) rotate(calc(var(--rot) + 15deg)) scale(1.15); }
         }
-        @keyframes wobble {
-          0%,100% { transform: rotate(-8deg) scale(1); }
-          25% { transform: rotate(6deg) scale(1.1); }
-          50% { transform: rotate(-4deg) scale(1); }
-          75% { transform: rotate(8deg) scale(1.05); }
+        .hero {
+          display: flex; flex-direction: column; align-items: center; text-align: center;
+          padding: 56px 16px 40px; position: relative; overflow: hidden;
         }
-        .nav-link-home { color: var(--text3); font-size: 13px; font-weight: 500; padding: 6px 10px; border-radius: 6px; cursor: pointer; transition: color 0.15s; }
-        .nav-link-home:hover { color: var(--text2); }
-        .pro-btn-home { background: var(--banana); color: #000; border: none; border-radius: 6px; padding: 7px 14px; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 13px; cursor: pointer; }
-        .login-btn-home { background: none; border: 1px solid var(--border2); color: var(--text); border-radius: 7px; padding: 7px 16px; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 600; font-size: 13px; cursor: pointer; }
-        .signup-btn-home { background: var(--banana); border: none; color: #000; border-radius: 7px; padding: 7px 16px; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 13px; cursor: pointer; }
-        .launch-btn-home { background: var(--surface); border: 1px solid var(--border2); color: var(--text); border-radius: 7px; padding: 7px 16px; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 13px; cursor: pointer; }
-        .hero-search-wrap { display: flex; gap: 10px; width: 100%; max-width: 560px; margin-bottom: 14px; }
-        .analyze-btn { background: var(--banana); color: #000; border: none; border-radius: 10px; padding: 0 24px; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 14px; cursor: pointer; white-space: nowrap; }
-        .ql-btn { background: var(--surface); border: 1px solid var(--border2); color: var(--text2); border-radius: 20px; padding: 8px 16px; font-family: 'DM Mono', monospace; font-size: 12px; cursor: pointer; transition: border-color 0.15s, color 0.15s; }
-        .ql-btn:hover { border-color: var(--banana); color: var(--banana); }
-        .feat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; width: 100%; max-width: 880px; margin-bottom: 48px; }
-        .feat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 22px; text-align: left; }
-        .cta-btn { background: var(--banana); color: #000; border: none; border-radius: 10px; padding: 15px 44px; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 16px; cursor: pointer; }
+        .hero-glow {
+          position: absolute; width: 700px; height: 700px; border-radius: 50%; pointer-events: none;
+          background: radial-gradient(circle, rgba(245,200,66,0.07) 0%, transparent 70%);
+          top: 50%; left: 50%; transform: translate(-50%, -50%);
+        }
+        .hero-banana { font-size: 60px; margin-bottom: 16px; display: inline-block; animation: bm-wobble 4s ease-in-out infinite; position: relative; }
+        .hero-title { font-size: clamp(34px, 5.5vw, 68px); font-weight: 800; letter-spacing: -2px; line-height: 1.08; margin-bottom: 18px; max-width: 780px; position: relative; }
+        .hero-sub { font-size: 17px; color: var(--text2); max-width: 560px; line-height: 1.65; margin-bottom: 32px; position: relative; }
+        .hero-search-wrap { display: flex; gap: 10px; width: 100%; max-width: 580px; margin-bottom: 14px; position: relative; }
+        .hero-search {
+          flex: 1; display: flex; align-items: center; gap: 8px; min-width: 0;
+          background: var(--surface); border: 1px solid var(--border2); border-radius: 10px; padding: 0 16px;
+          transition: border-color 0.15s, box-shadow 0.15s;
+        }
+        .hero-search:focus-within { border-color: rgba(245,200,66,0.6); box-shadow: 0 0 0 3px rgba(245,200,66,0.08); }
+        .hero-search input {
+          background: none; border: none; outline: none; color: var(--text); width: 100%; min-width: 0;
+          font-family: 'DM Mono', monospace; font-size: 13px; padding: 14px 0;
+        }
+        .hero-search input::placeholder { color: var(--text3); }
+        .analyze-btn { background: var(--banana); color: #000; border: none; border-radius: 10px; padding: 0 24px; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 14px; cursor: pointer; white-space: nowrap; transition: background 0.15s; }
+        .analyze-btn:hover { background: #ffd45a; }
+        .hero-hint { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text3); position: relative; line-height: 1.7; }
+        .nowrap { white-space: nowrap; }
+        .hero-hint a { color: var(--text2); text-decoration: none; border-bottom: 1px solid var(--border2); }
+        .hero-hint a:hover { color: var(--banana); border-color: var(--banana); }
+        .home-cta { padding: 8px 16px 64px; display: flex; justify-content: center; }
+        .home-cta-card {
+          width: 100%; max-width: 1100px; text-align: center; padding: 44px 24px 40px;
+          background: linear-gradient(180deg, rgba(245,200,66,0.06), rgba(245,200,66,0.015)); border: 1px solid var(--border2); border-radius: 18px;
+        }
+        .home-cta-title { font-size: clamp(22px, 3vw, 30px); font-weight: 800; letter-spacing: -0.6px; margin-bottom: 10px; }
+        .home-cta-sub { font-size: 14px; color: var(--text2); max-width: 520px; margin: 0 auto 26px; line-height: 1.6; }
+        .cta-btn { display: inline-block; background: var(--banana); color: #000; border: none; border-radius: 10px; padding: 15px 44px; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 16px; cursor: pointer; text-decoration: none; transition: background 0.15s, transform 0.15s; }
+        .cta-btn:hover { background: #ffd45a; transform: translateY(-1px); }
+        .home-cta-note { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text3); margin-top: 14px; }
+        .home-cta-more { margin-top: 8px; font-size: 12px; }
+        .home-cta-more a { color: var(--text2); text-decoration: none; }
+        .home-cta-more a:hover { color: var(--banana); }
         @media (max-width: 768px) {
-          nav { padding: 14px 16px !important; }
-          .nav-link-home, .pro-btn-home { display: none; }
-          .login-btn-home, .signup-btn-home { padding: 6px 10px; font-size: 12px; }
-          .launch-btn-home { padding: 6px 10px; font-size: 12px; }
+          .hero { padding: 44px 16px 32px; }
+          .hero-banana { font-size: 48px; }
+          .hero-sub { font-size: 15px; margin-bottom: 26px; }
           .hero-search-wrap { flex-direction: column; max-width: 100%; }
           .analyze-btn { padding: 14px; width: 100%; }
-          footer { padding: 20px 16px !important; flex-direction: column; text-align: center; }
+          .home-cta { padding-bottom: 48px; }
+          .home-cta-card { padding: 34px 18px 32px; }
+          .cta-btn { padding: 14px 32px; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .hero-banana { animation: none; }
+          .cta-btn:hover { transform: none; }
         }
       `}</style>
     </div>

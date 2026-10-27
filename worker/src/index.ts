@@ -4,7 +4,7 @@
 //   once                     process everything currently due, then exit
 //   sync <chain:addr>... [--full] [--passes N]   sync specific tokens now (enrolls them), print a report
 //   seed                     seed the registry from token_graphs
-//   trending                 enroll current GeckoTerminal trending tokens
+//   trending                 publish the GeckoTerminal trending snapshot + enroll the top tokens
 //   enroll <chain:addr> [--tier hot|warm|cold]
 //   status                   print the registry summary
 import { cfg, requireEnv } from './config';
@@ -13,7 +13,7 @@ import { createStore } from './store';
 import { createGraphRepo } from './graphs';
 import { Worker } from './loop';
 import { syncToken, SyncOutcome } from './sync';
-import { seedFromGraphs, enrollTrending, enrollManual } from './registry';
+import { seedFromGraphs, enrollTrending, enrollManual, refreshTrendingSnapshot } from './registry';
 import { normAddr } from '../../lib/graphCore';
 import { budget } from './budget';
 
@@ -110,7 +110,13 @@ async function main() {
   }
 
   if (cmd === 'seed') { const r = await seedFromGraphs(store, graphs); process.stdout.write(JSON.stringify(r) + '\n'); return; }
-  if (cmd === 'trending') { const r = await enrollTrending(store); process.stdout.write(JSON.stringify(r) + '\n'); return; }
+  if (cmd === 'trending') {
+    const snap = await refreshTrendingSnapshot(store);
+    const r = await enrollTrending(store, snap);
+    process.stdout.write(JSON.stringify({ snapshot: snap ? Object.fromEntries(Object.entries(snap.byChain).map(([c, l]) => [c, l.length])) : null, ...r }) + '\n');
+    await persistCounters();
+    return;
+  }
   if (cmd === 'enroll') {
     for (const t of targets.map(parseTarget)) {
       const inserted = await enrollManual(store, t.chain, t.address, opt('tier') as any);
