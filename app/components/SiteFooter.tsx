@@ -11,6 +11,10 @@ export default function SiteFooter() {
         </div>
         <nav className="bm-footer-links" aria-label="Footer">
           <Link href="/about">About</Link>
+          <Link href="/developers">Developers</Link>
+          <Link href="/terms">Terms</Link>
+          <Link href="/privacy">Privacy</Link>
+          <Link href="/refunds">Refunds</Link>
           <Link href="/app">Launch App</Link>
           <Link href="/login">Log in</Link>
           <Link href="/signup">Sign up</Link>

@@ -5,10 +5,111 @@ import { TokenGraph } from '@/lib/graphTypes';
 import { buildSim, drawGraph, findNodeAt, GraphSim, clusterColor } from '@/lib/mapEngine';
 import { calculateRugScore, RugScoreResult } from '@/lib/rugScore';
 import { supabase } from '@/lib/supabase';
+import { isFirstPartyHost, type EmbedPlan } from '@/lib/plans';
 import AddressList, { EXPLORER, TYPE_META, TypeIcon, shortAddr, fmtPct } from './AddressList';
 
 const CC: Record<string, string> = { eth: '#627EEA', bsc: '#F3BA2F', sol: '#9945FF', base: '#0052FF', robinhood: '#00C805' };
 const CL: Record<string, string> = { eth: 'Ethereum', bsc: 'BSC', sol: 'Solana', base: 'Base', robinhood: 'Robinhood' };
+
+// BananaMaps Embed options, resolved server-side in app/embed/page.tsx from the
+// partner id (?pid=) and the partner's current plan. `valid` is false when no
+// pid was given or it is unknown/revoked; `badge` false and `accent` only ever
+// arrive for the Partner plan.
+export interface EmbedOptions {
+  pid: string | null;
+  plan: EmbedPlan | null;
+  valid: boolean;
+  /** Show the "Powered by BananaMaps" badge (required on the free plan). */
+  badge: boolean;
+  /** Partner accent color (#RRGGBB) replacing the gold in the embed chrome. */
+  accent: string | null;
+  /** Host sites the partner registered; empty = any site. */
+  domains: string[];
+}
+
+const DEVELOPERS_EMBED_URL = 'https://www.bananamaps.io/developers/embed';
+
+/** Hostname of the page framing us, or null when it cannot be determined. */
+function embedParentHost(): string | null {
+  try {
+    const origin = window.location.ancestorOrigins?.[0] || document.referrer || '';
+    if (!origin) return null;
+    return new URL(origin).hostname.toLowerCase() || null;
+  } catch {
+    return null;
+  }
+}
+
+/** "*.example.com" matches subdomains; "example.com" matches itself and subdomains. */
+function hostMatchesEntry(host: string, entry: string): boolean {
+  const e = entry.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+  if (!e) return false;
+  if (e.startsWith('*.')) return host.endsWith(e.slice(1));
+  return host === e || host.endsWith('.' + e);
+}
+
+/**
+ * Whether this embed may render for the page framing it. Direct (top-level)
+ * visits and our own properties always may; otherwise an active partner id is
+ * required and, when it lists domains, the host must match one of them.
+ */
+type EmbedGateReason = 'nopid' | 'invalid' | 'domain';
+function embedGateReason(opts: EmbedOptions | undefined): EmbedGateReason | null {
+  try {
+    if (window.self === window.top) return null;
+    const host = embedParentHost();
+    if (host && isFirstPartyHost(host)) return null;
+    if (!opts?.valid) return opts?.pid ? 'invalid' : 'nopid';
+    if (opts.domains.length === 0) return null;
+    // The partner id is the credential; the domain list is a best-effort lock that
+    // can only be checked when the browser exposes the framing page's origin
+    // (Firefox has no ancestorOrigins and a strict referrer policy hides it).
+    if (!host) return null;
+    return opts.domains.some(d => hostMatchesEntry(host, d)) ? null : 'domain';
+  } catch {
+    return 'nopid';
+  }
+}
+
+// Shown inside the frame instead of the map when the host site has no active
+// partner id. Stays within the frame at any size — no horizontal scroll.
+function EmbedGate({ reason }: { reason: EmbedGateReason }) {
+  const pidInvalid = reason === 'invalid';
+  if (reason === 'domain') {
+    return (
+      <div style={{ height: '100dvh', background: '#0a0800', color: '#f5f0e8', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px 16px', overflowX: 'hidden', overflowY: 'auto', boxSizing: 'border-box' }}>
+        <div style={{ width: '100%', maxWidth: 420, textAlign: 'center', background: 'rgba(245,200,66,0.04)', border: '1px solid rgba(245,200,66,0.16)', borderRadius: 14, padding: '26px 22px', boxSizing: 'border-box' }}>
+          <div style={{ fontSize: 11, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'rgba(245,200,66,0.75)', fontWeight: 700 }}>🍌 BananaMaps Embed</div>
+          <h1 style={{ fontSize: 19, fontWeight: 800, lineHeight: 1.25, margin: '10px 0 8px', color: '#f5f0e8' }}>This page isn’t on the key’s domain list</h1>
+          <p style={{ fontSize: 13, lineHeight: 1.55, margin: 0, color: 'rgba(245,235,200,0.62)' }}>The partner id is valid, but this site’s domain isn’t listed for it. Add the domain in the BananaMaps dashboard, or clear the list to allow any site.</p>
+          <a href="https://www.bananamaps.io/developers/dashboard" target="_blank" rel="noopener noreferrer"
+            style={{ display: 'inline-block', marginTop: 16, background: '#F5C842', color: '#000', borderRadius: 8, padding: '9px 18px', fontWeight: 700, fontSize: 13, textDecoration: 'none' }}>
+            Open the dashboard
+          </a>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div style={{ height: '100dvh', background: '#0a0800', color: '#f5f0e8', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px 16px', overflowX: 'hidden', overflowY: 'auto', boxSizing: 'border-box' }}>
+      <div style={{ width: '100%', maxWidth: 420, textAlign: 'center', background: 'rgba(245,200,66,0.04)', border: '1px solid rgba(245,200,66,0.16)', borderRadius: 14, padding: '26px 22px', boxSizing: 'border-box' }}>
+        <div style={{ fontSize: 11, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'rgba(245,200,66,0.75)', fontWeight: 700 }}>🍌 BananaMaps Embed</div>
+        <h1 style={{ fontSize: 19, fontWeight: 800, lineHeight: 1.25, margin: '10px 0 8px', color: '#f5f0e8' }}>This site needs a BananaMaps Embed key</h1>
+        <p style={{ fontSize: 13, lineHeight: 1.55, margin: 0, color: 'rgba(245,235,200,0.62)' }}>Live holder maps are free to embed with a partner id. Get one in a minute.</p>
+        <a href={DEVELOPERS_EMBED_URL} target="_blank" rel="noopener noreferrer"
+          style={{ display: 'inline-block', marginTop: 16, background: '#F5C842', color: '#000', borderRadius: 8, padding: '9px 18px', fontWeight: 700, fontSize: 13, textDecoration: 'none' }}>
+          Get a free Embed key
+        </a>
+        <div style={{ fontSize: 11, lineHeight: 1.5, marginTop: 14, color: 'rgba(245,235,200,0.42)', overflowWrap: 'anywhere' }}>
+          Already have one? Add <code style={{ fontFamily: 'DM Mono, monospace', color: 'rgba(245,200,66,0.85)', fontSize: 11 }}>?pid=your_id</code> to the embed URL.
+        </div>
+        {pidInvalid && (
+          <div style={{ fontSize: 11, marginTop: 8, color: '#f5b0b0' }}>The pid in this URL is not active.</div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function fmtPrice(p: number): string {
   if (!p) return '—';
@@ -101,7 +202,7 @@ function TokenTile({ t, onOpen }: { t: DiscoverToken; onOpen: (addr: string, cha
   );
 }
 
-function AppContent({ embed = false }: { embed?: boolean }) {
+function AppContent({ embed = false, embedOptions }: { embed?: boolean; embedOptions?: EmbedOptions }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animRef = useRef<number>(0);
   const simRef = useRef<GraphSim | null>(null);
@@ -128,6 +229,20 @@ function AppContent({ embed = false }: { embed?: boolean }) {
   // partner sites (e.g. BananaScreener) — no nav, compact sidebar drawer,
   // attribution link instead. Also switches first builds to non-blocking polling.
   const isEmbed = embed || searchParams.get('embed') === '1';
+  // Partner accent replaces the gold in three embed-chrome spots only: the badge
+  // text, the token pill and the Holders button border.
+  const accent = embedOptions?.accent || '#F5C842';
+  const showBadge = embedOptions?.badge !== false;
+  // Embed gate: null until the mount effect inspects the framing page; the map
+  // is never fetched or drawn while it is anything but true. Non-embed = true.
+  const [embedAllowed, setEmbedAllowed] = useState<boolean | null>(isEmbed ? null : true);
+  const [embedGate, setEmbedGate] = useState<EmbedGateReason | null>(null);
+  useEffect(() => {
+    if (!isEmbed) return;
+    const reason = embedGateReason(embedOptions);
+    setEmbedGate(reason);
+    setEmbedAllowed(reason === null);
+  }, [isEmbed, embedOptions]);
   const [search, setSearch] = useState(searchParams.get('token') || '');
   const [chain, setChain] = useState('eth');
   const [loading, setLoading] = useState(false);
@@ -156,13 +271,14 @@ function AppContent({ embed = false }: { embed?: boolean }) {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [discover, setDiscover] = useState<{ popular: DiscoverToken[]; trending: DiscoverToken[] } | null>(null);
 
-  // Discovery grid data for the empty state
+  // Discovery grid data for the empty state (the embed never shows it)
   useEffect(() => {
+    if (isEmbed) return;
     fetch('/api/trending')
       .then(r => r.json())
       .then(d => setDiscover({ popular: d.popular || [], trending: d.trending || [] }))
       .catch(() => {});
-  }, []);
+  }, [isEmbed]);
 
   function openDiscoverToken(addr: string, tokenChain?: string) {
     router.push(`/app?token=${encodeURIComponent(addr)}${tokenChain ? `&chain=${encodeURIComponent(tokenChain)}` : ''}`);
@@ -355,7 +471,13 @@ function AppContent({ embed = false }: { embed?: boolean }) {
       setShowList(false);
     }
     try {
-      const baseParams = () => new URLSearchParams({ token: input.trim(), chain: opts?.chainOverride || chain });
+      const baseParams = () => {
+        const p = new URLSearchParams({ token: input.trim(), chain: opts?.chainOverride || chain });
+        // Partner-plan embeds ask the API to queue a worker refresh of snapshots
+        // older than 10 minutes (initial load, polls and refreshes alike).
+        if (isEmbed && embedOptions?.pid) p.set('pid', embedOptions.pid); // the server decides whether the plan includes priority refresh
+        return p;
+      };
       const params = baseParams();
       if (opts?.refresh) params.set('refresh', '1');
       // An iframe visitor can't sit on a 1-3 min build request — ask the API to
@@ -454,7 +576,7 @@ function AppContent({ embed = false }: { embed?: boolean }) {
         setBuilding(null);
       }
     }
-  }, [chain, isEmbed]);
+  }, [chain, isEmbed, embedOptions?.plan]);
 
   // URL-driven loading: covers first mount, in-app searches (router.push), and
   // browser back/forward — the URL is the source of truth for which token shows.
@@ -462,12 +584,14 @@ function AppContent({ embed = false }: { embed?: boolean }) {
   const urlChain = searchParams.get('chain');
   const [embedListOpen, setEmbedListOpen] = useState(false);
   useEffect(() => {
+    // An embed waits for the gate decision; a blocked embed never loads anything.
+    if (embedAllowed !== true) return;
     if (urlToken && urlToken !== lastLoadedRef.current) {
       setSearch(urlToken);
       loadToken(urlToken, urlChain ? { chainOverride: urlChain } : undefined);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [urlToken]);
+  }, [urlToken, embedAllowed]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -695,6 +819,11 @@ function AppContent({ embed = false }: { embed?: boolean }) {
   void ageTick; // consumed for periodic re-render of the age pill
   void buildTick; // consumed for the per-second elapsed readout while building
 
+  // Host site without an active partner id: the "get a key" panel replaces the map.
+  if (isEmbed && embedAllowed === false) {
+    return <EmbedGate reason={embedGate ?? 'nopid'} />;
+  }
+
   return (
     <div style={{ height: '100dvh', background: '#0a0800', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       {!isEmbed && (
@@ -852,6 +981,12 @@ function AppContent({ embed = false }: { embed?: boolean }) {
                 )}
                 <div style={{ fontSize: 10, color: 'rgba(180,180,255,0.2)', textAlign: 'center', marginTop: 18 }}>
                   {isMobile ? 'Pinch to zoom · Drag to pan' : 'Scroll to zoom · Drag to pan · Click a bubble for details'}
+                  {!isEmbed && (
+                    <>
+                      {' · '}<a href="/terms" style={{ color: 'inherit', textDecoration: 'underline', textDecorationColor: 'rgba(180,180,255,0.15)' }}>Terms</a>
+                      {' · '}<a href="/privacy" style={{ color: 'inherit', textDecoration: 'underline', textDecorationColor: 'rgba(180,180,255,0.15)' }}>Privacy</a>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
@@ -888,7 +1023,7 @@ function AppContent({ embed = false }: { embed?: boolean }) {
                   <span style={{ width: 8, height: 8, borderRadius: '50%', background: CC[graph.chain], display: 'inline-block', boxShadow: `0 0 6px ${CC[graph.chain]}` }} />{CL[graph.chain]}
                 </div>
                 {(isMobile || isEmbed) && (
-                  <div style={{ background: 'rgba(0,0,0,0.75)', border: '1px solid rgba(245,200,66,0.25)', borderRadius: 16, padding: '4px 10px', fontSize: 11, color: '#F5C842', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <div style={{ background: 'rgba(0,0,0,0.75)', border: `1px solid ${isEmbed ? accent + '40' : 'rgba(245,200,66,0.25)'}`, borderRadius: 16, padding: '4px 10px', fontSize: 11, color: isEmbed ? accent : '#F5C842', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
                     {graph.logo && <img src={graph.logo} alt="" style={{ width: 14, height: 14, borderRadius: '50%' }} onError={e => (e.currentTarget.style.display = 'none')} />}
                     {graph.name || graph.symbol}
                     <span style={{ color: 'rgba(240,237,230,0.9)' }}>{fmtPrice(graph.price)}</span>
@@ -970,17 +1105,19 @@ function AppContent({ embed = false }: { embed?: boolean }) {
               )}
             </div>
           )}
-          {isEmbed && (
+          {/* "Powered by BananaMaps" badge — required on the free plan and for
+              keyless first-party embeds; Partner-plan sites may turn it off. */}
+          {isEmbed && showBadge && (
             <a href={`https://www.bananamaps.io/app?token=${encodeURIComponent(urlToken || '')}${urlChain ? `&chain=${encodeURIComponent(urlChain)}` : ''}`}
-              target="_blank" rel="noopener noreferrer"
+              target="_blank" rel="noopener noreferrer" title="Powered by BananaMaps"
               style={{ position: 'absolute', bottom: 12, left: 12, display: 'flex', alignItems: 'center', gap: 5, background: 'rgba(0,0,0,0.75)', border: '1px solid rgba(245,200,66,0.25)', borderRadius: 16, padding: '5px 12px', fontSize: 11, fontWeight: 700, color: '#f0ede6', textDecoration: 'none', zIndex: 150 }}>
-              🍌 Banana<span style={{ color: '#F5C842' }}>Maps</span>
+              🍌 Banana<span style={{ color: accent }}>Maps</span>
               <span style={{ color: 'rgba(245,235,200,0.55)', fontWeight: 500 }}>· Open full map ↗</span>
             </a>
           )}
           {isEmbed && graph && (
             <button onClick={() => setEmbedListOpen(v => !v)}
-              style={{ position: 'absolute', top: 10, right: 10, display: 'flex', alignItems: 'center', gap: 5, background: 'rgba(0,0,0,0.75)', border: '1px solid rgba(245,200,66,0.25)', borderRadius: 16, padding: '5px 12px', fontSize: 10, fontWeight: 600, color: 'rgba(245,235,200,0.8)', cursor: 'pointer', zIndex: 150 }}>
+              style={{ position: 'absolute', top: 10, right: 10, display: 'flex', alignItems: 'center', gap: 5, background: 'rgba(0,0,0,0.75)', border: `1px solid ${accent}40`, borderRadius: 16, padding: '5px 12px', fontSize: 10, fontWeight: 600, color: 'rgba(245,235,200,0.8)', cursor: 'pointer', zIndex: 150 }}>
               ☰ Holders
             </button>
           )}
@@ -1164,6 +1301,6 @@ function AppContent({ embed = false }: { embed?: boolean }) {
   );
 }
 
-export default function AppClient({ embed = false }: { embed?: boolean }) {
-  return <Suspense><AppContent embed={embed} /></Suspense>;
+export default function AppClient({ embed = false, embedOptions }: { embed?: boolean; embedOptions?: EmbedOptions }) {
+  return <Suspense><AppContent embed={embed} embedOptions={embedOptions} /></Suspense>;
 }

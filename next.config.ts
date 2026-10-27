@@ -4,13 +4,18 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
-        // /embed is iframe-able by partner origins (BananaScreener) + local dev.
+        // BananaMaps Embed (/embed) may be framed from any origin at the header
+        // level. The partner check moved into the page itself: the embed reads
+        // the host site's origin on mount and only renders the map for our own
+        // properties (bananamaps.io, bananascreener.io, local dev) or for an
+        // active partner id (?pid=) whose domain list matches. Unknown hosts get
+        // a "get a free Embed key" panel instead of a browser-level block, which
+        // a header allow-list could never explain to the visitor.
         source: "/embed",
         headers: [
           {
             key: "Content-Security-Policy",
-            value:
-              "frame-ancestors 'self' https://bananascreener.io https://*.bananascreener.io http://localhost:* http://127.0.0.1:*",
+            value: "frame-ancestors *",
           },
         ],
       },

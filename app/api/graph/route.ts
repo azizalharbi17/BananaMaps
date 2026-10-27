@@ -6,6 +6,7 @@ import { checkBuildAllowed, clientIp } from '@/lib/buildGuard';
 import { runBuild, isBuildInFlight, BuildSlotsBusy } from '@/lib/buildRunner';
 import { KNOWN_TOKENS } from '@/lib/constants';
 import { lookupRegistered, requestSync, touchViewed, workerAlive } from '@/lib/registry';
+import { getPartnerConfig } from '@/lib/dev/accounts';
 
 // Full builds fetch ~150 wallet histories; background refreshes need the same window.
 export const maxDuration = 300;
@@ -51,6 +52,11 @@ const RESOLVE_TTL_MS = 10 * 60_000;
 const lastSyncRequest: Map<string, number> =
   ((globalThis as any).__graphSyncRequests ||= new Map());
 const SYNC_REQUEST_THROTTLE_MS = 60_000;
+// BananaMaps Embed on the Partner plan asks for a priority refresh (priority=1):
+// a worker-indexed snapshot older than this is flagged for a priority sync after
+// the response (same per-token throttle as a refresh click). Everything else
+// about the response is unchanged — the current snapshot is still served.
+const PRIORITY_STALE_MS = 10 * 60_000;
 // Views of an indexed token are recorded (one write per token per 5 minutes) so
 // the worker can promote what people are actually looking at to the hot tier.
 const lastViewTouch: Map<string, number> =
@@ -109,6 +115,10 @@ export async function GET(req: NextRequest) {
   // cache probe that never starts work, so polls are safe on any instance.
   const nowait = searchParams.get('wait') === '0';
   const poll = searchParams.get('poll') === '1';
+  // Partner-plan priority refresh is decided here from the embed's partner id
+  // (memoized 60 s), never from a client-supplied flag.
+  const pid = searchParams.get('pid') || '';
+  const priority = pid ? (await getPartnerConfig(pid))?.plan === 'partner' : false;
   const ip = clientIp(req.headers);
 
   if (!token.trim()) {
@@ -168,11 +178,18 @@ export async function GET(req: NextRequest) {
     // row is a dev-cache curiosity — still served in stale paths, never fresh ones.
     const fresh = cached && cached.graph.version >= MIN_COMPAT_VERSION && age < STALE_MS;
     const refreshCoolingDown = refresh && cached && age < REFRESH_COOLDOWN_MS;
+    // Partner-plan embed: a worker-indexed snapshot past the priority window gets
+    // flagged for the worker; the response is otherwise the same snapshot.
+    const priorityRefresh = priority && !!cached && indexed && age > PRIORITY_STALE_MS;
 
     // 2. Fresh snapshot (or a refresh inside the cooldown) → serve as-is
     if (cached && ((!refresh && fresh) || (refreshCoolingDown && !indexed))) {
       if (registered && !poll) after(() => noteView(flightKey, chain, addrKey));
-      return NextResponse.json({ graph: cached.graph, cachedAt: cached.computedAt, fromCache: true, indexed });
+      if (priorityRefresh) after(() => flagForWorker(flightKey, chain, addrKey));
+      return NextResponse.json({
+        graph: cached.graph, cachedAt: cached.computedAt, fromCache: true, indexed,
+        ...(priorityRefresh ? { priority: true } : {}),
+      });
     }
 
     // 2b. Registered token with a snapshot: refresh clicks and stale serves both
@@ -185,6 +202,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({
         graph: cached.graph, cachedAt: cached.computedAt, fromCache: true, indexed: true,
         revalidating: true, stale: !fresh, etaSeconds: 90,
+        ...(priorityRefresh ? { priority: true } : {}),
       });
     }
 
