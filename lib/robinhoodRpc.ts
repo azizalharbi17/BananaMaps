@@ -83,6 +83,9 @@ interface Endpoint {
   host: string;
   isPublic: boolean;
   provider: Provider;
+  /** Configured pacing floor. */
+  baseIntervalMs: number;
+  /** Current pacing: grows ×1.5 on every 429 (up to 8× base), decays 2% per success back to base. */
   minIntervalMs: number;
   maxRange: number;
   nextAt: number;          // pacing: earliest start time of the next request
@@ -124,6 +127,7 @@ function endpoints(): Endpoint[] {
     return {
       url, host, isPublic,
       provider: isPublic ? 'robinhood-rpc' : providerOf(url),
+      baseIntervalMs: isPublic ? PUBLIC_MIN_INTERVAL_MS : NODE_MIN_INTERVAL_MS,
       minIntervalMs: isPublic ? PUBLIC_MIN_INTERVAL_MS : NODE_MIN_INTERVAL_MS,
       maxRange: isPublic ? PUBLIC_MAX_RANGE : Math.max(1_000, NODE_MAX_RANGE),
       nextAt: 0, failedUntil: 0, failReason: '', head: 0, headAt: 0,
@@ -162,8 +166,30 @@ async function pace(ep: Endpoint) {
   if (wait > 0) await sleep(wait);
 }
 
+/**
+ * Rate-limit feedback: the public RPC's quota differs per source IP (a Hetzner
+ * address gets throttled well below what a residential one does), so the pacing
+ * adapts — every 429 widens the interval by half (capped at 8× the configured
+ * base) and each success narrows it 2% back toward the base.
+ */
+function throttled(ep: Endpoint) {
+  const base = Math.max(ep.baseIntervalMs, 100);
+  const next = Math.min(base * 8, Math.max(ep.minIntervalMs, base) * 1.5);
+  if (next > ep.minIntervalMs) {
+    ep.minIntervalMs = next;
+    if (next >= base * 2) console.warn(`[robinhood-rpc] ${ep.host} rate limited; pacing now ${Math.round(next)} ms between requests`);
+  }
+}
+function unthrottled(ep: Endpoint) {
+  if (ep.minIntervalMs > ep.baseIntervalMs) ep.minIntervalMs = Math.max(ep.baseIntervalMs, ep.minIntervalMs * 0.98);
+}
+/** 429 waits: 2, 4, 8, 16, 32 s (≈ 1 minute in total) — a per-minute quota needs the window to roll over. */
+const RETRIES_429 = 5;
+const wait429 = (attempt: number) => 2000 * 2 ** Math.min(attempt, 4);
+
 /** One HTTP POST to one endpoint with 429/5xx/network retries. JSON-RPC errors come back in the body. */
 async function post(ep: Endpoint, body: unknown, retries = 4): Promise<any> {
+  let throttles = 0;
   for (let attempt = 0; ; attempt++) {
     await pace(ep);
     try {
@@ -175,11 +201,18 @@ async function post(ep: Endpoint, body: unknown, retries = 4): Promise<any> {
         body: JSON.stringify(body),
         signal: AbortSignal.timeout(TIMEOUT_MS),
       });
-      if (res.status === 429 || res.status >= 500) {
-        if (res.status === 429) mod.stats.rateLimited++;
-        if (attempt >= retries) throw new UpstreamError(`HTTP ${res.status} ${ep.host}`);
+      if (res.status === 429) {
+        mod.stats.rateLimited++;
+        throttled(ep);
+        if (throttles++ >= RETRIES_429) throw new UpstreamError(`HTTP 429 ${ep.host} (still throttled after ${RETRIES_429} waits)`);
         const ra = Number(res.headers.get('retry-after'));
-        await sleep(res.status === 429 ? (Number.isFinite(ra) && ra > 0 ? ra * 1000 : 1500 * (attempt + 1)) : 800 * (attempt + 1));
+        await sleep(Number.isFinite(ra) && ra > 0 ? ra * 1000 : wait429(throttles - 1));
+        attempt--; // throttling has its own budget; don't consume the error retries
+        continue;
+      }
+      if (res.status >= 500) {
+        if (attempt >= retries) throw new UpstreamError(`HTTP ${res.status} ${ep.host}`);
+        await sleep(800 * (attempt + 1));
         continue;
       }
       if (res.status === 401 || res.status === 403) throw new UpstreamError(`HTTP ${res.status} ${ep.host}`);
@@ -191,10 +224,13 @@ async function post(ep: Endpoint, body: unknown, retries = 4): Promise<any> {
       // Some gateways answer 200 with a JSON-RPC 429 body.
       if (!Array.isArray(body) && json?.error?.code === 429) {
         mod.stats.rateLimited++;
-        if (attempt >= retries) throw new UpstreamError(`rate limited ${ep.host}`);
-        await sleep(1500 * (attempt + 1));
+        throttled(ep);
+        if (throttles++ >= RETRIES_429) throw new UpstreamError(`rate limited ${ep.host} (still throttled after ${RETRIES_429} waits)`);
+        await sleep(wait429(throttles - 1));
+        attempt--;
         continue;
       }
+      unthrottled(ep);
       return json;
     } catch (e) {
       if (e instanceof UpstreamError) throw e;
