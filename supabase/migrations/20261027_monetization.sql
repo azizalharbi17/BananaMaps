@@ -130,7 +130,7 @@ returns table (
   monthly_used bigint, monthly_quota integer, minute_used integer, per_minute integer,
   period text, period_end timestamptz
 )
-language plpgsql security definer set search_path = public as $
+language plpgsql security definer set search_path = public as $$
 #variable_conflict use_column
 declare
   k         public.api_keys%rowtype;
