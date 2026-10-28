@@ -143,7 +143,7 @@ input, button, select {
 .bm-footer-more-label { font-weight: 500; }
 .bm-footer-more a { color: inherit; font-weight: 700; text-decoration: none; transition: filter 0.15s; }
 .bm-footer-more a:hover { text-decoration: underline; text-decoration-color: var(--banana); text-underline-offset: 3px; filter: brightness(1.12); }
-.bm-footer-sep { color: var(--text3); padding: 0 2px; }
+.bm-footer-sep { color: var(--text2); font-weight: 700; padding: 0 4px; }
 .bm-footer-note { flex-basis: 100%; font-size: 12.5px; line-height: 1.6; color: var(--text2); opacity: 1; max-width: 640px; }
 @media (max-width: 480px) {
   .bm-footer { padding: 22px 16px 26px; }
