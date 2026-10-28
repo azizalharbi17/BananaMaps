@@ -124,7 +124,7 @@ export default function AboutPage() {
           width: 100%; max-width: 860px; padding: 64px 16px 36px; text-align: center; position: relative;
           background: radial-gradient(ellipse 70% 60% at 50% 0%, rgba(245,200,66,0.08), transparent 70%);
         }
-        .about-eyebrow { font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: var(--banana); margin-bottom: 18px; }
+        .about-eyebrow { font-family: 'Bricolage Grotesque', sans-serif; font-size: 12px; font-weight: 700; letter-spacing: 1.6px; text-transform: uppercase; color: var(--banana); margin-bottom: 18px; }
         .about-title { font-size: clamp(32px, 5vw, 56px); font-weight: 800; letter-spacing: -1.6px; line-height: 1.08; margin-bottom: 22px; }
         .about-lead { font-size: 17px; color: var(--text2); line-height: 1.7; max-width: 720px; margin: 0 auto 14px; }
         .about-lead-2 { color: var(--text2); opacity: 0.85; margin-bottom: 30px; }
@@ -132,8 +132,8 @@ export default function AboutPage() {
         .about-btn-lg { padding: 12px 24px; font-size: 14px; border-radius: 9px; }
         .about-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; max-width: 760px; margin: 0 auto; }
         .about-stat { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px 10px; }
-        .about-stat dd { font-family: 'DM Mono', monospace; font-size: 22px; font-weight: 500; color: var(--banana); letter-spacing: -0.5px; }
-        .about-stat dt { font-size: 11px; color: var(--text3); margin-top: 4px; }
+        .about-stat dd { font-family: 'Bricolage Grotesque', sans-serif; font-size: 24px; font-weight: 800; color: var(--banana); letter-spacing: -0.5px; font-variant-numeric: tabular-nums; }
+        .about-stat dt { font-size: 12.5px; color: var(--text2); margin-top: 4px; }
         .about-section { width: 100%; max-width: 960px; padding: 40px 16px 8px; }
         .about-h2 { font-size: 24px; font-weight: 800; letter-spacing: -0.6px; margin-bottom: 18px; }
         .feat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; width: 100%; }
@@ -144,11 +144,11 @@ export default function AboutPage() {
         .feat-desc { font-size: 12px; color: var(--text2); line-height: 1.5; }
         .about-steps { list-style: none; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-bottom: 26px; }
         .about-step { position: relative; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 22px; display: flex; flex-direction: column; gap: 12px; }
-        .about-step-n { font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: 1.5px; color: var(--banana); }
+        .about-step-n { font-family: 'Bricolage Grotesque', sans-serif; font-size: 12px; font-weight: 700; letter-spacing: 1.4px; color: var(--banana); font-variant-numeric: tabular-nums; }
         .about-step-title { font-weight: 700; font-size: 15px; margin-bottom: 6px; }
         .about-step-desc { font-size: 12.5px; color: var(--text2); line-height: 1.55; }
         .about-step-arrow { position: absolute; right: -14px; top: 50%; transform: translateY(-50%); width: 16px; text-align: center; color: var(--text3); font-size: 13px; background: var(--bg); line-height: 1; }
-        .about-chains-label { font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--text3); margin-bottom: 10px; }
+        .about-chains-label { font-family: 'Bricolage Grotesque', sans-serif; font-size: 12px; font-weight: 700; letter-spacing: 1.4px; text-transform: uppercase; color: var(--text2); margin-bottom: 10px; }
         .about-chains { display: flex; gap: 8px; flex-wrap: wrap; }
         .about-chain { display: inline-flex; align-items: center; gap: 7px; padding: 7px 12px; border-radius: 20px; border: 1px solid; background: var(--surface); font-size: 12px; font-weight: 600; color: var(--text); }
         .about-chain-dot { width: 7px; height: 7px; border-radius: 50%; }
@@ -156,7 +156,7 @@ export default function AboutPage() {
         .about-cta-title { font-size: clamp(22px, 3vw, 30px); font-weight: 800; letter-spacing: -0.6px; margin-bottom: 22px; }
         .cta-btn { display: inline-block; background: var(--banana); color: #000; border-radius: 10px; padding: 15px 44px; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 16px; text-decoration: none; transition: background 0.15s, transform 0.15s; }
         .cta-btn:hover { background: #ffd45a; transform: translateY(-1px); }
-        .about-cta-note { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text3); margin-top: 14px; line-height: 1.7; }
+        .about-cta-note { font-family: 'Bricolage Grotesque', sans-serif; font-size: 13px; color: var(--text2); margin-top: 14px; line-height: 1.7; }
         .nowrap { white-space: nowrap; }
         @media (max-width: 768px) {
           .about-hero { padding: 44px 16px 28px; }

@@ -84,6 +84,9 @@ const T = {
   hover: 'rgba(245,200,66,0.06)',
   selected: 'rgba(245,200,66,0.12)',
 };
+// Interface text (labels, counts, percentages) uses the site's primary face;
+// DM Mono is reserved for the raw wallet addresses.
+const SANS = "'Bricolage Grotesque', sans-serif";
 
 export default function AddressList(p: Props) {
   const { graph } = p;
@@ -138,7 +141,7 @@ export default function AddressList(p: Props) {
       <div style={{ padding: '12px 14px 10px', borderBottom: `1px solid ${T.line}` }}>
         <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 10 }}>
           <div style={{ fontSize: 11, letterSpacing: '1.6px', textTransform: 'uppercase', color: T.goldDim, fontWeight: 700 }}>Address list</div>
-          <div style={{ fontSize: 11, color: T.textMute, fontFamily: 'DM Mono, monospace' }}>top {holderTotal}</div>
+          <div style={{ fontSize: 12, color: T.textDim, fontFamily: SANS, fontVariantNumeric: 'tabular-nums' }}>top {holderTotal}</div>
         </div>
         <div style={{ position: 'relative' }}>
           <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: T.textMute, fontSize: 14, pointerEvents: 'none' }}>⌕</span>
@@ -147,7 +150,7 @@ export default function AddressList(p: Props) {
             onChange={e => p.setQuery(e.target.value)}
             placeholder="Search address or label"
             spellCheck={false}
-            style={{ width: '100%', background: 'rgba(245,200,66,0.05)', border: '1px solid rgba(245,200,66,0.16)', borderRadius: 8, padding: '8px 10px 8px 30px', color: T.text, fontSize: 13, fontFamily: 'DM Mono, monospace', outline: 'none', boxSizing: 'border-box' }}
+            style={{ width: '100%', background: 'rgba(245,200,66,0.05)', border: '1px solid rgba(245,200,66,0.16)', borderRadius: 8, padding: '8px 10px 8px 30px', color: T.text, fontSize: 13, fontFamily: SANS, outline: 'none', boxSizing: 'border-box' }}
           />
         </div>
         <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, cursor: 'pointer', fontSize: 12, color: T.textDim, userSelect: 'none' }}>
@@ -177,9 +180,9 @@ export default function AddressList(p: Props) {
                 <span style={{ width: 12, height: 12, borderRadius: '50%', background: color, flexShrink: 0, boxShadow: `0 0 8px ${color}80` }} />
                 <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'baseline', gap: 6 }}>
                   <span style={{ fontSize: 13, color: T.text, fontWeight: 700, whiteSpace: 'nowrap' }}>Cluster {it.id + 1}</span>
-                  <span style={{ fontSize: 12, color: T.textMute, fontFamily: 'DM Mono, monospace' }}>({it.size})</span>
+                  <span style={{ fontSize: 12, color: T.textDim, fontFamily: SANS, fontVariantNumeric: 'tabular-nums' }}>({it.size})</span>
                 </div>
-                <span style={{ fontSize: 12.5, color: color, fontFamily: 'DM Mono, monospace', fontWeight: 500, flexShrink: 0 }}>{fmtPct(it.pct)}</span>
+                <span style={{ fontSize: 12.5, color: color, fontFamily: SANS, fontVariantNumeric: 'tabular-nums', fontWeight: 600, flexShrink: 0 }}>{fmtPct(it.pct)}</span>
                 <span style={{ width: 16, textAlign: 'center', fontSize: 10, color: T.textMute, flexShrink: 0, transform: open ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }}>▶</span>
                 <button
                   className="al-eye"
@@ -217,11 +220,11 @@ export default function AddressList(p: Props) {
               {/* rank / cluster marker */}
               {n.rank !== undefined ? (
                 <span style={{
-                  width: 26, flexShrink: 0, textAlign: 'right', fontSize: 11, fontWeight: 600, fontFamily: 'DM Mono, monospace',
-                  color: color || (meta ? meta.color : T.textMute),
+                  width: 30, flexShrink: 0, textAlign: 'right', fontSize: 11.5, fontWeight: 700, fontFamily: SANS, fontVariantNumeric: 'tabular-nums',
+                  color: color || (meta ? meta.color : T.textDim),
                 }}>#{n.rank}</span>
               ) : (
-                <span style={{ width: 26, flexShrink: 0, display: 'flex', justifyContent: 'flex-end' }}>
+                <span style={{ width: 30, flexShrink: 0, display: 'flex', justifyContent: 'flex-end' }}>
                   <span style={{ width: 7, height: 7, borderRadius: '50%', background: color || T.textMute }} />
                 </span>
               )}
@@ -243,7 +246,7 @@ export default function AddressList(p: Props) {
                 )}
               </div>
               {/* supply share */}
-              <span style={{ fontSize: 12.5, fontFamily: 'DM Mono, monospace', color: n.pct > 0 ? T.textDim : T.textMute, flexShrink: 0, minWidth: 54, textAlign: 'right' }}>
+              <span style={{ fontSize: 12.5, fontFamily: SANS, fontVariantNumeric: 'tabular-nums', fontWeight: 500, color: n.pct > 0 ? T.textDim : T.textMute, flexShrink: 0, minWidth: 54, textAlign: 'right' }}>
                 {pctText}
               </span>
               <button

@@ -115,7 +115,7 @@ export default function EmbedSection(props: Props) {
         <div className="dash-label" style={{ marginBottom: 10 }}>Add a site</div>
         <div className="dash-form">
           <input className="dash-input" value={name} onChange={e => setName(e.target.value)} placeholder="Site name (e.g. My Screener)" maxLength={60} aria-label="Site name" disabled={creating || activeSites.length >= MAX_SITES} />
-          <input className="dash-input dash-input-mono" value={domains} onChange={e => setDomains(e.target.value)} placeholder="Domains, optional: example.com, *.example.com" aria-label="Allowed domains" disabled={creating || activeSites.length >= MAX_SITES} style={{ flexBasis: 280 }} />
+          <input className="dash-input" value={domains} onChange={e => setDomains(e.target.value)} placeholder="Domains, optional: example.com, *.example.com" aria-label="Allowed domains" disabled={creating || activeSites.length >= MAX_SITES} style={{ flexBasis: 280 }} />
           <button type="submit" className="bm-btn bm-btn-primary" disabled={creating || activeSites.length >= MAX_SITES}>{creating ? 'Adding…' : 'Add site'}</button>
         </div>
         <div className="dev-fine" style={{ marginTop: 8 }}>
@@ -204,13 +204,13 @@ function SiteCard({ partner: p, plan, onUpdate, onRemove, onUpgrade }: {
           onSubmit={e => { e.preventDefault(); run('details', async () => { await onUpdate(p.pid, { name: name.trim() || 'My site', domains: parseDomains(domains) }); setEditing(false); }); }}
         >
           <input className="dash-input" value={name} onChange={e => setName(e.target.value)} maxLength={60} aria-label="Site name" disabled={busy === 'details'} />
-          <input className="dash-input dash-input-mono" value={domains} onChange={e => setDomains(e.target.value)} placeholder="example.com, *.example.com" aria-label="Allowed domains" disabled={busy === 'details'} style={{ flexBasis: 260 }} />
+          <input className="dash-input" value={domains} onChange={e => setDomains(e.target.value)} placeholder="example.com, *.example.com" aria-label="Allowed domains" disabled={busy === 'details'} style={{ flexBasis: 260 }} />
           <button type="submit" className="bm-btn bm-btn-primary dash-btn-sm" disabled={busy === 'details'}>{busy === 'details' ? 'Saving…' : 'Save'}</button>
         </form>
       ) : (
         <div className="dash-domains">
-          <span style={{ color: 'var(--text3)' }}>Domains:</span>
-          {p.domains.length ? p.domains.map(d => <span key={d} className="dash-domain">{d}</span>) : <span style={{ color: 'var(--text3)' }}>any (add your domains before launch)</span>}
+          <span style={{ fontWeight: 600 }}>Domains:</span>
+          {p.domains.length ? p.domains.map(d => <span key={d} className="dash-domain">{d}</span>) : <span>any (add your domains before launch)</span>}
         </div>
       )}
 
@@ -246,14 +246,14 @@ function SiteCard({ partner: p, plan, onUpdate, onRemove, onUpgrade }: {
             />
             <input
               id={`accent-${p.pid}`}
-              className="dash-input dash-input-mono"
+              className="dash-input"
               value={accent}
               placeholder="#F5C842"
               maxLength={7}
               disabled={!isPartner || busy === 'accent'}
               onChange={e => setAccent(e.target.value)}
               aria-invalid={!accentValid}
-              style={{ flexBasis: 120 }}
+              style={{ flexBasis: 120, fontVariantNumeric: 'tabular-nums' }}
             />
             {isPartner && accentDirty && (
               <button type="button" className="bm-btn bm-btn-primary dash-btn-sm" disabled={!accentValid || busy === 'accent'} onClick={() => run('accent', () => onUpdate(p.pid, { accent: accent.trim() ? '#' + accent.trim().replace('#', '').toUpperCase() : null }))}>

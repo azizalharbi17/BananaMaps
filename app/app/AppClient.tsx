@@ -10,6 +10,9 @@ import AddressList, { EXPLORER, TYPE_META, TypeIcon, shortAddr, fmtPct } from '.
 
 const CC: Record<string, string> = { eth: '#627EEA', bsc: '#F3BA2F', sol: '#9945FF', base: '#0052FF', robinhood: '#00C805' };
 const CL: Record<string, string> = { eth: 'Ethereum', bsc: 'BSC', sol: 'Solana', base: 'Base', robinhood: 'Robinhood' };
+// Interface text (labels, stats, counts) uses the site's primary face; DM Mono
+// is reserved for wallet addresses and code snippets.
+const SANS = "'Bricolage Grotesque', sans-serif";
 
 // BananaMaps Embed options, resolved server-side in app/embed/page.tsx from the
 // partner id (?pid=) and the partner's current plan. `valid` is false when no
@@ -947,7 +950,7 @@ function AppContent({ embed = false, embedOptions }: { embed?: boolean; embedOpt
                   <div style={{ fontSize: 16, color: 'rgba(245,235,200,0.85)', fontWeight: 700, marginTop: 6 }}>
                     {error || 'Explore token holder maps'}
                   </div>
-                  <div style={{ fontSize: 11, color: 'rgba(245,235,200,0.35)', marginTop: 4 }}>
+                  <div style={{ fontSize: 12.5, color: 'rgba(245,235,200,0.6)', marginTop: 4 }}>
                     Search any token or paste a contract address
                   </div>
                   {/* The embed has no search bar, so an error needs its own way back */}
@@ -960,7 +963,7 @@ function AppContent({ embed = false, embedOptions }: { embed?: boolean; embedOpt
                 </div>
                 {!isEmbed && discover && discover.popular.length > 0 && (
                   <>
-                    <div style={{ fontSize: 9, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'rgba(245,200,66,0.4)', marginTop: 18 }}>Popular maps · instant</div>
+                    <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'rgba(245,200,66,0.7)', marginTop: 18 }}>Popular maps · instant</div>
                     <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : '1fr 1fr 1fr', gap: 8 }}>
                       {discover.popular.slice(0, 9).map(t => <TokenTile key={`${t.chain}:${t.address}`} t={t} onOpen={openDiscoverToken} />)}
                     </div>
@@ -968,8 +971,8 @@ function AppContent({ embed = false, embedOptions }: { embed?: boolean; embedOpt
                 )}
                 {!isEmbed && discover && discover.trending.length > 0 && (
                   <>
-                    <div style={{ fontSize: 9, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'rgba(245,200,66,0.4)', marginTop: 16 }}>
-                      Trending now <span style={{ opacity: 0.6, textTransform: 'none', letterSpacing: 0 }}>· first map takes ~2 min to compute</span>
+                    <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'rgba(245,200,66,0.7)', marginTop: 16 }}>
+                      Trending now <span style={{ opacity: 0.85, fontWeight: 500, textTransform: 'none', letterSpacing: 0 }}>· first map takes ~2 min to compute</span>
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : '1fr 1fr 1fr', gap: 8 }}>
                       {discover.trending
@@ -979,12 +982,12 @@ function AppContent({ embed = false, embedOptions }: { embed?: boolean; embedOpt
                     </div>
                   </>
                 )}
-                <div style={{ fontSize: 10, color: 'rgba(180,180,255,0.2)', textAlign: 'center', marginTop: 18 }}>
+                <div style={{ fontSize: 11.5, color: 'rgba(245,235,200,0.6)', textAlign: 'center', marginTop: 18 }}>
                   {isMobile ? 'Pinch to zoom · Drag to pan' : 'Scroll to zoom · Drag to pan · Click a bubble for details'}
                   {!isEmbed && (
                     <>
-                      {' · '}<a href="/terms" style={{ color: 'inherit', textDecoration: 'underline', textDecorationColor: 'rgba(180,180,255,0.15)' }}>Terms</a>
-                      {' · '}<a href="/privacy" style={{ color: 'inherit', textDecoration: 'underline', textDecorationColor: 'rgba(180,180,255,0.15)' }}>Privacy</a>
+                      {' · '}<a href="/terms" style={{ color: 'rgba(245,200,66,0.85)', textDecoration: 'underline', textDecorationColor: 'rgba(245,200,66,0.5)' }}>Terms</a>
+                      {' · '}<a href="/privacy" style={{ color: 'rgba(245,200,66,0.85)', textDecoration: 'underline', textDecorationColor: 'rgba(245,200,66,0.5)' }}>Privacy</a>
                     </>
                   )}
                 </div>
@@ -995,7 +998,7 @@ function AppContent({ embed = false, embedOptions }: { embed?: boolean; embedOpt
             <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 16, background: 'rgba(10,8,0,0.9)' }}>
               <div style={{ fontSize: 44, animation: 'spin 1s linear infinite' }}>🍌</div>
               <div style={{ fontSize: 13, color: 'rgba(245,200,66,0.7)' }}>Mapping holders & transfers...</div>
-              <div style={{ fontSize: 10, color: 'rgba(245,200,66,0.35)' }}>First load computes the full graph — can take a minute</div>
+              <div style={{ fontSize: 11.5, color: 'rgba(245,200,66,0.6)' }}>First load computes the full graph — can take a minute</div>
             </div>
           )}
           {!loading && building !== null && (
@@ -1005,7 +1008,7 @@ function AppContent({ embed = false, embedOptions }: { embed?: boolean; embedOpt
               <div style={{ fontSize: 11, color: 'rgba(245,235,200,0.45)', textAlign: 'center', maxWidth: 320, lineHeight: 1.6 }}>
                 First-time maps take ~2 minutes to compute.<br />This view refreshes automatically — no need to reload.
               </div>
-              <div style={{ fontSize: 10, color: 'rgba(245,235,200,0.3)', fontFamily: 'DM Mono,monospace' }}>
+              <div style={{ fontSize: 11.5, color: 'rgba(245,235,200,0.55)', fontFamily: SANS, fontVariantNumeric: 'tabular-nums' }}>
                 {fmtElapsed(Date.now() - building)} elapsed · checking every {Math.round(BUILD_POLL_MS / 1000)}s
               </div>
             </div>
@@ -1043,14 +1046,14 @@ function AppContent({ embed = false, embedOptions }: { embed?: boolean; embedOpt
                 ] as [string, string | number, string | undefined][]).map(([l, v, tip]) => (
                   <div key={l} title={tip} style={{ background: 'rgba(8,6,0,0.8)', border: '1px solid rgba(245,200,66,0.16)', borderRadius: 10, padding: '6px 12px', display: 'flex', alignItems: 'center', gap: 8, backdropFilter: 'blur(6px)' }}>
                     <span style={{ fontSize: 10, color: 'rgba(245,200,66,0.7)', textTransform: 'uppercase', letterSpacing: '1.2px', fontWeight: 700 }}>{l}</span>
-                    <span style={{ fontSize: 15, color: '#F6F1E6', fontWeight: 800, fontFamily: 'DM Mono, monospace', letterSpacing: -0.2 }}>{v}</span>
+                    <span style={{ fontSize: 15, color: '#F6F1E6', fontWeight: 800, fontFamily: SANS, fontVariantNumeric: 'tabular-nums', letterSpacing: -0.2 }}>{v}</span>
                   </div>
                 ))}
                 {rugScore && (
                   <div onClick={() => setShowRugDetails(!showRugDetails)} title="Risk score — click for the breakdown" style={{ background: 'rgba(8,6,0,0.8)', border: `1px solid ${rugScore.color}66`, borderRadius: 10, padding: '6px 12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 7, backdropFilter: 'blur(6px)' }}>
                     <span style={{ fontSize: 10, color: 'rgba(245,200,66,0.7)', textTransform: 'uppercase', letterSpacing: '1.2px', fontWeight: 700 }}>Risk</span>
                     <span style={{ width: 8, height: 8, borderRadius: '50%', background: rugScore.color, display: 'inline-block', boxShadow: `0 0 8px ${rugScore.color}99` }} />
-                    <span style={{ fontSize: 15, color: rugScore.color, fontWeight: 800, fontFamily: 'DM Mono, monospace' }}>{rugScore.score}</span>
+                    <span style={{ fontSize: 15, color: rugScore.color, fontWeight: 800, fontFamily: SANS, fontVariantNumeric: 'tabular-nums' }}>{rugScore.score}</span>
                     <span style={{ fontSize: 12, color: rugScore.color, opacity: 0.9, fontWeight: 600 }}>{rugScore.label}</span>
                     <span style={{ fontSize: 9, color: rugScore.color, opacity: 0.7 }}>{showRugDetails ? '▲' : '▼'}</span>
                   </div>
@@ -1066,7 +1069,7 @@ function AppContent({ embed = false, embedOptions }: { embed?: boolean; embedOpt
                     <div key={f.name} style={{ marginBottom: 8 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
                         <span style={{ fontSize: 12, color: 'rgba(243,238,226,0.85)', fontWeight: 600 }}>{f.name}</span>
-                        <span style={{ fontSize: 12, color: f.score >= 70 ? '#2EE89A' : f.score >= 40 ? '#EAB308' : '#EF4444', fontWeight: 700, fontFamily: 'DM Mono, monospace' }}>{f.score}/100</span>
+                        <span style={{ fontSize: 12, color: f.score >= 70 ? '#2EE89A' : f.score >= 40 ? '#EAB308' : '#EF4444', fontWeight: 700, fontFamily: SANS, fontVariantNumeric: 'tabular-nums' }}>{f.score}/100</span>
                       </div>
                       <div style={{ height: 5, background: 'rgba(255,255,255,0.08)', borderRadius: 2, overflow: 'hidden' }}>
                         <div style={{ height: '100%', width: `${f.score}%`, background: f.score >= 70 ? '#2EE89A' : f.score >= 40 ? '#EAB308' : '#EF4444', borderRadius: 2, transition: 'width 0.5s' }} />
@@ -1074,7 +1077,7 @@ function AppContent({ embed = false, embedOptions }: { embed?: boolean; embedOpt
                       <div style={{ fontSize: 11, color: 'rgba(243,238,226,0.5)', marginTop: 4, lineHeight: 1.4 }}>{f.detail}</div>
                     </div>
                   ))}
-                  <div style={{ fontSize: 10, color: 'rgba(243,238,226,0.4)', marginTop: 10, lineHeight: 1.45 }}>This score is for informational purposes only and does not constitute financial advice. Always do your own research.</div>
+                  <div style={{ fontSize: 11.5, color: 'rgba(243,238,226,0.62)', marginTop: 10, lineHeight: 1.45 }}>This score is for informational purposes only and does not constitute financial advice. Always do your own research.</div>
                 </div>
               )}
             </div>
@@ -1093,7 +1096,7 @@ function AppContent({ embed = false, embedOptions }: { embed?: boolean; embedOpt
                     style={{ display: 'flex', alignItems: 'center', gap: 7, background: 'rgba(8,6,0,0.8)', border: `1px solid ${col}66`, borderRadius: 10, padding: '5px 11px', fontSize: 11.5, fontWeight: 600, color: col, cursor: 'pointer', opacity: hid ? 0.45 : 1, backdropFilter: 'blur(6px)', fontFamily: 'inherit' }}>
                     <span style={{ width: 8, height: 8, borderRadius: '50%', background: col, display: 'inline-block', boxShadow: `0 0 6px ${col}aa` }} />
                     Cluster {c.id + 1}
-                    <span style={{ color: 'rgba(243,238,226,0.75)', fontWeight: 500, fontFamily: 'DM Mono, monospace', fontSize: 11 }}>{c.pct.toFixed(c.pct < 1 ? 2 : 1)}% of supply</span>
+                    <span style={{ color: 'rgba(243,238,226,0.82)', fontWeight: 500, fontFamily: SANS, fontVariantNumeric: 'tabular-nums', fontSize: 11.5 }}>{c.pct.toFixed(c.pct < 1 ? 2 : 1)}% of supply</span>
                   </button>
                 );
               })}
@@ -1171,7 +1174,7 @@ function AppContent({ embed = false, embedOptions }: { embed?: boolean; embedOpt
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0 }}>
                   <span style={{ width: 9, height: 9, borderRadius: '50%', flexShrink: 0, background: selected.cluster !== undefined ? clusterColor(selected.cluster) : 'rgba(160,170,220,0.9)', boxShadow: selected.cluster !== undefined ? `0 0 8px ${clusterColor(selected.cluster)}99` : 'none' }} />
-                  <span style={{ fontSize: 12, color: 'rgba(243,238,226,0.6)', fontFamily: 'DM Mono, monospace', fontWeight: 600, flexShrink: 0 }}>{selected.rank !== undefined ? `#${selected.rank}` : 'counterparty'}</span>
+                  <span style={{ fontSize: 12, color: 'rgba(243,238,226,0.7)', fontFamily: SANS, fontVariantNumeric: 'tabular-nums', fontWeight: 700, flexShrink: 0 }}>{selected.rank !== undefined ? `#${selected.rank}` : 'counterparty'}</span>
                   {selected.cluster !== undefined && (
                     <span style={{ fontSize: 11, fontWeight: 700, color: clusterColor(selected.cluster), background: clusterColor(selected.cluster) + '18', padding: '2px 8px', borderRadius: 8, border: `1px solid ${clusterColor(selected.cluster)}44`, flexShrink: 0 }}>Cluster {selected.cluster + 1}</span>
                   )}
@@ -1200,7 +1203,7 @@ function AppContent({ embed = false, embedOptions }: { embed?: boolean; embedOpt
                 ] as [string, string, string][]).map(([l, v, c]) => (
                   <div key={l} style={{ background: 'rgba(245,200,66,0.05)', border: '1px solid rgba(245,200,66,0.08)', borderRadius: 8, padding: '7px 8px' }}>
                     <div style={{ fontSize: 9.5, color: 'rgba(245,200,66,0.65)', textTransform: 'uppercase', letterSpacing: '1.1px', fontWeight: 700, marginBottom: 4 }}>{l}</div>
-                    <div style={{ fontSize: 14, color: c, fontWeight: 700, fontFamily: 'DM Mono, monospace', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{v}</div>
+                    <div style={{ fontSize: 14, color: c, fontWeight: 700, fontFamily: SANS, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{v}</div>
                   </div>
                 ))}
               </div>
@@ -1220,7 +1223,7 @@ function AppContent({ embed = false, embedOptions }: { embed?: boolean; embedOpt
                         <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: c.node.label ? 'inherit' : 'DM Mono, monospace', fontWeight: c.node.label ? 600 : 400, color: '#F3EEE2' }}>
                           {c.node.label || shortAddr(c.node.address)}
                         </span>
-                        <span style={{ color: 'rgba(243,238,226,0.55)', flexShrink: 0, fontFamily: 'DM Mono, monospace', fontSize: 11.5 }}>
+                        <span style={{ color: 'rgba(243,238,226,0.68)', flexShrink: 0, fontFamily: SANS, fontVariantNumeric: 'tabular-nums', fontSize: 12 }}>
                           {c.out > 0 && c.in > 0 ? '⇄' : c.out > 0 ? '→' : '←'} {c.total}
                         </span>
                       </div>

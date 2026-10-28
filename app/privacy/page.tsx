@@ -281,8 +281,9 @@ const SECTIONS: LegalSection[] = [
     body: (
       <>
         <p>
-          We’ll post updates here with a new “Last updated” date and, for material changes, email account holders before the
-          change takes effect. Earlier versions are available on request.
+          We’ll post updates here with a new “Last updated” date and, for material changes, notify you before the change takes
+          effect by email to the address on your account or by a prominent notice on the site. Earlier versions are available
+          on request.
         </p>
       </>
     ),

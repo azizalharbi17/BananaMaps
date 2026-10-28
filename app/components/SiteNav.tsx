@@ -1,6 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
+import Wordmark from './Wordmark';
 
 /** Shared header: brand, About / Developers links, Log in / Sign up / Launch App. */
 export default function SiteNav() {
@@ -27,7 +28,7 @@ export default function SiteNav() {
       <div className="bm-nav-left">
         <Link href="/" className="bm-nav-brand" aria-label="BananaMaps home">
           <span className="bm-logo" aria-hidden>🍌</span>
-          <span className="bm-nav-wordmark">Banana<span style={{ color: 'var(--banana)' }}>Maps</span></span>
+          <Wordmark suffix="Maps" className="bm-nav-wordmark" />
         </Link>
         <Link href="/about" className="bm-nav-link" aria-current={pathname === '/about' ? 'page' : undefined}>
           About

@@ -317,7 +317,7 @@ export default function DocsPage() {
                 <thead><tr><th>Code</th><th>Status</th><th>Meaning</th></tr></thead>
                 <tbody>
                   {ERRORS.map(e => (
-                    <tr key={e.code}><td><code>{e.code}</code></td><td className="dev-mono">{e.status}</td><td>{e.meaning}</td></tr>
+                    <tr key={e.code}><td><code>{e.code}</code></td><td className="dev-num">{e.status}</td><td>{e.meaning}</td></tr>
                   ))}
                 </tbody>
               </table>
@@ -344,9 +344,9 @@ export default function DocsPage() {
                   {API_PLANS.map(p => (
                     <tr key={p.tier}>
                       <td>{p.name}</td>
-                      <td className="dev-mono">{fmtNum(p.monthlyQuota)}</td>
-                      <td className="dev-mono">{p.perMinute}</td>
-                      <td className="dev-mono">{p.priceMonthly === 0 ? 'Free' : `$${p.priceMonthly}/mo · $${fmtNum(p.priceYearly)}/yr`}</td>
+                      <td className="dev-num">{fmtNum(p.monthlyQuota)}</td>
+                      <td className="dev-num">{p.perMinute}</td>
+                      <td className="dev-num">{p.priceMonthly === 0 ? 'Free' : `$${p.priceMonthly}/mo · $${fmtNum(p.priceYearly)}/yr`}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -407,7 +407,7 @@ export default function DocsPage() {
               <table className="dev-table">
                 <thead><tr><th>Parameter</th><th>Required</th><th>Description</th></tr></thead>
                 <tbody>
-                  {EMBED_PARAMS.map(p => <tr key={p.name}><td><code>{p.name}</code></td><td className="dev-mono">{p.req}</td><td>{p.meaning}</td></tr>)}
+                  {EMBED_PARAMS.map(p => <tr key={p.name}><td><code>{p.name}</code></td><td className="dev-num">{p.req}</td><td>{p.meaning}</td></tr>)}
                 </tbody>
               </table>
             </div>

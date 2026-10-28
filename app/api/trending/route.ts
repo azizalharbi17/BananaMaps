@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { TrendingToken, TrendingSnapshot, TRENDING_NETWORKS, TRENDING_SNAPSHOT_ID } from '@/lib/trending';
+import { TrendingToken, TrendingSnapshot, TRENDING_NETWORKS, TRENDING_SNAPSHOT_ID, dedupeForDisplay } from '@/lib/trending';
 
 export const dynamic = 'force-dynamic';
 
@@ -92,8 +92,15 @@ export async function GET() {
   const empty: TrendingPayload = { popular: [], trending: [], byChain: {}, trendingAt: null, fetchedAt: Date.now() };
   if (!sb) return NextResponse.json(empty);
   const [popular, snap] = await Promise.all([fetchPopular(sb), fetchSnapshot(sb)]);
+  // Display-level dedupe per chain, in two passes (lib/trending.ts):
+  //  1. same chain + address (any casing) → one entry, the higher-volume pool
+  //     wins — the worker applies this rule too, this covers older snapshots;
+  //  2. same chain + symbol + name but a DIFFERENT contract (a copycat or
+  //     relaunch, e.g. the two "Elon 2028" ELON2028 contracts on eth) → only
+  //     the higher-volume one is shown. The snapshot itself keeps both.
+  // Copy the items so markHasMap() never mutates the snapshot objects.
   const byChain: Record<string, TrendingToken[]> = {};
-  for (const [, chain] of TRENDING_NETWORKS) byChain[chain] = (snap?.byChain[chain] || []).map(t => ({ ...t }));
+  for (const [, chain] of TRENDING_NETWORKS) byChain[chain] = dedupeForDisplay(snap?.byChain[chain] || []).map(t => ({ ...t }));
   await markHasMap(sb, Object.values(byChain).flat());
   // Interleave chains so no single chain dominates the legacy grid
   const trending: TrendingToken[] = [];

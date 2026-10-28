@@ -170,15 +170,15 @@ function KeyRow({ k, onRename, onRevoke }: { k: DashKey; onRename: Props['onRena
       </div>
       <div className="dash-cell">
         <div className="dash-cell-label">Created</div>
-        <span className="dash-cell-mono">{fmtDate(k.createdAt)}</span>
+        <span className="dash-cell-num">{fmtDate(k.createdAt)}</span>
       </div>
       <div className="dash-cell">
         <div className="dash-cell-label">Last used</div>
-        <span className="dash-cell-mono">{fmtAgo(k.lastUsedAt)}</span>
+        <span className="dash-cell-num">{fmtAgo(k.lastUsedAt)}</span>
       </div>
       <div className="dash-cell">
         <div className="dash-cell-label">Calls this month</div>
-        <span className="dash-cell-mono">{fmtNum(k.calls)}</span>
+        <span className="dash-cell-num">{fmtNum(k.calls)}</span>
       </div>
       <div className="dash-cell dash-cell-actions">
         {revokedRow ? (

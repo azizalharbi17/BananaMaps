@@ -139,14 +139,14 @@ export default function Home() {
         .hero-search:focus-within { border-color: rgba(245,200,66,0.6); box-shadow: 0 0 0 3px rgba(245,200,66,0.08); }
         .hero-search input {
           background: none; border: none; outline: none; color: var(--text); width: 100%; min-width: 0;
-          font-family: 'DM Mono', monospace; font-size: 13px; padding: 14px 0;
+          font-family: 'Bricolage Grotesque', sans-serif; font-size: 14px; padding: 14px 0;
         }
-        .hero-search input::placeholder { color: var(--text3); }
+        .hero-search input::placeholder { color: var(--text2); opacity: 0.9; }
         .analyze-btn { background: var(--banana); color: #000; border: none; border-radius: 10px; padding: 0 24px; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 14px; cursor: pointer; white-space: nowrap; transition: background 0.15s; }
         .analyze-btn:hover { background: #ffd45a; }
-        .hero-hint { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text3); position: relative; line-height: 1.7; }
+        .hero-hint { font-family: 'Bricolage Grotesque', sans-serif; font-size: 13px; color: var(--text2); position: relative; line-height: 1.7; }
         .nowrap { white-space: nowrap; }
-        .hero-hint a { color: var(--text2); text-decoration: none; border-bottom: 1px solid var(--border2); }
+        .hero-hint a { color: var(--text); text-decoration: none; border-bottom: 1px solid var(--border2); }
         .hero-hint a:hover { color: var(--banana); border-color: var(--banana); }
         .home-cta { padding: 8px 16px 64px; display: flex; justify-content: center; }
         .home-cta-card {
@@ -157,8 +157,8 @@ export default function Home() {
         .home-cta-sub { font-size: 14px; color: var(--text2); max-width: 520px; margin: 0 auto 26px; line-height: 1.6; }
         .cta-btn { display: inline-block; background: var(--banana); color: #000; border: none; border-radius: 10px; padding: 15px 44px; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 16px; cursor: pointer; text-decoration: none; transition: background 0.15s, transform 0.15s; }
         .cta-btn:hover { background: #ffd45a; transform: translateY(-1px); }
-        .home-cta-note { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text3); margin-top: 14px; }
-        .home-cta-more { margin-top: 8px; font-size: 12px; }
+        .home-cta-note { font-family: 'Bricolage Grotesque', sans-serif; font-size: 13px; color: var(--text2); margin-top: 14px; line-height: 1.7; }
+        .home-cta-more { margin-top: 8px; font-size: 13px; }
         .home-cta-more a { color: var(--text2); text-decoration: none; }
         .home-cta-more a:hover { color: var(--banana); }
         @media (max-width: 768px) {

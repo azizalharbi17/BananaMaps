@@ -3,6 +3,7 @@
 import { useState, useEffect, useSyncExternalStore } from "react";
 import { supabase } from "@/lib/supabase";
 import Link from "next/link";
+import Wordmark from "../components/Wordmark";
 import { safeNext as safeNextOn } from "@/lib/safeNext";
 
 interface Banana {
@@ -166,8 +167,8 @@ export default function SignUpPage() {
           }}>
             <Link href="/" className="home-logo" style={{ textDecoration: "none", display: "block", textAlign: "center", marginBottom: "32px", transition: "opacity 0.2s" }}>
               <div style={{ fontSize: "2.5rem", marginBottom: "8px" }}>🍌</div>
-              <h1 style={{ fontSize: "1.6rem", fontWeight: 700, color: "#EAB308", margin: "0 0 6px 0" }}>
-                Banana<span style={{ color: "#ffffff" }}>Maps</span>
+              <h1 style={{ fontSize: "1.6rem", fontWeight: 700, margin: "0 0 6px 0" }}>
+                <Wordmark suffix="Maps" />
               </h1>
               <p style={{ fontSize: "0.85rem", color: "rgba(255,255,255,0.4)", margin: 0 }}>Create your account</p>
             </Link>

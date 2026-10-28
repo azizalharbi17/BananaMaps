@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
-import type { TrendingPayload } from './chains';
+import { dedupeForDisplay, type TrendingPayload, type TrendingToken } from './chains';
 
 // One fetch of /api/trending per page load, shared by every component that
 // calls useTrending() (ticker + trending grid). The API itself is served from
@@ -19,9 +19,16 @@ function load(): Promise<TrendingPayload | null> {
       .then(d => {
         inflight = null;
         if (d && d.byChain && typeof d.byChain === 'object') {
-          cached = d;
+          // Belt and braces: the API already dedupes, but both the ticker and
+          // the grid render byChain, so collapse same-contract repeats and
+          // same-name lookalikes here too before the payload is cached and shared.
+          const byChain: Record<string, TrendingToken[]> = {};
+          for (const [chain, list] of Object.entries(d.byChain)) {
+            byChain[chain] = dedupeForDisplay(Array.isArray(list) ? list : []);
+          }
+          cached = { ...d, byChain };
           cachedAt = Date.now();
-          return d;
+          return cached;
         }
         return null;
       });

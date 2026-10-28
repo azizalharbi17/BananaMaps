@@ -6,10 +6,21 @@ import { useTrending } from './useTrending';
 import { CHAIN_BY_ID, DOWN, UP, fmtPct, interleave, mapHref, type TrendingToken } from './chains';
 
 const MAX_ITEMS = 40;
-/** Seconds per item — keeps the scroll speed constant regardless of list length. */
-const SECONDS_PER_ITEM = 2;
+/**
+ * Seconds per item — keeps the scroll speed constant regardless of list length.
+ * 4s/item is about half the original pace (was 2s) so symbols are readable as
+ * they pass; the 60s floor keeps short lists from racing.
+ */
+const SECONDS_PER_ITEM = 4;
+const MIN_DURATION_S = 60;
 
-function TickerItem({ t }: { t: TrendingToken }) {
+/**
+ * `clone` marks the item as part of the aria-hidden duplicate sequence that makes
+ * the loop seamless: it stays clickable/hoverable for mouse users but leaves the
+ * tab order, so keyboard users get 40 stops instead of 80 and no focusable
+ * content hides inside aria-hidden.
+ */
+function TickerItem({ t, clone }: { t: TrendingToken; clone?: boolean }) {
   const chain = CHAIN_BY_ID[t.chain];
   const up = t.change24h >= 0;
   return (
@@ -18,6 +29,7 @@ function TickerItem({ t }: { t: TrendingToken }) {
       prefetch={false}
       className="bm-ticker-item"
       title={`${t.name || t.symbol} · ${chain?.label ?? t.chain}`}
+      tabIndex={clone ? -1 : undefined}
     >
       <TokenLogo src={t.logo} symbol={t.symbol} size={16} />
       <span className="bm-ticker-sym">{t.symbol || t.name}</span>
@@ -29,8 +41,9 @@ function TickerItem({ t }: { t: TrendingToken }) {
 
 /**
  * Site-wide trending marquee shown above the nav. Pure CSS translateX over a
- * duplicated list for a seamless loop; pauses on hover; with
- * prefers-reduced-motion the list is rendered once and simply scrolls.
+ * duplicated list for a seamless loop; pauses on hover and on keyboard focus
+ * (CSS :hover / :focus-within in globals.css); with prefers-reduced-motion the
+ * list is rendered once and simply scrolls.
  * Height is fixed at 34px so data arriving never shifts the layout.
  */
 export default function Ticker() {
@@ -46,7 +59,7 @@ export default function Ticker() {
   }, []);
 
   const items = useMemo(() => (data ? interleave(data.byChain, MAX_ITEMS) : []), [data]);
-  const duration = Math.max(30, items.length * SECONDS_PER_ITEM);
+  const duration = Math.max(MIN_DURATION_S, items.length * SECONDS_PER_ITEM);
 
   let body: React.ReactNode;
   if (items.length === 0 && loading) {
@@ -68,7 +81,7 @@ export default function Ticker() {
         </div>
         {!reduced && (
           <div className="bm-ticker-seq" aria-hidden>
-            {items.map(t => <TickerItem key={`${t.chain}:${t.address}`} t={t} />)}
+            {items.map(t => <TickerItem key={`${t.chain}:${t.address}`} t={t} clone />)}
           </div>
         )}
       </div>

@@ -31,6 +31,74 @@ export const TRENDING_NETWORKS: [string, string][] = [['eth', 'eth'], ['bsc', 'b
 // Wrapped natives / stables trend constantly but their holder maps are noise
 const SKIP_SYMBOLS = new Set(['WETH', 'WBNB', 'WSOL', 'SOL', 'WBTC', 'USDC', 'USDT', 'DAI', 'CBBTC']);
 
+/** Identity of a trending token: chain + address, compared case-insensitively. */
+export function trendingKey(t: Pick<TrendingToken, 'chain' | 'address'>): string {
+  return `${t.chain}:${String(t.address || '').toLowerCase()}`;
+}
+
+/**
+ * Collapse repeated tokens (same chain + address, any address casing) to one
+ * entry. The higher-volume24h entry wins (ties: the first one), and it takes
+ * the FIRST occurrence's slot so the trending order is preserved. Pure: never
+ * mutates the input list or its items.
+ *
+ * app/components/chains.ts carries an identical client-side copy (client
+ * components must not import lib/); keep the two in sync.
+ */
+export function dedupeTrending(list: TrendingToken[]): TrendingToken[] {
+  const slot = new Map<string, number>();
+  const out: TrendingToken[] = [];
+  for (const t of list) {
+    const key = trendingKey(t);
+    const at = slot.get(key);
+    if (at === undefined) {
+      slot.set(key, out.length);
+      out.push(t);
+    } else if ((Number(t.volume24h) || 0) > (Number(out[at].volume24h) || 0)) {
+      out[at] = t;
+    }
+  }
+  return out;
+}
+
+/** Display identity for the lookalike pass: chain + symbol + name, case- and whitespace-insensitive. */
+function lookalikeKey(t: TrendingToken): string | null {
+  const norm = (s: unknown) => String(s || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  const symbol = norm(t.symbol);
+  if (!symbol) return null;
+  return `${t.chain}|${symbol}|${norm(t.name)}`;
+}
+
+/**
+ * Display-layer pass on top of dedupeTrending(): two DIFFERENT contracts on the
+ * same chain with the same symbol AND name (a copycat or relaunch — e.g. the two
+ * "Elon 2028" / ELON2028 contracts on eth) are indistinguishable on a card, so
+ * only the higher-volume24h one is shown, in the first occurrence's slot. The
+ * worker snapshot keeps both contracts; this runs only where lists are rendered
+ * (/api/trending and the client hook). Same-contract repeats must already be
+ * collapsed by dedupeTrending(). Client copy: app/components/chains.ts.
+ */
+export function collapseLookalikes(list: TrendingToken[]): TrendingToken[] {
+  const slot = new Map<string, number>();
+  const out: TrendingToken[] = [];
+  for (const t of list) {
+    const key = lookalikeKey(t);
+    const at = key === null ? undefined : slot.get(key);
+    if (at === undefined) {
+      if (key !== null) slot.set(key, out.length);
+      out.push(t);
+    } else if ((Number(t.volume24h) || 0) > (Number(out[at].volume24h) || 0)) {
+      out[at] = t;
+    }
+  }
+  return out;
+}
+
+/** What the homepage shows: same-contract repeats and same-name lookalikes collapsed. */
+export function dedupeForDisplay(list: TrendingToken[]): TrendingToken[] {
+  return collapseLookalikes(dedupeTrending(list));
+}
+
 export async function fetchTrendingChain(net: string, chain: string, limit = 3): Promise<TrendingToken[]> {
   try {
     recordProviderCall('https://api.geckoterminal.com/api/v2/networks/trending_pools');
@@ -45,15 +113,23 @@ export async function fetchTrendingChain(net: string, chain: string, limit = 3):
     for (const inc of data.included || []) {
       if (inc.type === 'token') tokens.set(inc.id, inc.attributes);
     }
-    const out: TrendingToken[] = [];
-    const seen = new Set<string>();
+    // Collect one candidate per pool over the WHOLE list, then dedupe by
+    // chain + lowercased address (trendingKey) so a token that trends in
+    // several pools appears once, with its higher-volume pool's stats. The
+    // lowercasing is defensive against any id/address casing drift, not a
+    // behaviour we have observed from GeckoTerminal (ids are `{net}_{address}`).
+    // Dedupe before slicing to `limit`, or a duplicate past the cut-off would
+    // survive. NOTE: this does NOT collapse different contracts that share a
+    // ticker (e.g. two ELON2028 contracts on eth, 0xbcc01eae… and 0x7f4457f8…):
+    // those are distinct tokens and are kept on purpose — merging by symbol
+    // would be a product decision, not a dedupe fix.
+    const candidates: TrendingToken[] = [];
     for (const pool of data.data) {
       const tokId = pool.relationships?.base_token?.data?.id;
       const tok = tokId && tokens.get(tokId);
-      if (!tok?.address || seen.has(tokId)) continue;
+      if (!tok?.address) continue;
       if (SKIP_SYMBOLS.has(String(tok.symbol || '').toUpperCase())) continue;
-      seen.add(tokId);
-      out.push({
+      candidates.push({
         chain,
         address: tok.address,
         name: tok.name || tok.symbol || '',
@@ -62,9 +138,8 @@ export async function fetchTrendingChain(net: string, chain: string, limit = 3):
         change24h: Number(pool.attributes?.price_change_percentage?.h24) || 0,
         volume24h: Number(pool.attributes?.volume_usd?.h24) || 0,
       });
-      if (out.length >= limit) break;
     }
-    return out;
+    return dedupeTrending(candidates).slice(0, limit);
   } catch {
     return [];
   }

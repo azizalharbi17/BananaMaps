@@ -10,8 +10,8 @@ import Link from 'next/link';
 import SiteNav from '../components/SiteNav';
 import SiteFooter from '../components/SiteFooter';
 
-export const LEGAL_LAST_UPDATED = 'October 27, 2026';
-export const SUPPORT_EMAIL = 'support@bananamaps.io';
+export const LEGAL_LAST_UPDATED = 'October 28, 2026';
+export const SUPPORT_EMAIL = 'support@bananazone.io';
 
 export type LegalSlug = 'terms' | 'privacy' | 'refunds';
 
@@ -123,12 +123,13 @@ export default function LegalPage({
       <style>{`
         .legal-main { align-items: center; }
         .legal-wrap { width: 100%; max-width: 760px; padding: 48px 16px 72px; }
-        .legal-eyebrow { font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: var(--banana); margin-bottom: 14px; }
+        .legal-eyebrow { font-family: 'Bricolage Grotesque', sans-serif; font-size: 12px; font-weight: 700; letter-spacing: 1.4px; text-transform: uppercase; color: var(--banana); margin-bottom: 14px; }
         .legal-title { font-size: clamp(30px, 4.5vw, 44px); font-weight: 800; letter-spacing: -1.2px; line-height: 1.1; margin-bottom: 14px; overflow-wrap: anywhere; }
         .legal-summary { font-size: 16px; color: var(--text2); line-height: 1.65; max-width: 68ch; }
-        .legal-meta { display: flex; flex-wrap: wrap; gap: 6px 22px; margin-top: 18px; font-family: 'DM Mono', monospace; font-size: 12px; color: var(--text3); line-height: 1.6; }
+        .legal-meta { display: flex; flex-wrap: wrap; gap: 6px 22px; margin-top: 18px; font-family: 'Bricolage Grotesque', sans-serif; font-size: 13px; color: var(--text2); line-height: 1.6; font-variant-numeric: tabular-nums; }
         .legal-meta dt, .legal-meta dd { display: inline; }
-        .legal-meta dd { color: var(--text2); }
+        .legal-meta dt { font-weight: 600; }
+        .legal-meta dd { color: var(--text); }
         .legal-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin: 28px 0 30px; padding-bottom: 18px; border-bottom: 1px solid var(--border); }
         .legal-tab {
           font-size: 13px; font-weight: 600; color: var(--text2); text-decoration: none; padding: 7px 12px; border-radius: 8px;
@@ -156,30 +157,30 @@ export default function LegalPage({
           padding: 14px 16px; margin: 0 0 16px; color: var(--text); font-size: 14.5px; line-height: 1.65;
         }
         .legal-callout p:last-child { margin-bottom: 0; }
-        .legal-callout-label { font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--banana); margin-bottom: 6px; }
+        .legal-callout-label { font-family: 'Bricolage Grotesque', sans-serif; font-size: 11.5px; font-weight: 700; letter-spacing: 1.4px; text-transform: uppercase; color: var(--banana); margin-bottom: 6px; }
 
         .legal-toc { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; margin: 20px 0 8px; }
-        .legal-toc-label { font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--text3); margin-bottom: 10px; }
+        .legal-toc-label { font-family: 'Bricolage Grotesque', sans-serif; font-size: 11.5px; font-weight: 700; letter-spacing: 1.4px; text-transform: uppercase; color: var(--text2); margin-bottom: 10px; }
         .legal-toc ol { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 18px; }
         .legal-toc li { margin: 0; font-size: 13px; line-height: 1.45; min-width: 0; }
         .legal-toc a { color: var(--text2); border: none; display: flex; gap: 9px; align-items: baseline; }
         .legal-toc a:hover { color: var(--banana); }
-        .legal-toc .legal-num { font-size: 11px; }
+        .legal-toc .legal-num { font-size: 12px; }
 
         .legal-section { margin-top: 40px; scroll-margin-top: 24px; }
         .legal-section h2 {
           font-size: 20px; font-weight: 800; letter-spacing: -0.4px; color: var(--text); margin-bottom: 12px; line-height: 1.3;
           display: flex; gap: 10px; align-items: baseline;
         }
-        .legal-num { font-family: 'DM Mono', monospace; font-size: 13px; font-weight: 500; color: var(--banana); flex-shrink: 0; }
+        .legal-num { font-family: 'Bricolage Grotesque', sans-serif; font-size: 13px; font-weight: 700; color: var(--banana); flex-shrink: 0; font-variant-numeric: tabular-nums; }
 
         .legal-contact {
           margin-top: 48px; padding: 20px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface);
           display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px 16px;
         }
         .legal-contact-title { font-weight: 700; color: var(--text); font-size: 15px; }
-        .legal-contact-sub { font-size: 13px; color: var(--text3); margin-top: 3px; line-height: 1.5; }
-        .legal-body a.legal-contact-btn { font-family: 'DM Mono', monospace; font-weight: 500; font-size: 12px; border-bottom: 1px solid var(--border2); color: var(--text); max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+        .legal-contact-sub { font-size: 13px; color: var(--text2); margin-top: 3px; line-height: 1.5; }
+        .legal-body a.legal-contact-btn { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 600; font-size: 13px; border-bottom: 1px solid var(--border2); color: var(--text); max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
         .legal-body a.legal-contact-btn:hover { color: var(--banana); border-color: var(--banana); }
 
         @media (max-width: 600px) {

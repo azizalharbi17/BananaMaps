@@ -373,9 +373,15 @@ const SECTIONS: LegalSection[] = [
     body: (
       <>
         <p>
-          We may update these Terms as the Service evolves. We’ll post the new version here with a new “Last updated” date.
-          For material changes we’ll email account holders at least 14 days before the change takes effect. Using the Service
-          after that date means you accept the new Terms; if you don’t, stop using the Service and cancel any paid plan.
+          We may update these Terms as the Service evolves. For material changes — for example anything that reduces your
+          rights or adds to your obligations — we’ll give you at least 14 days’ notice before the change takes effect, by
+          email to the address on your account or by a prominent notice on the site. Non-material changes, such as
+          clarifications, typo fixes and changes that don’t reduce your rights, take effect when we post them here with a new
+          “Last updated” date.
+        </p>
+        <p>
+          Using the Service after a change takes effect means you accept the updated Terms. If you don’t agree, stop using the
+          Service and cancel any paid plan before that date.
         </p>
       </>
     ),
@@ -401,7 +407,7 @@ export default function TermsPage() {
       title="Terms of Service"
       summary={SUMMARY}
       lastUpdated={LEGAL_LAST_UPDATED}
-      effectiveNote={`${LEGAL_LAST_UPDATED} for all accounts. Material changes are announced by email at least 14 days before they apply.`}
+      effectiveNote={`${LEGAL_LAST_UPDATED} for all accounts. Material changes are announced at least 14 days in advance, by email to the address on your account or by a prominent notice on the site.`}
       intro={
         <>
           <p>

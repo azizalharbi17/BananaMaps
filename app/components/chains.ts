@@ -80,6 +80,68 @@ export function fmtAgo(iso: string | null | undefined, now = Date.now()): string
   return `${Math.floor(h / 24)}d ago`;
 }
 
+/**
+ * Collapse repeated tokens (same chain + address, any address casing) to one
+ * entry: the higher-volume24h one wins (ties: first), kept at the FIRST
+ * occurrence's slot so the trending order is preserved. Pure.
+ *
+ * Client-side twin of dedupeTrending() in lib/trending.ts — client components
+ * must not import lib/, so this small duplicate is intended; keep them in sync.
+ */
+export function dedupeTrending(list: TrendingToken[]): TrendingToken[] {
+  const slot = new Map<string, number>();
+  const out: TrendingToken[] = [];
+  for (const t of list) {
+    const key = `${t.chain}:${String(t.address || '').toLowerCase()}`;
+    const at = slot.get(key);
+    if (at === undefined) {
+      slot.set(key, out.length);
+      out.push(t);
+    } else if ((Number(t.volume24h) || 0) > (Number(out[at].volume24h) || 0)) {
+      out[at] = t;
+    }
+  }
+  return out;
+}
+
+/** Display identity for the lookalike pass: chain + symbol + name, case- and whitespace-insensitive. */
+function lookalikeKey(t: TrendingToken): string | null {
+  const norm = (s: unknown) => String(s || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  const symbol = norm(t.symbol);
+  if (!symbol) return null;
+  return `${t.chain}|${symbol}|${norm(t.name)}`;
+}
+
+/**
+ * Display-layer pass on top of dedupeTrending(): two DIFFERENT contracts on the
+ * same chain with the same symbol AND name (a copycat or relaunch — e.g. the two
+ * "Elon 2028" / ELON2028 contracts on eth) are indistinguishable on a card, so
+ * only the higher-volume24h one is shown, in the first occurrence's slot. The
+ * worker snapshot keeps both contracts; this runs only where lists are rendered
+ * (/api/trending and the client hook). Same-contract repeats must already be
+ * collapsed by dedupeTrending(). Client copy: app/components/chains.ts.
+ */
+export function collapseLookalikes(list: TrendingToken[]): TrendingToken[] {
+  const slot = new Map<string, number>();
+  const out: TrendingToken[] = [];
+  for (const t of list) {
+    const key = lookalikeKey(t);
+    const at = key === null ? undefined : slot.get(key);
+    if (at === undefined) {
+      if (key !== null) slot.set(key, out.length);
+      out.push(t);
+    } else if ((Number(t.volume24h) || 0) > (Number(out[at].volume24h) || 0)) {
+      out[at] = t;
+    }
+  }
+  return out;
+}
+
+/** What the homepage shows: same-contract repeats and same-name lookalikes collapsed. */
+export function dedupeForDisplay(list: TrendingToken[]): TrendingToken[] {
+  return collapseLookalikes(dedupeTrending(list));
+}
+
 /** Round-robin across chains in display order so no single chain dominates. */
 export function interleave(byChain: Record<string, TrendingToken[]>, max: number): TrendingToken[] {
   const out: TrendingToken[] = [];
