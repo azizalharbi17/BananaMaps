@@ -1,6 +1,3 @@
-export const ETHERSCAN_KEY = '2VDFW1JUNC8AS2BD3UEPG11FQ4P3TNUP2M';
-export const HELIUS_KEY = '47457a62-fd41-4fe7-991d-9ec8ed4fb6e0';
-
 export const KNOWN_TOKENS: Record<string, { address: string; chain: string; name: string }> = {
   PEPE:   { address: '0x6982508145454Ce325dDbE47a25d4ec3d2311933', chain: 'eth', name: 'Pepe' },
   SHIB:   { address: '0x95aD61b0a150d79219dCF64E1E6Cc01f0B64C4cE', chain: 'eth', name: 'Shiba Inu' },
