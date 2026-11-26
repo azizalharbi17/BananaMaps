@@ -6,7 +6,7 @@ import { buildSim, drawGraph, findNodeAt, GraphSim, clusterColor } from '@/lib/m
 import { calculateRugScore, RugScoreResult } from '@/lib/rugScore';
 import { supabase } from '@/lib/supabase';
 import { isFirstPartyHost, type EmbedPlan } from '@/lib/plans';
-import AddressList, { EXPLORER, TYPE_META, TypeIcon, shortAddr, fmtPct } from './AddressList';
+import AddressList, { explorerHolderUrl, TYPE_META, TypeIcon, shortAddr, fmtPct } from './AddressList';
 
 const CC: Record<string, string> = { eth: '#627EEA', bsc: '#F3BA2F', sol: '#9945FF', base: '#0052FF', robinhood: '#00C805' };
 const CL: Record<string, string> = { eth: 'Ethereum', bsc: 'BSC', sol: 'Solana', base: 'Base', robinhood: 'Robinhood' };
@@ -1199,7 +1199,10 @@ function AppContent({ embed = false, embedOptions }: { embed?: boolean; embedOpt
                 {([
                   ['Supply', selected.pct ? fmtPct(selected.pct) : '—', '#F6F1E6'],
                   ['Amount', selected.balanceFormatted ? fAmt(selected.balanceFormatted) : '—', '#F6F1E6'],
-                  ['USD', (() => { const usd = selected.usdValue ?? (selected.balanceFormatted && graph?.price ? selected.balanceFormatted * graph.price : 0); return usd ? fUSD(usd) : '—'; })(), '#2EE89A'],
+                  // USD is always balance × the snapshot price shown in the header, never a
+                  // provider's stored figure: Vybe priced positions ~26% off our displayed
+                  // price, and worker deltas move balances without touching stored USD.
+                  ['USD', (() => { const usd = selected.balanceFormatted && graph?.price ? selected.balanceFormatted * graph.price : (selected.usdValue || 0); return usd ? fUSD(usd) : '—'; })(), '#2EE89A'],
                 ] as [string, string, string][]).map(([l, v, c]) => (
                   <div key={l} style={{ background: 'rgba(245,200,66,0.05)', border: '1px solid rgba(245,200,66,0.08)', borderRadius: 8, padding: '7px 8px' }}>
                     <div style={{ fontSize: 9.5, color: 'rgba(245,200,66,0.65)', textTransform: 'uppercase', letterSpacing: '1.1px', fontWeight: 700, marginBottom: 4 }}>{l}</div>
@@ -1207,6 +1210,11 @@ function AppContent({ embed = false, embedOptions }: { embed?: boolean; embedOpt
                   </div>
                 ))}
               </div>
+              {cachedAt && (
+                <div style={{ fontSize: 11.5, color: 'rgba(243,238,226,0.55)', marginTop: -4, marginBottom: 10, fontFamily: SANS }}>
+                  Balance as of {fmtAge(cachedAt)}{graph?.price ? ` · at ${fmtPrice(graph.price)}` : ''}
+                </div>
+              )}
               {connections.length > 0 && (
                 <div style={{ marginBottom: 10 }}>
                   <div style={{ fontSize: 9.5, color: 'rgba(245,200,66,0.65)', textTransform: 'uppercase', letterSpacing: '1.1px', fontWeight: 700, marginBottom: 5 }}>
@@ -1231,8 +1239,8 @@ function AppContent({ embed = false, embedOptions }: { embed?: boolean; embedOpt
                   </div>
                 </div>
               )}
-              <button onClick={() => window.open(`${EXPLORER[graph?.chain || 'eth']}/${selected.address}`, '_blank')} style={{ width: '100%', background: 'rgba(245,200,66,0.06)', border: '1px solid rgba(245,200,66,0.18)', borderRadius: 8, padding: '7px', color: 'rgba(245,200,66,0.9)', fontSize: 12, cursor: 'pointer', fontWeight: 700, fontFamily: 'inherit' }}>
-                View on Explorer ↗
+              <button onClick={() => window.open(explorerHolderUrl(graph?.chain || 'eth', graph?.address || '', selected.address), '_blank')} style={{ width: '100%', background: 'rgba(245,200,66,0.06)', border: '1px solid rgba(245,200,66,0.18)', borderRadius: 8, padding: '7px', color: 'rgba(245,200,66,0.9)', fontSize: 12, cursor: 'pointer', fontWeight: 700, fontFamily: 'inherit' }}>
+                View this holding on Explorer ↗
               </button>
             </div>
           )}

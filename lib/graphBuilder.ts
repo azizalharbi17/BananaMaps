@@ -437,6 +437,22 @@ export async function fetchHoldersSOL(mint: string): Promise<HolderFetch> {
       else if (fromApi) labels.set(addr, fromApi);
     }
   }
+  if (holders.length) {
+    // Vybe's percentageOfSupplyHeld uses its own supply figure, which differs from
+    // the on-chain total that Solscan shows (~3% on pump.fun tokens). Re-derive %
+    // from the mint's on-chain supply so our numbers match the explorer.
+    const asset = await tryFetchJson(`https://mainnet.helius-rpc.com/?api-key=${HELIUS_KEY}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'getAsset', params: { id: mint } }),
+    });
+    const supplyRaw = Number(asset?.result?.token_info?.supply);
+    const decimals = Number(asset?.result?.token_info?.decimals);
+    if (Number.isFinite(supplyRaw) && supplyRaw > 0 && Number.isFinite(decimals)) {
+      const supply = supplyRaw / Math.pow(10, decimals);
+      for (const h of holders) if (h.balanceFormatted > 0) h.pct = (h.balanceFormatted / supply) * 100;
+    }
+  }
   if (!holders.length) {
     // Brand-new tokens (pump.fun launches etc.) lag Moralis indexing. For small
     // tokens, aggregating raw token accounts by owner via Helius is feasible.

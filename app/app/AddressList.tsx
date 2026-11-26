@@ -11,6 +11,22 @@ const EXPLORER: Record<string, string> = {
   robinhood: 'https://robinhoodchain.blockscout.com/address',
 };
 
+/**
+ * Explorer page for THIS wallet's holding of THIS token — the number our popup
+ * shows. The generic address page headlines the wallet's total net worth across
+ * every asset, which is why "the value didn't match" when people compared them.
+ */
+export function explorerHolderUrl(chain: string, token: string, wallet: string): string {
+  switch (chain) {
+    case 'eth': return `https://etherscan.io/token/${token}?a=${wallet}`;
+    case 'bsc': return `https://bscscan.com/token/${token}?a=${wallet}`;
+    case 'base': return `https://basescan.org/token/${token}?a=${wallet}`;
+    case 'robinhood': return `https://robinhoodchain.blockscout.com/token/${token}?a=${wallet}`;
+    case 'sol': return `https://solscan.io/account/${wallet}#portfolio`;
+    default: return `${EXPLORER[chain] || EXPLORER.eth}/${wallet}`;
+  }
+}
+
 export function EyeIcon({ off, size = 16 }: { off: boolean; size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
