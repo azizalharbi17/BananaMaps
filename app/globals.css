@@ -1,18 +1,31 @@
-@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700;12..96,800&family=DM+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap');
 
+/* Theme B "Studio" — flat, professional, one accent. Mirrored in lib/theme.ts
+   for inline-styled screens; keep the two in sync. Yellow is reserved for the
+   wordmark suffix, the primary button, active/selected states and focus rings. */
 :root {
   --banana: #F5C842;
-  --banana-dim: #C49A10;
-  --bg: #0a0800;
-  --bg2: #0d0a00;
-  --bg3: #111000;
-  --surface: #181200;
-  --surface2: #201800;
-  --text: #f5f0e8;
-  --text2: #b8a878;
-  --text3: #6b5e38;
-  --border: #2a2000;
-  --border2: #3a2e00;
+  --banana-dim: #C9A232;
+  --banana-ink: #141413;
+  --bg: #0F1115;
+  --bg2: #13161C;
+  --bg3: #0B0D11;
+  --surface: #13161C;
+  --surface2: #1A1E27;
+  --surface3: #23272F;
+  --text: #F2F4F7;
+  --text2: #9096A3;
+  --text3: #5F6672;
+  --border: #23272F;
+  --border2: #2B3039;
+  --divider: #1C2027;
+  --up: #3CB371;
+  --down: #E5484D;
+  --warn: #E3B341;
+  --map-bg: #070A12;
+  --font-sans: Inter, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'DM Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --shadow-popup: 0 10px 30px rgba(0,0,0,0.45);
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -20,12 +33,12 @@
 body {
   background: var(--bg);
   color: var(--text);
-  font-family: 'Bricolage Grotesque', sans-serif;
+  font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
 }
 
 input, button, select {
-  font-family: 'Bricolage Grotesque', sans-serif;
+  font-family: var(--font-sans);
 }
 
 ::-webkit-scrollbar { width: 4px; }
@@ -39,76 +52,65 @@ input, button, select {
 /* ------------------------------------------------------------------------
    Shared site chrome — additive. Used by app/components/* (SiteNav,
    SiteFooter, Ticker, TrendingGrid, TokenLogo) on the homepage and /about.
+   Theme B "Studio": flat surfaces, borders carry the structure, motion is
+   functional only (the skeleton pulse is the one animation in this file).
    ------------------------------------------------------------------------ */
 
-@keyframes bm-wobble {
-  0%, 100% { transform: rotate(-8deg) scale(1); }
-  25% { transform: rotate(6deg) scale(1.1); }
-  50% { transform: rotate(-4deg) scale(1); }
-  75% { transform: rotate(8deg) scale(1.05); }
-}
-@keyframes bm-ticker-scroll {
-  from { transform: translateX(0); }
-  to { transform: translateX(-50%); }
-}
 @keyframes bm-skeleton {
   0%, 100% { opacity: 0.45; }
   50% { opacity: 1; }
 }
-@keyframes bm-blink {
-  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(245,200,66,0.45); }
-  50% { opacity: 0.7; box-shadow: 0 0 0 4px rgba(245,200,66,0); }
-}
 
 .bm-page { min-height: 100vh; background: var(--bg); display: flex; flex-direction: column; }
 .bm-main { flex: 1; position: relative; z-index: 1; display: flex; flex-direction: column; }
-.bm-grain {
-  position: fixed; inset: 0; pointer-events: none; z-index: 9999; opacity: 0.025;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='1'/%3E%3C/svg%3E");
-}
 
-/* Token logo + fallback */
+/* Token logo + fallback (first letter of the symbol on a neutral disc). */
 .bm-logo-img { border-radius: 50%; flex-shrink: 0; object-fit: cover; background: var(--surface2); display: inline-block; }
 .bm-logo-fallback {
   border-radius: 50%; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center;
-  background: rgba(245,200,66,0.12); color: var(--banana); font-weight: 800; line-height: 1;
-  font-family: 'Bricolage Grotesque', sans-serif;
+  background: var(--surface2); color: var(--text2); font-weight: 700; line-height: 1;
+  font-family: var(--font-sans);
 }
 
-/* Buttons */
+/* Buttons — 32px controls (7px padding + 12.5px/1.2 text + 1px border), radius 7.
+   Hover changes border/background colour only, never a lift. The focus ring is the
+   accent at 25%, derived from the token so the theme stays single-source. */
 .bm-btn {
-  border-radius: 7px; padding: 7px 16px; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 13px;
+  border-radius: 7px; padding: 7px 14px; font-family: var(--font-sans); font-weight: 600; font-size: 12.5px;
   line-height: 1.2; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
   transition: border-color 0.15s, background 0.15s, color 0.15s;
 }
-.bm-btn-ghost { background: none; border: 1px solid var(--border2); color: var(--text); font-weight: 600; }
-.bm-btn-ghost:hover { border-color: var(--text3); }
-.bm-btn-primary { background: var(--banana); border: 1px solid var(--banana); color: #000; }
-.bm-btn-primary:hover { background: #ffd45a; border-color: #ffd45a; }
-.bm-btn-surface { background: var(--surface); border: 1px solid var(--border2); color: var(--text); }
-.bm-btn-surface:hover { border-color: var(--banana); color: var(--banana); }
+.bm-btn:focus-visible { outline: none; border-color: var(--banana); box-shadow: 0 0 0 3px color-mix(in srgb, var(--banana) 25%, transparent); }
+.bm-btn-ghost { background: none; border: 1px solid var(--border2); color: var(--text); }
+.bm-btn-ghost:hover { background: var(--surface2); }
+.bm-btn-primary { background: var(--banana); border: 1px solid var(--banana); color: var(--banana-ink); font-weight: 700; }
+.bm-btn-primary:hover { background: #FFD35A; border-color: #FFD35A; }
+/* The primary button is already accent-bordered, so its ring needs a dark gap to read. */
+.bm-btn-primary:focus-visible { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--banana); }
+.bm-btn-surface { background: var(--surface); border: 1px solid var(--border); color: var(--text); }
+.bm-btn-surface:hover { background: var(--surface2); border-color: var(--border2); }
 
-/* Nav */
+/* Nav — 52px bar (10px padding + 32px controls), wordmark 17px/800. */
 .bm-nav {
   display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-shrink: 0;
-  padding: 12px max(16px, env(safe-area-inset-right)) 12px max(16px, env(safe-area-inset-left));
+  padding: 10px max(16px, env(safe-area-inset-right)) 10px max(16px, env(safe-area-inset-left));
   border-bottom: 1px solid var(--border); position: relative; z-index: 2;
 }
-.bm-nav-left { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.bm-nav-left { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .bm-nav-brand {
-  display: flex; align-items: center; gap: 8px; font-weight: 800; font-size: 19px; letter-spacing: -0.3px;
+  display: flex; align-items: center; gap: 6px; font-weight: 800; font-size: 17px; letter-spacing: -0.3px;
   text-decoration: none; color: var(--text); white-space: nowrap;
 }
-.bm-nav-brand .bm-logo { font-size: 22px; display: inline-block; animation: bm-wobble 4s ease-in-out infinite; }
+.bm-nav-brand .bm-logo { font-size: 18px; line-height: 1; display: inline-block; }
 .bm-nav-link {
   color: var(--text2); font-size: 13px; font-weight: 600; padding: 7px 10px; border-radius: 7px; text-decoration: none;
   transition: color 0.15s, background 0.15s;
 }
-.bm-nav-link:hover { color: var(--text); background: rgba(245,200,66,0.06); }
-.bm-nav-link[aria-current="page"] { color: var(--banana); }
+.bm-nav-link:hover { color: var(--text); background: var(--surface2); }
+.bm-nav-link[aria-current="page"] { color: var(--text); }
 .bm-nav-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 @media (max-width: 768px) {
-  .bm-nav { padding: 12px 16px; }
+  .bm-nav { padding: 10px 16px; }
   .bm-nav-left { gap: 6px; }
   .bm-nav .bm-btn { padding: 6px 10px; font-size: 12px; }
 }
@@ -116,7 +118,7 @@ input, button, select {
   .bm-nav-link { display: none; }
 }
 
-/* Brand wordmark — "Banana" white, suffix gold (see components/Wordmark.tsx). Never breaks mid-word. */
+/* Brand wordmark — "Banana" white, suffix accent (see components/Wordmark.tsx). Never breaks mid-word. */
 .bm-wordmark { white-space: nowrap; }
 /* Footer BananaZone wordmarks match the 700 of the BananaFlip / BananaScreener links on the same lines
    (scoped so the BananaMaps logo keeps the 800 it inherits from .bm-nav-brand / .bm-footer-brand). */
@@ -125,7 +127,7 @@ input, button, select {
 /* Footer */
 .bm-footer {
   border-top: 1px solid var(--border); padding: 26px 16px 28px; position: relative; z-index: 2;
-  font-family: 'Bricolage Grotesque', sans-serif; font-size: 13px; color: var(--text2);
+  font-family: var(--font-sans); font-size: 13px; color: var(--text2);
 }
 .bm-footer-inner {
   max-width: 1100px; margin: 0 auto; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px 24px;
@@ -137,64 +139,58 @@ input, button, select {
 .bm-footer-copy { font-weight: 500; font-size: 12.5px; color: var(--text2); margin-left: 4px; font-variant-numeric: tabular-nums; }
 .bm-footer-links { display: flex; gap: 10px 18px; flex-wrap: wrap; font-size: 13px; font-weight: 500; }
 .bm-footer-links a { color: var(--text2); text-decoration: none; transition: color 0.15s; }
-.bm-footer-links a:hover { color: var(--banana); }
+.bm-footer-links a:hover { color: var(--text); }
 /* "More from BananaZone: BananaFlip · BananaScreener" — always its own line under the brand/links row. */
 .bm-footer-more { flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font-size: 13px; color: var(--text2); }
 .bm-footer-more-label { font-weight: 500; }
-.bm-footer-more a { color: inherit; font-weight: 700; text-decoration: none; transition: filter 0.15s; }
-.bm-footer-more a:hover { text-decoration: underline; text-decoration-color: var(--banana); text-underline-offset: 3px; filter: brightness(1.12); }
+.bm-footer-more a { color: inherit; font-weight: 700; text-decoration: none; }
+.bm-footer-more a:hover { text-decoration: underline; text-decoration-color: var(--text2); text-underline-offset: 3px; }
 .bm-footer-sep { color: var(--text2); font-weight: 700; padding: 0 4px; }
-.bm-footer-note { flex-basis: 100%; font-size: 12.5px; line-height: 1.6; color: var(--text2); opacity: 1; max-width: 640px; }
+.bm-footer-note { flex-basis: 100%; font-size: 12.5px; line-height: 1.6; color: var(--text2); max-width: 640px; }
 @media (max-width: 480px) {
   .bm-footer { padding: 22px 16px 26px; }
   .bm-footer-inner { gap: 12px 16px; }
   .bm-footer-links { gap: 8px 14px; }
 }
 
-/* Ticker */
+/* Ticker — a static strip: the list renders once and scrolls sideways (wheel,
+   trackpad, touch, or tabbing through the links); hidden scrollbar, no marquee. */
 .bm-ticker {
   height: 34px; display: flex; align-items: stretch; flex-shrink: 0; overflow: hidden;
-  border-bottom: 1px solid var(--border); background: var(--bg2); position: relative; z-index: 2;
+  border-bottom: 1px solid var(--border); background: var(--surface); position: relative; z-index: 2;
 }
 .bm-ticker-label {
   display: flex; align-items: center; gap: 7px; padding: 0 12px; flex-shrink: 0; white-space: nowrap;
-  font-family: 'Bricolage Grotesque', sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 1.4px; text-transform: uppercase; color: var(--text2);
+  font-family: var(--font-sans); font-size: 11.5px; font-weight: 600; color: var(--text2);
   border-right: 1px solid var(--border);
 }
-.bm-ticker-live { width: 6px; height: 6px; border-radius: 50%; background: var(--banana); animation: bm-blink 1.8s ease-in-out infinite; }
+.bm-ticker-live { width: 6px; height: 6px; border-radius: 50%; background: var(--up); }
 .bm-ticker-viewport {
-  flex: 1; min-width: 0; overflow: hidden; position: relative;
-  -webkit-mask-image: linear-gradient(90deg, transparent, #000 20px, #000 calc(100% - 20px), transparent);
-  mask-image: linear-gradient(90deg, transparent, #000 20px, #000 calc(100% - 20px), transparent);
+  flex: 1; min-width: 0; position: relative;
+  overflow-x: auto; overflow-y: hidden; scrollbar-width: none;
+  /* Edge fade = "more this way": each side fades only while content continues
+     past it (Ticker.tsx measures and sets the two vars on scroll/resize). */
+  --fade-l: 0px; --fade-r: 24px;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 var(--fade-l), #000 calc(100% - var(--fade-r)), transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 var(--fade-l), #000 calc(100% - var(--fade-r)), transparent);
 }
-.bm-ticker-track {
-  display: flex; align-items: center; height: 100%; width: max-content;
-  animation: bm-ticker-scroll var(--bm-ticker-dur, 60s) linear infinite; will-change: transform;
-}
-.bm-ticker-seq { display: flex; align-items: center; height: 100%; }
-/* Pause the marquee while the pointer is over it or a ticker link has keyboard focus. */
-.bm-ticker:hover .bm-ticker-track,
-.bm-ticker:focus-within .bm-ticker-track { animation-play-state: paused; }
-.bm-ticker-static { animation: none !important; }
-.bm-ticker-empty { padding: 0 16px; font-size: 12.5px; color: var(--text2); font-family: 'Bricolage Grotesque', sans-serif; white-space: nowrap; }
+.bm-ticker-viewport::-webkit-scrollbar { display: none; }
+.bm-ticker-track { display: flex; align-items: center; height: 100%; width: max-content; }
+.bm-ticker-empty { padding: 0 16px; font-size: 12.5px; color: var(--text2); font-family: var(--font-sans); white-space: nowrap; }
 .bm-ticker-item {
   display: inline-flex; align-items: center; gap: 7px; padding: 0 14px; height: 100%; white-space: nowrap;
   color: var(--text); text-decoration: none; border-right: 1px solid var(--border);
+  transition: background 0.15s;
 }
-.bm-ticker-item:hover { background: rgba(245,200,66,0.05); }
-.bm-ticker-item:hover .bm-ticker-sym { color: var(--banana); }
+.bm-ticker-item:hover { background: var(--surface2); }
+/* Inset ring: the strip clips overflow, so a default outline would be cut off. */
+.bm-ticker-item:focus-visible { outline: 2px solid var(--banana); outline-offset: -2px; }
 .bm-ticker-sym { font-weight: 700; font-size: 12px; letter-spacing: -0.1px; }
-.bm-ticker-chg { font-family: 'Bricolage Grotesque', sans-serif; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.bm-ticker-chg { font-family: var(--font-sans); font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .bm-ticker-dot { width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; }
 .bm-ticker-skel {
   display: inline-block; width: 92px; height: 12px; border-radius: 6px; margin: 0 22px; flex-shrink: 0;
   background: var(--surface2); animation: bm-skeleton 1.4s ease-in-out infinite;
-}
-@media (prefers-reduced-motion: reduce) {
-  .bm-ticker-track { animation: none; }
-  .bm-ticker-viewport { overflow-x: auto; scrollbar-width: none; }
-  .bm-ticker-viewport::-webkit-scrollbar { display: none; }
-  .bm-ticker-live, .bm-ticker-skel, .bm-nav-brand .bm-logo { animation: none; }
 }
 
 /* Trending grid */
@@ -202,15 +198,15 @@ input, button, select {
 .bm-trending-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 10px 16px; margin-bottom: 20px; flex-wrap: wrap; }
 .bm-trending-title { font-size: 24px; font-weight: 800; letter-spacing: -0.6px; line-height: 1.15; }
 .bm-trending-sub { font-size: 12.5px; color: var(--text2); margin-top: 5px; line-height: 1.5; }
-.bm-trending-updated { font-family: 'Bricolage Grotesque', sans-serif; font-size: 12.5px; font-weight: 500; color: var(--text2); white-space: nowrap; padding-bottom: 2px; font-variant-numeric: tabular-nums; }
+.bm-trending-updated { font-family: var(--font-sans); font-size: 12.5px; font-weight: 500; color: var(--text2); white-space: nowrap; padding-bottom: 2px; font-variant-numeric: tabular-nums; }
 .bm-trending-empty {
-  padding: 28px 16px; text-align: center; border: 1px dashed var(--border2); border-radius: 12px;
-  font-family: 'Bricolage Grotesque', sans-serif; font-size: 13px; color: var(--text2);
+  padding: 28px 16px; text-align: center; border: 1px dashed var(--border2); border-radius: 10px;
+  font-family: var(--font-sans); font-size: 13px; color: var(--text2);
 }
 .bm-chain-row { margin-bottom: 24px; }
 .bm-chain-head { display: flex; align-items: center; gap: 9px; margin-bottom: 10px; font-size: 13px; font-weight: 700; color: var(--text2); }
 .bm-chain-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-.bm-chain-count { font-family: 'Bricolage Grotesque', sans-serif; font-size: 12px; font-weight: 500; color: var(--text2); margin-left: 2px; font-variant-numeric: tabular-nums; }
+.bm-chain-count { font-family: var(--font-sans); font-size: 12px; font-weight: 500; color: var(--text2); margin-left: 2px; font-variant-numeric: tabular-nums; }
 .bm-trow {
   display: grid; grid-auto-flow: column; grid-auto-columns: 240px; gap: 10px;
   overflow-x: auto; scroll-snap-type: x proximity; -webkit-overflow-scrolling: touch;
@@ -222,29 +218,29 @@ input, button, select {
 }
 .bm-tcard {
   display: flex; align-items: center; gap: 10px; padding: 11px 12px; min-width: 0; scroll-snap-align: start;
-  background: var(--surface); border: 1px solid var(--border); border-radius: 12px; text-decoration: none; color: var(--text);
-  transition: border-color 0.15s, background 0.15s, transform 0.15s;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 10px; text-decoration: none; color: var(--text);
+  transition: border-color 0.15s, background 0.15s;
 }
-.bm-tcard:hover { border-color: rgba(245,200,66,0.45); background: var(--surface2); transform: translateY(-1px); }
+.bm-tcard:hover { border-color: var(--border2); background: var(--surface2); }
 .bm-tcard-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .bm-tcard-sym { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; line-height: 1.2; min-width: 0; }
 /* The symbol never gets squeezed by the badge; ellipsis only if it alone is wider than the card. */
 .bm-tcard-symtxt { flex: 0 0 auto; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* The badge takes whatever is left and drops its text (keeping the dot) when that is ~64px or less
-   (the measured width of "INSTANT" at 11px/700/1.2px tracking plus the 5px dot and 4px gap). */
+/* The badge takes whatever is left and drops its text (keeping the dot) when that is ~48px or less
+   (the measured width of "instant" at 10.5px/600 plus the 5px dot and 4px gap). */
 .bm-tcard-sym > .bm-instant { flex: 1 1 0; min-width: 5px; container-type: inline-size; overflow: hidden; white-space: nowrap; }
-@container (max-width: 64px) { .bm-instant-txt { display: none; } }
+@container (max-width: 48px) { .bm-instant-txt { display: none; } }
 .bm-tcard-name { font-size: 11px; color: var(--text2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.bm-tcard-side { text-align: right; flex-shrink: 0; font-family: 'Bricolage Grotesque', sans-serif; font-variant-numeric: tabular-nums; display: flex; flex-direction: column; gap: 2px; }
+.bm-tcard-side { text-align: right; flex-shrink: 0; font-family: var(--font-sans); font-variant-numeric: tabular-nums; display: flex; flex-direction: column; gap: 2px; }
 .bm-tcard-chg { font-size: 12.5px; font-weight: 700; }
 .bm-tcard-vol { font-size: 12px; font-weight: 500; color: var(--text2); }
+/* "instant" chip: a map is already built for this token. Neutral text, a small up-coloured dot. */
 .bm-instant {
   display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0;
-  font-family: 'Bricolage Grotesque', sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; color: var(--banana);
+  font-family: var(--font-sans); font-size: 10.5px; font-weight: 600; color: var(--text2);
 }
-.bm-instant::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: var(--banana); }
-.bm-skel { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; height: 56px; animation: bm-skeleton 1.4s ease-in-out infinite; }
+.bm-instant::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: var(--up); flex-shrink: 0; }
+.bm-skel { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; height: 56px; animation: bm-skeleton 1.4s ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) {
-  .bm-skel { animation: none; }
-  .bm-tcard:hover { transform: none; }
+  .bm-skel, .bm-ticker-skel { animation: none; }
 }

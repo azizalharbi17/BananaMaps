@@ -42,8 +42,8 @@ export const CHAINS: ChainMeta[] = [
 
 export const CHAIN_BY_ID: Record<string, ChainMeta> = Object.fromEntries(CHAINS.map(c => [c.id, c]));
 
-export const UP = '#2EE89A';
-export const DOWN = '#EF4444';
+// Up/down change colours come from the CSS tokens var(--up) / var(--down)
+// (mirrored as THEME.up / THEME.down in lib/theme.ts); nothing is exported here.
 
 export function mapHref(t: TrendingToken): string {
   return `/app?token=${encodeURIComponent(t.address)}&chain=${encodeURIComponent(t.chain)}`;

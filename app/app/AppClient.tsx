@@ -1,18 +1,26 @@
 'use client';
 import { useEffect, useRef, useState, Suspense, useCallback, useMemo } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { TokenGraph } from '@/lib/graphTypes';
 import { buildSim, drawGraph, findNodeAt, GraphSim, clusterColor } from '@/lib/mapEngine';
+import { toViewGraph } from '@/lib/graphView';
+import { THEME, TYPE_COLORS, CHAIN_COLORS, CHAIN_TEXT_COLORS, hexA } from '@/lib/theme';
 import { calculateRugScore, RugScoreResult } from '@/lib/rugScore';
 import { supabase } from '@/lib/supabase';
 import { isFirstPartyHost, type EmbedPlan } from '@/lib/plans';
 import AddressList, { explorerHolderUrl, TYPE_META, TypeIcon, shortAddr, fmtPct } from './AddressList';
 
-const CC: Record<string, string> = { eth: '#627EEA', bsc: '#F3BA2F', sol: '#9945FF', base: '#0052FF', robinhood: '#00C805' };
-const CL: Record<string, string> = { eth: 'Ethereum', bsc: 'BSC', sol: 'Solana', base: 'Base', robinhood: 'Robinhood' };
-// Interface text (labels, stats, counts) uses the site's primary face; DM Mono
-// is reserved for wallet addresses and code snippets.
-const SANS = "'Bricolage Grotesque', sans-serif";
+const CHAINS = ['eth', 'bsc', 'sol', 'base', 'robinhood'] as const;
+const CHAIN_LABEL: Record<string, string> = { eth: 'Ethereum', bsc: 'BSC', sol: 'Solana', base: 'Base', robinhood: 'Robinhood' };
+// Unclustered wallets on the map are navy; their dot in the popup / transfers list
+// uses the same rim tone as lib/mapEngine.
+const UNCLUSTERED_DOT = 'rgba(128,148,200,0.9)';
+// Error surfaces (toast, inline notices): down-tinted border + soft red text.
+const ERROR_BORDER = 'rgba(229,72,77,0.45)';
+const ERROR_TEXT = '#F3A7AA';
+// Translucent cover for the loading / building overlays and the legend box.
+const COVER = 'rgba(15,17,21,0.9)';
 
 // BananaMaps Embed options, resolved server-side in app/embed/page.tsx from the
 // partner id (?pid=) and the partner's current plan. `valid` is false when no
@@ -24,7 +32,7 @@ export interface EmbedOptions {
   valid: boolean;
   /** Show the "Powered by BananaMaps" badge (required on the free plan). */
   badge: boolean;
-  /** Partner accent color (#RRGGBB) replacing the gold in the embed chrome. */
+  /** Partner accent color (#RRGGBB) replacing the accent in the embed chrome. */
   accent: string | null;
   /** Host sites the partner registered; empty = any site. */
   domains: string[];
@@ -74,19 +82,35 @@ function embedGateReason(opts: EmbedOptions | undefined): EmbedGateReason | null
   }
 }
 
+const gateShell: React.CSSProperties = {
+  height: '100dvh', background: THEME.bg, color: THEME.text, fontFamily: THEME.fontSans,
+  display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px 16px',
+  overflowX: 'hidden', overflowY: 'auto', boxSizing: 'border-box',
+};
+const gateCard: React.CSSProperties = {
+  width: '100%', maxWidth: 420, textAlign: 'center', background: THEME.surface,
+  border: `1px solid ${THEME.border}`, borderRadius: THEME.radiusCard, padding: '26px 22px', boxSizing: 'border-box',
+};
+const gateEyebrow: React.CSSProperties = { fontSize: 12, fontWeight: 600, color: THEME.text2 };
+const gateTitle: React.CSSProperties = { fontSize: 18, fontWeight: 700, lineHeight: 1.3, margin: '10px 0 8px', color: THEME.text };
+const gateBody: React.CSSProperties = { fontSize: 13, lineHeight: 1.55, margin: 0, color: THEME.text2 };
+const gateButton: React.CSSProperties = {
+  display: 'inline-block', marginTop: 16, background: THEME.accent, color: THEME.accentInk,
+  borderRadius: THEME.radiusControl, padding: '8px 16px', fontWeight: 700, fontSize: 13, textDecoration: 'none',
+};
+
 // Shown inside the frame instead of the map when the host site has no active
 // partner id. Stays within the frame at any size — no horizontal scroll.
 function EmbedGate({ reason }: { reason: EmbedGateReason }) {
   const pidInvalid = reason === 'invalid';
   if (reason === 'domain') {
     return (
-      <div style={{ height: '100dvh', background: '#0a0800', color: '#f5f0e8', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px 16px', overflowX: 'hidden', overflowY: 'auto', boxSizing: 'border-box' }}>
-        <div style={{ width: '100%', maxWidth: 420, textAlign: 'center', background: 'rgba(245,200,66,0.04)', border: '1px solid rgba(245,200,66,0.16)', borderRadius: 14, padding: '26px 22px', boxSizing: 'border-box' }}>
-          <div style={{ fontSize: 11, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'rgba(245,200,66,0.75)', fontWeight: 700 }}>🍌 BananaMaps Embed</div>
-          <h1 style={{ fontSize: 19, fontWeight: 800, lineHeight: 1.25, margin: '10px 0 8px', color: '#f5f0e8' }}>This page isn’t on the key’s domain list</h1>
-          <p style={{ fontSize: 13, lineHeight: 1.55, margin: 0, color: 'rgba(245,235,200,0.62)' }}>The partner id is valid, but this site’s domain isn’t listed for it. Add the domain in the BananaMaps dashboard, or clear the list to allow any site.</p>
-          <a href="https://www.bananamaps.io/developers/dashboard" target="_blank" rel="noopener noreferrer"
-            style={{ display: 'inline-block', marginTop: 16, background: '#F5C842', color: '#000', borderRadius: 8, padding: '9px 18px', fontWeight: 700, fontSize: 13, textDecoration: 'none' }}>
+      <div style={gateShell}>
+        <div style={gateCard}>
+          <div style={gateEyebrow}>🍌 BananaMaps Embed</div>
+          <h1 style={gateTitle}>This page isn’t on the key’s domain list</h1>
+          <p style={gateBody}>The partner id is valid, but this site’s domain isn’t listed for it. Add the domain in the BananaMaps dashboard, or clear the list to allow any site.</p>
+          <a href="https://www.bananamaps.io/developers/dashboard" target="_blank" rel="noopener noreferrer" style={gateButton}>
             Open the dashboard
           </a>
         </div>
@@ -94,20 +118,19 @@ function EmbedGate({ reason }: { reason: EmbedGateReason }) {
     );
   }
   return (
-    <div style={{ height: '100dvh', background: '#0a0800', color: '#f5f0e8', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px 16px', overflowX: 'hidden', overflowY: 'auto', boxSizing: 'border-box' }}>
-      <div style={{ width: '100%', maxWidth: 420, textAlign: 'center', background: 'rgba(245,200,66,0.04)', border: '1px solid rgba(245,200,66,0.16)', borderRadius: 14, padding: '26px 22px', boxSizing: 'border-box' }}>
-        <div style={{ fontSize: 11, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'rgba(245,200,66,0.75)', fontWeight: 700 }}>🍌 BananaMaps Embed</div>
-        <h1 style={{ fontSize: 19, fontWeight: 800, lineHeight: 1.25, margin: '10px 0 8px', color: '#f5f0e8' }}>This site needs a BananaMaps Embed key</h1>
-        <p style={{ fontSize: 13, lineHeight: 1.55, margin: 0, color: 'rgba(245,235,200,0.62)' }}>Live holder maps are free to embed with a partner id. Get one in a minute.</p>
-        <a href={DEVELOPERS_EMBED_URL} target="_blank" rel="noopener noreferrer"
-          style={{ display: 'inline-block', marginTop: 16, background: '#F5C842', color: '#000', borderRadius: 8, padding: '9px 18px', fontWeight: 700, fontSize: 13, textDecoration: 'none' }}>
+    <div style={gateShell}>
+      <div style={gateCard}>
+        <div style={gateEyebrow}>🍌 BananaMaps Embed</div>
+        <h1 style={gateTitle}>This site needs a BananaMaps Embed key</h1>
+        <p style={gateBody}>Live holder maps are free to embed with a partner id. Get one in a minute.</p>
+        <a href={DEVELOPERS_EMBED_URL} target="_blank" rel="noopener noreferrer" style={gateButton}>
           Get a free Embed key
         </a>
-        <div style={{ fontSize: 11, lineHeight: 1.5, marginTop: 14, color: 'rgba(245,235,200,0.42)', overflowWrap: 'anywhere' }}>
-          Already have one? Add <code style={{ fontFamily: 'DM Mono, monospace', color: 'rgba(245,200,66,0.85)', fontSize: 11 }}>?pid=your_id</code> to the embed URL.
+        <div style={{ fontSize: 11.5, lineHeight: 1.5, marginTop: 14, color: THEME.text2, overflowWrap: 'anywhere' }}>
+          Already have one? Add <code style={{ fontFamily: THEME.fontMono, color: THEME.text, background: THEME.well, border: `1px solid ${THEME.border}`, borderRadius: 4, padding: '1px 5px', fontSize: 11 }}>?pid=your_id</code> to the embed URL.
         </div>
         {pidInvalid && (
-          <div style={{ fontSize: 11, marginTop: 8, color: '#f5b0b0' }}>The pid in this URL is not active.</div>
+          <div style={{ fontSize: 11.5, marginTop: 8, color: ERROR_TEXT }}>The pid in this URL is not active.</div>
         )}
       </div>
     </div>
@@ -166,6 +189,16 @@ function fAmt(n: number): string {
   if (n >= 1e3) return (n / 1e3).toFixed(2) + 'K';
   return n.toFixed(2);
 }
+// Popup figures: full digits with separators ("12,301,900"), abbreviated only
+// once they would no longer fit the 280px card.
+function fBalance(n: number): string {
+  if (n >= 1e12) return fAmt(n);
+  return n.toLocaleString('en-US', { maximumFractionDigits: n >= 1000 ? 0 : 2 });
+}
+function fUSDFull(n: number): string {
+  if (n >= 1e9) return fUSD(n);
+  return '$' + n.toLocaleString('en-US', { maximumFractionDigits: n >= 1000 ? 0 : 2 });
+}
 
 interface DiscoverToken {
   chain: string;
@@ -176,28 +209,37 @@ interface DiscoverToken {
   change24h: number;
 }
 
+function SearchIcon({ size = 13 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={THEME.text2} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0 }}>
+      <circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" />
+    </svg>
+  );
+}
+
 function TokenTile({ t, onOpen }: { t: DiscoverToken; onOpen: (addr: string, chain?: string) => void }) {
   return (
     <button onClick={() => onOpen(t.address, t.chain)} style={{
       display: 'flex', alignItems: 'center', gap: 8, padding: '9px 11px', cursor: 'pointer', textAlign: 'left',
-      background: 'rgba(245,200,66,0.04)', border: '1px solid rgba(245,200,66,0.1)', borderRadius: 10, minWidth: 0,
+      background: THEME.surface, border: `1px solid ${THEME.border}`, borderRadius: THEME.radiusCard, minWidth: 0,
+      color: THEME.text, fontFamily: 'inherit', transition: 'border-color 150ms',
     }}
-      onMouseEnter={e => { e.currentTarget.style.background = 'rgba(245,200,66,0.09)'; e.currentTarget.style.borderColor = 'rgba(245,200,66,0.3)'; }}
-      onMouseLeave={e => { e.currentTarget.style.background = 'rgba(245,200,66,0.04)'; e.currentTarget.style.borderColor = 'rgba(245,200,66,0.1)'; }}>
+      onMouseEnter={e => { e.currentTarget.style.borderColor = THEME.borderStrong; }}
+      onMouseLeave={e => { e.currentTarget.style.borderColor = THEME.border; }}>
       {t.logo ? (
         <img src={t.logo} alt="" style={{ width: 26, height: 26, borderRadius: '50%', flexShrink: 0 }} onError={e => (e.currentTarget.style.display = 'none')} />
       ) : (
-        <span style={{ width: 26, height: 26, borderRadius: '50%', flexShrink: 0, background: 'rgba(245,200,66,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, color: '#F5C842', fontWeight: 800 }}>{(t.symbol || '?')[0]}</span>
+        <span style={{ width: 26, height: 26, borderRadius: '50%', flexShrink: 0, background: THEME.surface2, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, color: THEME.text2, fontWeight: 600 }}>{(t.symbol || '?')[0]}</span>
       )}
       <span style={{ flex: 1, minWidth: 0 }}>
         <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-          <span style={{ fontSize: 12, fontWeight: 700, color: '#f0ead8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.symbol || t.name}</span>
-          <span style={{ width: 5, height: 5, borderRadius: '50%', background: CC[t.chain] || '#888', flexShrink: 0 }} />
+          <span style={{ fontSize: 12, fontWeight: 700, color: THEME.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.symbol || t.name}</span>
+          <span style={{ width: 5, height: 5, borderRadius: '50%', background: CHAIN_COLORS[t.chain] || THEME.text3, flexShrink: 0 }} />
         </span>
-        <span style={{ display: 'block', fontSize: 9, color: 'rgba(245,235,200,0.4)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.name}</span>
+        <span style={{ display: 'block', fontSize: 11, color: THEME.text2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.name}</span>
       </span>
       {t.change24h !== 0 && (
-        <span style={{ fontSize: 10, fontWeight: 700, flexShrink: 0, color: t.change24h >= 0 ? '#2EE89A' : '#EF4444' }}>
+        <span style={{ fontSize: 11, fontWeight: 600, flexShrink: 0, fontVariantNumeric: 'tabular-nums', color: t.change24h >= 0 ? THEME.up : THEME.down }}>
           {t.change24h >= 0 ? '+' : ''}{t.change24h.toFixed(1)}%
         </span>
       )}
@@ -205,11 +247,33 @@ function TokenTile({ t, onOpen }: { t: DiscoverToken; onOpen: (addr: string, cha
   );
 }
 
+// Shared control looks (inline-styled screen; mirrors .bm-btn-* in globals.css).
+const ghostBtn: React.CSSProperties = {
+  background: 'none', border: `1px solid ${THEME.borderStrong}`, borderRadius: THEME.radiusControl, padding: '6px 12px',
+  color: THEME.text, fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap', height: 32,
+};
+const primaryBtn: React.CSSProperties = {
+  background: THEME.accent, border: `1px solid ${THEME.accent}`, borderRadius: THEME.radiusControl, padding: '6px 12px',
+  color: THEME.accentInk, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap', height: 32,
+};
+const textBtn: React.CSSProperties = {
+  background: 'none', border: 'none', padding: '6px 10px', color: THEME.text, fontSize: 12, fontWeight: 600,
+  cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap', height: 32,
+};
+const closeBtn: React.CSSProperties = {
+  background: 'none', border: 'none', color: THEME.text2, cursor: 'pointer', fontSize: 15, lineHeight: 1, padding: 0, fontFamily: 'inherit',
+};
+const dot = (color: string, size = 6): React.CSSProperties => ({
+  width: size, height: size, borderRadius: '50%', background: color, display: 'inline-block', flexShrink: 0,
+});
+const statLabel: React.CSSProperties = { color: THEME.text2, fontSize: 12, whiteSpace: 'nowrap', flexShrink: 0 };
+const statValue: React.CSSProperties = { color: THEME.text, fontWeight: 600, fontVariantNumeric: 'tabular-nums', marginLeft: 4 };
+
 function AppContent({ embed = false, embedOptions }: { embed?: boolean; embedOptions?: EmbedOptions }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animRef = useRef<number>(0);
   const simRef = useRef<GraphSim | null>(null);
-  const graphRef = useRef<TokenGraph | null>(null);
+  const graphRef = useRef<TokenGraph | null>(null); // the DRAWN graph (view), read by the rAF loop and hit-testing
   const hoveredIdxRef = useRef(-1);
   const selectedIdxRef = useRef(-1);
   const highlightRef = useRef<Set<string>>(new Set());
@@ -229,12 +293,12 @@ function AppContent({ embed = false, embedOptions }: { embed?: boolean; embedOpt
   const searchParams = useSearchParams();
   const router = useRouter();
   // Embed mode (/embed route, or ?embed=1): map-only chrome for iframing on
-  // partner sites (e.g. BananaScreener) — no nav, compact sidebar drawer,
+  // partner sites (e.g. BananaScreener) — no top bar, compact sidebar drawer,
   // attribution link instead. Also switches first builds to non-blocking polling.
   const isEmbed = embed || searchParams.get('embed') === '1';
-  // Partner accent replaces the gold in three embed-chrome spots only: the badge
-  // text, the token pill and the Holders button border.
-  const accent = embedOptions?.accent || '#F5C842';
+  // Partner accent replaces the theme accent in three embed-chrome spots only: the
+  // badge suffix, the token pill text and the Holders button border.
+  const accent = embedOptions?.accent || THEME.accent;
   const showBadge = embedOptions?.badge !== false;
   // Embed gate: null until the mount effect inspects the framing page; the map
   // is never fetched or drawn while it is anything but true. Non-embed = true.
@@ -252,9 +316,9 @@ function AppContent({ embed = false, embedOptions }: { embed?: boolean; embedOpt
   const [building, setBuilding] = useState<number | null>(null); // build start ts while the server computes
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [graph, setGraph] = useState<TokenGraph | null>(null);
+  const [graph, setGraph] = useState<TokenGraph | null>(null); // raw API graph (every counterparty)
   const [cachedAt, setCachedAt] = useState<string | null>(null);
-  const [ageTick, setAgeTick] = useState(0); // re-render for the age pill
+  const [ageTick, setAgeTick] = useState(0); // re-render for the "Updated …" readout
   const [hidden, setHidden] = useState<Set<string>>(new Set());
   const [selectedAddr, setSelectedAddr] = useState<string | null>(null);
   const [hoveredAddr, setHoveredAddr] = useState<string | null>(null); // bubble under the cursor → list row highlight
@@ -274,6 +338,10 @@ function AppContent({ embed = false, embedOptions }: { embed?: boolean; embedOpt
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [discover, setDiscover] = useState<{ popular: DiscoverToken[]; trending: DiscoverToken[] } | null>(null);
 
+  // Visual v2: everything the user sees is derived from the shaped view graph
+  // (lib/graphView). The raw graph is kept only for the popup's transfers list.
+  const view = useMemo(() => (graph ? toViewGraph(graph) : null), [graph]);
+
   // Discovery grid data for the empty state (the embed never shows it)
   useEffect(() => {
     if (isEmbed) return;
@@ -289,26 +357,26 @@ function AppContent({ embed = false, embedOptions }: { embed?: boolean; embedOpt
 
   const addrToIdx = useMemo(() => {
     const m = new Map<string, number>();
-    graph?.nodes.forEach((n, i) => m.set(n.address, i));
+    view?.nodes.forEach((n, i) => m.set(n.address, i));
     return m;
-  }, [graph]);
+  }, [view]);
 
   // Keep refs in sync for the rAF loop
-  useEffect(() => { graphRef.current = graph; }, [graph]);
+  useEffect(() => { graphRef.current = view; }, [view]);
   useEffect(() => {
     selectedIdxRef.current = selectedAddr !== null ? (addrToIdx.get(selectedAddr) ?? -1) : -1;
   }, [selectedAddr, addrToIdx]);
   const applyQueryHighlight = useCallback(() => {
     const q = query.trim().toLowerCase();
-    if (!q || !graph) { highlightRef.current = new Set(); return; }
+    if (!q || !view) { highlightRef.current = new Set(); return; }
     highlightRef.current = new Set(
-      graph.nodes
+      view.nodes
         .filter(n => n.address.toLowerCase().includes(q) || (n.label || '').toLowerCase().includes(q))
         .map(n => n.address),
     );
-  }, [query, graph]);
+  }, [query, view]);
   useEffect(() => { applyQueryHighlight(); }, [applyQueryHighlight]);
-  // Legend chip hover: light up that cluster's members on the map
+  // Legend row hover: light up that cluster's members on the map
   function highlightCluster(id: number | null) {
     const g = graphRef.current;
     if (id === null || !g) { applyQueryHighlight(); return; }
@@ -338,7 +406,7 @@ function AppContent({ embed = false, embedOptions }: { embed?: boolean; embedOpt
     return () => window.removeEventListener('resize', check);
   }, []);
 
-  // Refresh the "Xm ago" pill once a minute
+  // Refresh the "Updated Xm ago" readout once a minute
   useEffect(() => {
     const t = setInterval(() => setAgeTick(v => v + 1), 60_000);
     return () => clearInterval(t);
@@ -381,14 +449,14 @@ function AppContent({ embed = false, embedOptions }: { embed?: boolean; embedOpt
     offsetRef.current = { x: cw / 2 - cx * scale, y: ch / 2 - cy * scale };
   }
 
-  // Build / rebuild the simulation when graph or hidden set changes.
+  // Build / rebuild the simulation when the view graph or hidden set changes.
   useEffect(() => {
     const canvas = canvasRef.current;
     hoveredIdxRef.current = -1; // node indices are only valid within one graph
-    if (!graph || !canvas) { simRef.current = null; return; }
+    if (!view || !canvas) { simRef.current = null; return; }
     syncCanvasSize(canvas);
     const prev = simRef.current;
-    const g = buildSim(graph, hidden, sizeRef.current.w, sizeRef.current.h);
+    const g = buildSim(view, hidden, sizeRef.current.w, sizeRef.current.h);
     // Preserve positions across rebuilds (eye toggles shouldn't rescatter the map)
     if (prev && prev.nodes.length) {
       const pos = new Map(prev.nodes.map(n => [n.node.address, n]));
@@ -403,8 +471,8 @@ function AppContent({ embed = false, embedOptions }: { embed?: boolean; embedOpt
       userTouchedViewRef.current = false;
     }
     simRef.current = g;
-    if (process.env.NODE_ENV === 'development') (window as any).__simDebug = { sim: g, size: { ...sizeRef.current } };
-  }, [graph, hidden]);
+    if (process.env.NODE_ENV === 'development') (window as unknown as { __simDebug?: unknown }).__simDebug = { sim: g, size: { ...sizeRef.current } };
+  }, [view, hidden]);
 
   // Single render loop: tick the sim while hot, always draw. Driven by rAF with a
   // timer backup — browsers suspend rAF entirely in hidden/embedded tabs, and the
@@ -425,14 +493,10 @@ function AppContent({ embed = false, embedOptions }: { embed?: boolean; embedOpt
       // All drawing happens in CSS pixels; the DPR transform keeps output crisp.
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, w, h);
+      // Flat navy field, a shade deeper at the edges — the theme's one radial.
       const bg = ctx.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, Math.max(w, h) * 0.8);
-      bg.addColorStop(0, '#0d0a00'); bg.addColorStop(1, '#0a0800');
+      bg.addColorStop(0, THEME.mapBgCenter); bg.addColorStop(1, THEME.mapBg);
       ctx.fillStyle = bg; ctx.fillRect(0, 0, w, h);
-      for (let i = 0; i < 60; i++) {
-        ctx.beginPath();
-        ctx.arc((Math.sin(i * 137.508) * 0.5 + 0.5) * w, (Math.cos(i * 97.311) * 0.5 + 0.5) * h, 0.4 + (i % 3) * 0.25, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(245,200,66,${0.015 + (i % 5) * 0.008})`; ctx.fill();
-      }
       const g = simRef.current;
       if (g) {
         if (g.sim.alpha() > g.sim.alphaMin()) {
@@ -547,27 +611,28 @@ function AppContent({ embed = false, embedOptions }: { embed?: boolean; embedOpt
         return;
       }
       const g: TokenGraph = data.graph;
+      // Shape once here for the per-load derived state (hidden set, rug score);
+      // the render side derives the same view from `graph` via useMemo.
+      const v = toViewGraph(g);
       const sameToken = graphRef.current && graphRef.current.chain === g.chain && graphRef.current.address === g.address;
       setGraph(g);
       setCachedAt(data.cachedAt || g.computedAt);
       setChain(g.chain);
       if (!opts?.refresh || !sameToken) {
         // CEX / DEX / burn / contract wallets start hidden (BubbleMaps default)
-        setHidden(new Set(g.nodes.filter(n => n.labelType).map(n => n.address)));
+        setHidden(new Set(v.nodes.filter(n => n.labelType).map(n => n.address)));
         setExpanded(new Set());
         setQuery('');
         setUngroup(false);
         simRef.current = null; // force fresh layout
       }
-      const holders = g.nodes.filter(n => n.kind === 'holder');
+      const holders = v.nodes.filter(n => n.kind === 'holder');
       // Rug-score inputs: only exchange-like labels exclude a wallet from concentration
-      // math (contracts like vesting wallets are real holders), and only clusters with
-      // ≥2 top holders count as suspicious (holder+counterparty pairs are routine).
-      const meaningfulClusters = g.clusters.filter(c =>
-        c.members.filter(i => g.nodes[i].kind === 'holder').length >= 2).length;
+      // math (contracts like vesting wallets are real holders). Every view cluster
+      // already holds ≥2 top holders, so the drawn cluster count is the suspicious one.
       setRugScore(calculateRugScore(
         holders.map(h => ({ pct: h.pct, cluster: h.cluster, address: h.address, isLabeledExchange: !!h.labelType && h.labelType !== 'contract' })),
-        meaningfulClusters,
+        v.clusters.length,
         g.chain,
       ));
     } catch {
@@ -685,11 +750,11 @@ function AppContent({ embed = false, embedOptions }: { embed?: boolean; embedOpt
   }, []);
 
   function selectAtPoint(wx: number, wy: number, screenX: number, screenY: number) {
-    const g = simRef.current, graph = graphRef.current;
-    if (!g || !graph) return;
+    const g = simRef.current, drawn = graphRef.current;
+    if (!g || !drawn) return;
     const idx = findNodeAt(g, wx, wy, scaleRef.current);
     if (idx >= 0) {
-      const node = graph.nodes[idx];
+      const node = drawn.nodes[idx];
       setSelectedAddr(node.address);
       setSelectedPos({ x: screenX, y: screenY });
       // Sync sidebar: expand the node's cluster row, then scroll its row into view
@@ -780,13 +845,27 @@ function AppContent({ embed = false, embedOptions }: { embed?: boolean; embedOpt
     } catch {}
   }
 
-  const selected = selectedAddr && graph ? graph.nodes[addrToIdx.get(selectedAddr) ?? -1] || null : null;
+  const toggleExpanded = (id: number) => setExpanded(prev => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+
+  const selected = selectedAddr && view ? view.nodes[addrToIdx.get(selectedAddr) ?? -1] || null : null;
 
   // Wallets connected to the selected node by observed transfers (BubbleMaps'
-  // "transactions with listed wallets" panel).
+  // "transactions with listed wallets" panel). This is the ONE place the raw
+  // graph is read: the full counterparty count stays visible even though the map
+  // folds one-off spokes away. Peers absent from the view are flagged (`drawn`)
+  // and take their dot color from the VIEW cluster id — raw ids are renumbered.
+  const rawAddrToIdx = useMemo(() => {
+    const m = new Map<string, number>();
+    graph?.nodes.forEach((n, i) => m.set(n.address, i));
+    return m;
+  }, [graph]);
   const connections = useMemo(() => {
-    if (!selectedAddr || !graph) return [];
-    const idx = addrToIdx.get(selectedAddr);
+    if (!selectedAddr || !graph || !view) return [];
+    const idx = rawAddrToIdx.get(selectedAddr);
     if (idx === undefined) return [];
     const byPeer = new Map<number, { out: number; in: number }>();
     for (const e of graph.edges) {
@@ -799,27 +878,60 @@ function AppContent({ embed = false, embedOptions }: { embed?: boolean; embedOpt
       }
     }
     return [...byPeer.entries()]
-      .map(([peer, c]) => ({ node: graph.nodes[peer], ...c, total: c.in + c.out }))
+      .map(([peer, c]) => {
+        const node = graph.nodes[peer];
+        const vi = addrToIdx.get(node.address);
+        return { node, ...c, total: c.in + c.out, drawn: vi !== undefined, cluster: vi !== undefined ? view.nodes[vi].cluster : undefined };
+      })
       .sort((a, b) => b.total - a.total);
-  }, [selectedAddr, graph, addrToIdx]);
-  const holderCount = graph ? graph.nodes.filter(n => n.kind === 'holder').length : 0;
-  const top10pct = graph
-    ? graph.nodes.filter(n => n.kind === 'holder' && (n.rank || 999) <= 10).reduce((s, n) => s + n.pct, 0)
+  }, [selectedAddr, graph, view, rawAddrToIdx, addrToIdx]);
+  const holderCount = view ? view.nodes.filter(n => n.kind === 'holder').length : 0;
+  const top10pct = view
+    ? view.nodes.filter(n => n.kind === 'holder' && (n.rank || 999) <= 10).reduce((s, n) => s + n.pct, 0)
     : 0;
 
   function getPopupStyle(): React.CSSProperties {
-    const W = 272, H = 196 + (connections.length ? Math.min(connections.length, 6) * 26 + 30 : 0);
+    const W = 280, H = 236 + (connections.length ? Math.min(connections.length, 6) * 26 + 30 : 0);
     const vw = typeof window !== 'undefined' ? window.innerWidth : 800;
     const vh = typeof window !== 'undefined' ? window.innerHeight : 600;
+    const minTop = isEmbed ? 48 : 100; // below the top bar + stats strip
     let left = selectedPos.x + 16, top = selectedPos.y - H / 2;
     if (left + W > vw - 10) left = selectedPos.x - W - 16;
-    if (top < 60) top = 60;
+    if (top < minTop) top = minTop;
     if (top + H > vh - 20) top = vh - H - 20;
-    const borderColor = selected?.cluster !== undefined ? clusterColor(selected.cluster) + '66' : 'rgba(245,200,66,0.2)';
-    return { position: 'fixed', top, left, width: W, background: 'rgba(14,11,0,0.97)', border: `1px solid ${borderColor}`, borderRadius: 12, padding: '12px 14px', zIndex: 200, boxShadow: '0 10px 32px rgba(0,0,0,0.75)', backdropFilter: 'blur(8px)' };
+    return {
+      position: 'fixed', top, left, width: W, boxSizing: 'border-box', background: THEME.surface,
+      border: `1px solid ${THEME.borderStrong}`, borderRadius: THEME.radiusCard, padding: '12px 14px', zIndex: 200,
+      boxShadow: THEME.shadowPopup, display: 'flex', flexDirection: 'column', gap: 10, color: THEME.text,
+    };
   }
 
-  void ageTick; // consumed for periodic re-render of the age pill
+  // Stats strip: the scrollbar is hidden, so edge fades mark the side(s) where
+  // content continues (--fade-l / --fade-r on the element) and a vertical wheel
+  // scrolls the row sideways — otherwise mouse users at tablet widths could never
+  // reach the trailing items (Risk).
+  const stripRef = useRef<HTMLDivElement>(null);
+  const updateStripFade = useCallback(() => {
+    const el = stripRef.current;
+    if (!el) return;
+    const max = el.scrollWidth - el.clientWidth;
+    el.style.setProperty('--fade-l', el.scrollLeft > 1 ? '24px' : '0px');
+    el.style.setProperty('--fade-r', max - el.scrollLeft > 1 ? '24px' : '0px');
+  }, []);
+  useEffect(() => {
+    const el = stripRef.current;
+    if (!el) return;
+    updateStripFade();
+    const ro = new ResizeObserver(updateStripFade);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [view, rugScore, isMobile, isEmbed, updateStripFade]);
+  const handleStripWheel = (e: React.WheelEvent<HTMLDivElement>) => {
+    const el = e.currentTarget;
+    if (Math.abs(e.deltaY) > Math.abs(e.deltaX) && el.scrollWidth > el.clientWidth) el.scrollLeft += e.deltaY;
+  };
+
+  void ageTick; // consumed for periodic re-render of the "Updated …" readout
   void buildTick; // consumed for the per-second elapsed readout while building
 
   // Host site without an active partner id: the "get a key" panel replaces the map.
@@ -827,89 +939,113 @@ function AppContent({ embed = false, embedOptions }: { embed?: boolean; embedOpt
     return <EmbedGate reason={embedGate ?? 'nopid'} />;
   }
 
+  const chainColor = view ? (CHAIN_COLORS[view.chain] || THEME.text2) : THEME.text2;
+  const priceChange = view && view.priceChange24h !== 0 ? (
+    <span style={{ fontSize: 11.5, fontWeight: 600, fontVariantNumeric: 'tabular-nums', color: view.priceChange24h >= 0 ? THEME.up : THEME.down }}>
+      {view.priceChange24h >= 0 ? '▲' : '▼'} {Math.abs(view.priceChange24h).toFixed(1)}%
+    </span>
+  ) : null;
+  const stats: [string, string | number, string | undefined][] = view ? [
+    ['Holders', view.totalHolders ? view.totalHolders.toLocaleString('en-US') : holderCount, view.totalHolders ? `top ${holderCount} mapped` : undefined],
+    ['Top 10', top10pct.toFixed(1) + '%', undefined],
+    ['Clusters', view.clusters.length, undefined],
+    ...(view.marketCap ? [['Market cap', fUSD(view.marketCap), undefined] as [string, string, undefined]] : []),
+    ...(view.volume24h ? [['24h volume', fUSD(view.volume24h), undefined] as [string, string, undefined]] : []),
+  ] : [];
+  const addressListShared = {
+    hidden, toggleHidden, selectedAddr, query, setQuery, ungroup, setUngroup, expanded, toggleExpanded,
+  };
+
   return (
-    <div style={{ height: '100dvh', background: '#0a0800', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+    <div style={{ height: '100dvh', background: THEME.bg, color: THEME.text, fontFamily: THEME.fontSans, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       {!isEmbed && (
-      <nav style={{ display: 'flex', alignItems: 'center', padding: '10px 12px', borderBottom: '1px solid rgba(245,200,66,0.1)', gap: 8, flexShrink: 0, background: '#0a0800' }}>
-        <a href="/" style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 800, fontSize: 19, textDecoration: 'none', color: '#f0ede6', flexShrink: 0 }}>
-          <span>🍌</span><span className="nav-hide-mobile">Banana<span style={{ color: '#F5C842' }}>Maps</span></span>
-        </a>
+      <nav style={{ height: 52, boxSizing: 'border-box', display: 'flex', alignItems: 'center', padding: '0 16px', borderBottom: `1px solid ${THEME.border}`, gap: 12, flexShrink: 0, background: THEME.surface }}>
+        <Link href="/" prefetch={false} style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 800, fontSize: 17, letterSpacing: -0.3, textDecoration: 'none', color: THEME.text, flexShrink: 0 }}>
+          <span style={{ fontSize: 17, lineHeight: 1 }} aria-hidden="true">🍌</span>
+          <span className="nav-hide-mobile">Banana<span style={{ color: THEME.accent }}>Maps</span></span>
+        </Link>
         {!isMobile && (
-          <div style={{ display: 'flex', gap: 4 }}>
-            {(['eth', 'bsc', 'sol', 'base', 'robinhood'] as const).map(c => (
-              <button key={c} onClick={() => setChain(c)} style={{ background: chain === c ? 'rgba(245,200,66,0.08)' : 'transparent', border: `1px solid ${chain === c ? CC[c] : 'rgba(255,255,255,0.08)'}`, color: chain === c ? CC[c] : 'rgba(255,255,255,0.35)', borderRadius: 6, padding: '4px 8px', fontSize: 10, cursor: 'pointer', fontFamily: 'inherit' }}>
-                <span style={{ display: 'inline-block', width: 5, height: 5, borderRadius: '50%', background: CC[c], marginRight: 4 }} />{c.toUpperCase()}
-              </button>
-            ))}
+          <div role="group" aria-label="Chain" style={{ display: 'flex', height: 32, border: `1px solid ${THEME.border}`, borderRadius: THEME.radiusControl, overflow: 'hidden', flexShrink: 0 }}>
+            {CHAINS.map((c, i) => {
+              const active = chain === c;
+              return (
+                <button key={c} onClick={() => setChain(c)} aria-pressed={active} style={{
+                  display: 'flex', alignItems: 'center', gap: 5, padding: '0 10px', background: active ? THEME.surface3 : 'transparent',
+                  border: 'none', borderRight: i < CHAINS.length - 1 ? `1px solid ${THEME.border}` : 'none',
+                  color: active ? THEME.text : THEME.text2, fontSize: 11.5, fontWeight: active ? 700 : 600, cursor: 'pointer', fontFamily: 'inherit',
+                  transition: 'background-color 150ms, color 150ms',
+                }}>
+                  <span style={dot(CHAIN_COLORS[c], 5)} />{c.toUpperCase()}
+                </button>
+              );
+            })}
           </div>
         )}
-        <div style={{ flex: 1, minWidth: 0, maxWidth: 700, display: 'flex', alignItems: 'center', background: 'rgba(245,200,66,0.04)', border: '1px solid rgba(245,200,66,0.12)', borderRadius: 8, padding: '0 10px', gap: 6 }}>
+        <div className="bm-app-search" style={{ flex: 1, minWidth: 0, maxWidth: isMobile ? undefined : 440, height: 32, display: 'flex', alignItems: 'center', background: THEME.bg, border: `1px solid ${THEME.border}`, borderRadius: THEME.radiusControl, padding: '0 10px', gap: 8, transition: 'border-color 150ms, box-shadow 150ms' }}>
+          <SearchIcon />
           {isMobile && (
-            <select value={chain} onChange={e => setChain(e.target.value)} style={{ background: 'transparent', border: 'none', outline: 'none', color: CC[chain], fontSize: 11, cursor: 'pointer' }}>
-              {['eth', 'bsc', 'sol', 'base', 'robinhood'].map(c => <option key={c} value={c} style={{ background: '#0a0a18' }}>{c.toUpperCase()}</option>)}
+            <select value={chain} onChange={e => setChain(e.target.value)} aria-label="Chain" style={{ background: 'transparent', border: 'none', outline: 'none', color: CHAIN_TEXT_COLORS[chain] || THEME.text, fontSize: 11.5, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+              {CHAINS.map(c => <option key={c} value={c} style={{ background: THEME.surface, color: THEME.text }}>{c.toUpperCase()}</option>)}
             </select>
           )}
-          <input value={search} onChange={e => setSearch(e.target.value)} onKeyDown={e => e.key === 'Enter' && doSearch()} placeholder="Token name or contract address..." style={{ flex: 1, background: 'none', border: 'none', outline: 'none', color: '#f5f0e8', fontSize: 13, padding: '9px 0', minWidth: 0 }} />
-          <button onClick={doSearch} style={{ background: '#F5C842', color: '#000', border: 'none', borderRadius: 6, padding: '5px 8px', fontWeight: 700, fontSize: 11, cursor: 'pointer', flexShrink: 0 }}>{loading ? '...' : 'Go'}</button>
+          <input value={search} onChange={e => setSearch(e.target.value)} onKeyDown={e => e.key === 'Enter' && doSearch()} placeholder="Token name or contract address…" aria-label="Search token" style={{ flex: 1, background: 'none', border: 'none', outline: 'none', color: THEME.text, fontSize: 12.5, minWidth: 0, fontFamily: 'inherit' }} />
+          {isMobile && (
+            <button onClick={doSearch} style={{ ...primaryBtn, height: 24, padding: '0 8px', fontSize: 11, flexShrink: 0 }}>{loading ? '...' : 'Go'}</button>
+          )}
         </div>
 
-        {/* Token identity + market chips */}
-        {graph && !isMobile && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 1, minWidth: 0 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(245,200,66,0.06)', border: '1px solid rgba(245,200,66,0.2)', borderRadius: 16, padding: '4px 10px', minWidth: 0 }}>
-              {graph.logo && <img src={graph.logo} alt="" style={{ width: 18, height: 18, borderRadius: '50%', flexShrink: 0 }} onError={e => (e.currentTarget.style.display = 'none')} />}
-              <span style={{ fontSize: 12, fontWeight: 700, color: '#F5C842', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{graph.name || graph.symbol}</span>
-              {graph.symbol && <span style={{ fontSize: 10, color: 'rgba(245,200,66,0.5)', whiteSpace: 'nowrap' }}>{graph.symbol}</span>}
+        {/* Token identity + market data */}
+        {view && !isMobile && (
+          <>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, height: 32, padding: `0 10px 0 ${view.logo ? 5 : 10}px`, border: `1px solid ${THEME.border}`, borderRadius: THEME.radiusControl, minWidth: 0, flexShrink: 1 }}>
+              {view.logo && <img src={view.logo} alt="" style={{ width: 20, height: 20, borderRadius: '50%', flexShrink: 0 }} onError={e => (e.currentTarget.style.display = 'none')} />}
+              <span style={{ fontSize: 12.5, fontWeight: 600, color: THEME.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{view.name || view.symbol}</span>
+              {view.symbol && <span style={{ fontSize: 11.5, color: THEME.text2, whiteSpace: 'nowrap' }}>{view.symbol}</span>}
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'rgba(0,0,0,0.5)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 16, padding: '4px 10px', whiteSpace: 'nowrap' }}>
-              <span style={{ fontSize: 12, fontWeight: 700, color: '#f0ede6' }}>{fmtPrice(graph.price)}</span>
-              {graph.priceChange24h !== 0 && (
-                <span style={{ fontSize: 10, fontWeight: 700, color: graph.priceChange24h >= 0 ? '#2EE89A' : '#EF4444' }}>
-                  {graph.priceChange24h >= 0 ? '▲' : '▼'} {Math.abs(graph.priceChange24h).toFixed(1)}%
-                </span>
-              )}
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, fontSize: 13, fontWeight: 600, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', flexShrink: 0 }}>
+              {fmtPrice(view.price)}{priceChange}
             </div>
             {cachedAt && (
-              <button onClick={() => loadToken(graph.address, { refresh: true, chainOverride: graph.chain })} disabled={refreshing}
+              <button onClick={() => loadToken(view.address, { refresh: true, chainOverride: view.chain })} disabled={refreshing}
                 title="Data age — click to recompute"
-                style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'rgba(0,0,0,0.5)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 16, padding: '4px 10px', cursor: refreshing ? 'wait' : 'pointer', color: 'rgba(245,235,200,0.6)', fontSize: 10, whiteSpace: 'nowrap' }}>
-                <span style={{ display: 'inline-block', animation: refreshing ? 'spin 1s linear infinite' : 'none' }}>⟳</span>
-                {refreshing ? 'updating…' : fmtAge(cachedAt)}
+                style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'none', border: 'none', padding: '6px 2px', cursor: refreshing ? 'wait' : 'pointer', color: THEME.text2, fontSize: 11.5, whiteSpace: 'nowrap', fontFamily: 'inherit', flexShrink: 0 }}>
+                {refreshing ? (
+                  <><span className="bm-spin" style={{ display: 'inline-block' }}>⟳</span>updating…</>
+                ) : `Updated ${fmtAge(cachedAt)}`}
               </button>
             )}
-            <button onClick={handleShare} title="Copy link"
-              style={{ background: 'rgba(0,0,0,0.5)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 16, padding: '4px 10px', cursor: 'pointer', color: shared ? '#2EE89A' : 'rgba(245,235,200,0.6)', fontSize: 10, whiteSpace: 'nowrap' }}>
-              {shared ? '✓ Copied' : '↗ Share'}
-            </button>
-          </div>
+          </>
         )}
 
         <div style={{ flex: 1 }} className="nav-hide-mobile" />
 
+        {view && !isMobile && (
+          <button onClick={handleShare} title="Copy link" style={{ ...ghostBtn, color: shared ? THEME.up : THEME.text, flexShrink: 0 }}>
+            {shared ? '✓ Copied' : 'Share'}
+          </button>
+        )}
+
         {/* Auth section */}
         {userEmail ? (
           <div style={{ position: 'relative', flexShrink: 0 }}>
-            <button onClick={() => setShowUserMenu(!showUserMenu)} style={{
-              background: 'rgba(245,200,66,0.08)', border: '1px solid rgba(245,200,66,0.2)', borderRadius: 8, padding: '6px 12px',
-              color: '#F5C842', fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600,
-            }}>
-              <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#2EE89A', display: 'inline-block' }} />
+            <button onClick={() => setShowUserMenu(!showUserMenu)} aria-haspopup="menu" aria-expanded={showUserMenu} aria-label={`Account: ${userEmail}`} style={{ ...ghostBtn, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={dot(THEME.up, 6)} />
               <span className="nav-hide-mobile">{userEmail.length > 18 ? userEmail.slice(0, 16) + '...' : userEmail}</span>
-              <span style={{ fontSize: 8 }}>▼</span>
+              <span style={{ fontSize: 8, color: THEME.text2 }} aria-hidden="true">▼</span>
             </button>
             {showUserMenu && (
-              <div style={{
-                position: 'absolute', top: 'calc(100% + 6px)', right: 0, background: 'rgba(15,12,0,0.97)',
-                border: '1px solid rgba(245,200,66,0.15)', borderRadius: 10, padding: '6px', minWidth: 220,
-                boxShadow: '0 8px 30px rgba(0,0,0,0.6)', zIndex: 500,
+              <div role="menu" style={{
+                position: 'absolute', top: 'calc(100% + 6px)', right: 0, background: THEME.surface,
+                border: `1px solid ${THEME.borderStrong}`, borderRadius: THEME.radiusCard, padding: 6, minWidth: 220,
+                boxShadow: THEME.shadowPopup, zIndex: 500,
               }}>
-                <div style={{ padding: '8px 12px', fontSize: 10, color: 'rgba(245,200,66,0.4)', borderBottom: '1px solid rgba(245,200,66,0.08)', marginBottom: 4, wordBreak: 'break-all' }}>
+                <div style={{ padding: '8px 12px', fontSize: 11.5, color: THEME.text2, borderBottom: `1px solid ${THEME.border}`, marginBottom: 4, wordBreak: 'break-all' }}>
                   {userEmail}
                 </div>
-                <button onClick={handleLogout} style={{
-                  width: '100%', background: 'none', border: 'none', padding: '8px 12px', color: '#f5f0e8', fontSize: 12,
-                  cursor: 'pointer', textAlign: 'left', borderRadius: 6, fontWeight: 500,
-                }} onMouseEnter={e => e.currentTarget.style.background = 'rgba(245,200,66,0.08)'}
+                <button role="menuitem" onClick={handleLogout} style={{
+                  width: '100%', background: 'none', border: 'none', padding: '8px 12px', color: THEME.text, fontSize: 12.5,
+                  cursor: 'pointer', textAlign: 'left', borderRadius: THEME.radiusControl, fontWeight: 500, fontFamily: 'inherit', transition: 'background-color 150ms',
+                }} onMouseEnter={e => e.currentTarget.style.background = THEME.surface2}
                   onMouseLeave={e => e.currentTarget.style.background = 'none'}>
                   Log out
                 </button>
@@ -917,53 +1053,85 @@ function AppContent({ embed = false, embedOptions }: { embed?: boolean; embedOpt
             )}
           </div>
         ) : (
-          <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-            <button onClick={() => router.push('/login')} className="nav-hide-mobile" style={{
-              background: 'none', border: '1px solid rgba(245,200,66,0.2)', borderRadius: 7, padding: '6px 14px',
-              color: '#f5f0e8', fontSize: 11, cursor: 'pointer', fontWeight: 600,
-            }}>Log in</button>
-            <button onClick={() => router.push('/signup')} className="nav-hide-mobile" style={{
-              background: '#F5C842', border: 'none', borderRadius: 7, padding: '6px 14px',
-              color: '#000', fontSize: 11, cursor: 'pointer', fontWeight: 700,
-            }}>Sign up</button>
+          <div style={{ display: 'flex', gap: 4, flexShrink: 0, alignItems: 'center' }}>
+            <button onClick={() => router.push('/login')} className="nav-hide-mobile" style={textBtn}>Log in</button>
+            <button onClick={() => router.push('/signup')} className="nav-hide-mobile" style={primaryBtn}>Sign up</button>
           </div>
         )}
 
-        {graph && isMobile && (
-          <button onClick={() => setShowList(true)} style={{ background: 'rgba(245,200,66,0.08)', border: '1px solid rgba(100,120,200,0.2)', borderRadius: 6, padding: '6px 8px', color: 'rgba(245,200,66,0.8)', fontSize: 10, cursor: 'pointer', flexShrink: 0 }}>☰</button>
+        {view && isMobile && (
+          <button onClick={() => setShowList(true)} aria-label="Address list" style={{ ...ghostBtn, padding: '0 10px', flexShrink: 0 }}>☰</button>
         )}
       </nav>
       )}
 
-      <div style={{ flex: 1, display: 'flex', overflow: 'hidden', position: 'relative' }}>
-        <div style={{ flex: 1, position: 'relative', background: '#0a0800' }}>
+      {/* Stats strip: one dense row under the top bar (replaces the floating pills).
+          The stats scroll sideways on narrow screens; in embed mode the row also
+          carries the token identity, and the Holders toggle sits OUTSIDE the
+          scrolling region so it stays reachable in a narrow partner iframe. */}
+      {view && (
+        <div style={{ height: 40, boxSizing: 'border-box', display: 'flex', alignItems: 'center', borderBottom: `1px solid ${THEME.border}`, background: THEME.surface, flexShrink: 0 }}>
+        <div ref={stripRef} className="bm-app-strip" onScroll={updateStripFade} onWheel={handleStripWheel}
+          style={{ flex: 1, minWidth: 0, height: '100%', display: 'flex', alignItems: 'center', gap: 28, padding: '0 16px', fontSize: 12, overflowX: 'auto', whiteSpace: 'nowrap', scrollbarWidth: 'none' }}>
+          {(isEmbed || isMobile) && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, minWidth: 0 }}>
+              {view.logo && <img src={view.logo} alt="" style={{ width: 16, height: 16, borderRadius: '50%', flexShrink: 0 }} onError={e => (e.currentTarget.style.display = 'none')} />}
+              <span style={{ fontSize: 12.5, fontWeight: 600, color: isEmbed ? accent : THEME.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 160 }}>{view.name || view.symbol}</span>
+              <span style={{ fontSize: 12.5, fontWeight: 600, color: THEME.text, fontVariantNumeric: 'tabular-nums' }}>{fmtPrice(view.price)}</span>
+              {priceChange}
+            </div>
+          )}
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 600, color: CHAIN_TEXT_COLORS[view.chain] || THEME.text2, flexShrink: 0 }}>
+            <span style={dot(chainColor, 6)} />{CHAIN_LABEL[view.chain] || view.chain}
+          </span>
+          {stats.map(([l, v, tip]) => (
+            <span key={l} title={tip} style={statLabel}>{l}<span style={statValue}>{v}</span></span>
+          ))}
+          {rugScore && (
+            <button onClick={() => setShowRugDetails(v => !v)} title="Risk score — click for the breakdown" aria-expanded={showRugDetails}
+              style={{ ...statLabel, background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: 'inherit', lineHeight: 'inherit' }}>
+              Risk<span style={{ ...statValue, color: rugScore.color }}>{rugScore.score} · {rugScore.label}</span>
+            </button>
+          )}
+        </div>
+        {isEmbed && (
+          <button onClick={() => setEmbedListOpen(v => !v)} aria-expanded={embedListOpen}
+            style={{ ...ghostBtn, height: 28, padding: '0 10px', fontSize: 11.5, border: `1px solid ${accent}`, flexShrink: 0, marginRight: 16 }}>
+            ☰ Holders
+          </button>
+        )}
+        </div>
+      )}
+
+      <div style={{ flex: 1, display: 'flex', overflow: 'hidden', position: 'relative', minHeight: 0 }}>
+        <div style={{ flex: 1, position: 'relative', minWidth: 0, background: THEME.mapBg }}>
           <canvas ref={canvasRef}
             onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp}
             onMouseLeave={() => { isDraggingRef.current = false; hoveredIdxRef.current = -1; if (hoveredAddrRef.current) { hoveredAddrRef.current = null; setHoveredAddr(null); } }}
             style={{ width: '100%', height: '100%', display: 'block', cursor: 'grab', touchAction: 'none' }}
           />
-          {!loading && building === null && !graph && (
-            <div style={{ position: 'absolute', inset: 0, overflowY: 'auto', display: 'flex', justifyContent: 'center' }}>
+          {!loading && building === null && !view && (
+            <div style={{ position: 'absolute', inset: 0, overflowY: 'auto', display: 'flex', justifyContent: 'center', background: THEME.bg }}>
               <div style={{ width: '100%', maxWidth: 680, padding: '36px 20px 60px', display: 'flex', flexDirection: 'column', gap: 10 }}>
                 <div style={{ textAlign: 'center' }}>
-                  <div style={{ fontSize: 44 }}>🍌</div>
-                  <div style={{ fontSize: 16, color: 'rgba(245,235,200,0.85)', fontWeight: 700, marginTop: 6 }}>
+                  <div style={{ fontSize: 44, lineHeight: 1 }} aria-hidden="true">🍌</div>
+                  <div style={{ fontSize: 16, color: THEME.text, fontWeight: 700, marginTop: 10 }}>
                     {error || 'Explore token holder maps'}
                   </div>
-                  <div style={{ fontSize: 12.5, color: 'rgba(245,235,200,0.6)', marginTop: 4 }}>
+                  <div style={{ fontSize: 12.5, color: THEME.text2, marginTop: 4 }}>
                     Search any token or paste a contract address
                   </div>
                   {/* The embed has no search bar, so an error needs its own way back */}
                   {isEmbed && error && urlToken && (
                     <button onClick={() => loadToken(urlToken, urlChain ? { chainOverride: urlChain } : undefined)}
-                      style={{ marginTop: 12, background: '#F5C842', color: '#000', border: 'none', borderRadius: 8, padding: '7px 16px', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
+                      style={{ ...primaryBtn, marginTop: 12, padding: '0 16px' }}>
                       ↻ Try again
                     </button>
                   )}
                 </div>
                 {!isEmbed && discover && discover.popular.length > 0 && (
                   <>
-                    <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'rgba(245,200,66,0.7)', marginTop: 18 }}>Popular maps · instant</div>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: THEME.text2, marginTop: 18 }}>Popular maps · instant</div>
                     <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : '1fr 1fr 1fr', gap: 8 }}>
                       {discover.popular.slice(0, 9).map(t => <TokenTile key={`${t.chain}:${t.address}`} t={t} onOpen={openDiscoverToken} />)}
                     </div>
@@ -971,8 +1139,8 @@ function AppContent({ embed = false, embedOptions }: { embed?: boolean; embedOpt
                 )}
                 {!isEmbed && discover && discover.trending.length > 0 && (
                   <>
-                    <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'rgba(245,200,66,0.7)', marginTop: 16 }}>
-                      Trending now <span style={{ opacity: 0.85, fontWeight: 500, textTransform: 'none', letterSpacing: 0 }}>· first map takes ~2 min to compute</span>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: THEME.text2, marginTop: 16 }}>
+                      Trending now <span style={{ fontWeight: 500 }}>· first map takes ~2 min to compute</span>
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : '1fr 1fr 1fr', gap: 8 }}>
                       {discover.trending
@@ -982,12 +1150,12 @@ function AppContent({ embed = false, embedOptions }: { embed?: boolean; embedOpt
                     </div>
                   </>
                 )}
-                <div style={{ fontSize: 11.5, color: 'rgba(245,235,200,0.6)', textAlign: 'center', marginTop: 18 }}>
+                <div style={{ fontSize: 11.5, color: THEME.text2, textAlign: 'center', marginTop: 18 }}>
                   {isMobile ? 'Pinch to zoom · Drag to pan' : 'Scroll to zoom · Drag to pan · Click a bubble for details'}
                   {!isEmbed && (
                     <>
-                      {' · '}<a href="/terms" style={{ color: 'rgba(245,200,66,0.85)', textDecoration: 'underline', textDecorationColor: 'rgba(245,200,66,0.5)' }}>Terms</a>
-                      {' · '}<a href="/privacy" style={{ color: 'rgba(245,200,66,0.85)', textDecoration: 'underline', textDecorationColor: 'rgba(245,200,66,0.5)' }}>Privacy</a>
+                      {' · '}<a href="/terms" style={{ color: THEME.text2, textDecoration: 'underline', textDecorationColor: THEME.text3 }}>Terms</a>
+                      {' · '}<a href="/privacy" style={{ color: THEME.text2, textDecoration: 'underline', textDecorationColor: THEME.text3 }}>Privacy</a>
                     </>
                   )}
                 </div>
@@ -995,115 +1163,77 @@ function AppContent({ embed = false, embedOptions }: { embed?: boolean; embedOpt
             </div>
           )}
           {loading && (
-            <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 16, background: 'rgba(10,8,0,0.9)' }}>
-              <div style={{ fontSize: 44, animation: 'spin 1s linear infinite' }}>🍌</div>
-              <div style={{ fontSize: 13, color: 'rgba(245,200,66,0.7)' }}>Mapping holders & transfers...</div>
-              <div style={{ fontSize: 11.5, color: 'rgba(245,200,66,0.6)' }}>First load computes the full graph — can take a minute</div>
+            <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 16, background: COVER }}>
+              <div className="bm-spin" style={{ fontSize: 44, lineHeight: 1 }} aria-hidden="true">🍌</div>
+              <div style={{ fontSize: 13, color: THEME.text, fontWeight: 600 }}>Mapping holders & transfers...</div>
+              <div style={{ fontSize: 11.5, color: THEME.text2 }}>First load computes the full graph — can take a minute</div>
             </div>
           )}
           {!loading && building !== null && (
-            <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 14, background: 'rgba(10,8,0,0.9)', padding: 20 }}>
-              <div style={{ fontSize: 44, animation: 'spin 1s linear infinite' }}>🍌</div>
-              <div style={{ fontSize: 14, color: 'rgba(245,200,66,0.85)', fontWeight: 700 }}>Building this holder map</div>
-              <div style={{ fontSize: 11, color: 'rgba(245,235,200,0.45)', textAlign: 'center', maxWidth: 320, lineHeight: 1.6 }}>
+            <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 14, background: COVER, padding: 20 }}>
+              <div className="bm-spin" style={{ fontSize: 44, lineHeight: 1 }} aria-hidden="true">🍌</div>
+              <div style={{ fontSize: 14, color: THEME.text, fontWeight: 700 }}>Building this holder map</div>
+              <div style={{ fontSize: 12, color: THEME.text2, textAlign: 'center', maxWidth: 320, lineHeight: 1.6 }}>
                 First-time maps take ~2 minutes to compute.<br />This view refreshes automatically — no need to reload.
               </div>
-              <div style={{ fontSize: 11.5, color: 'rgba(245,235,200,0.55)', fontFamily: SANS, fontVariantNumeric: 'tabular-nums' }}>
+              <div style={{ fontSize: 11.5, color: THEME.text2, fontVariantNumeric: 'tabular-nums' }}>
                 {fmtElapsed(Date.now() - building)} elapsed · checking every {Math.round(BUILD_POLL_MS / 1000)}s
               </div>
             </div>
           )}
-          {error && graph && (
-            <div style={{ position: 'absolute', top: 12, left: '50%', transform: 'translateX(-50%)', background: 'rgba(40,10,10,0.95)', border: '1px solid rgba(239,68,68,0.4)', color: '#f5b0b0', borderRadius: 8, padding: '8px 16px', fontSize: 11, zIndex: 150, display: 'flex', gap: 10, alignItems: 'center' }}>
+          {error && view && (
+            <div role="alert" style={{ position: 'absolute', top: 12, left: '50%', transform: 'translateX(-50%)', background: THEME.surface, border: `1px solid ${ERROR_BORDER}`, color: ERROR_TEXT, borderRadius: 8, padding: '8px 16px', fontSize: 12, zIndex: 150, display: 'flex', gap: 10, alignItems: 'center', maxWidth: 'calc(100% - 24px)' }}>
               {error}
-              <button onClick={() => setError(null)} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.4)', cursor: 'pointer', fontSize: 13, padding: 0 }}>×</button>
+              <button onClick={() => setError(null)} aria-label="Dismiss" style={{ ...closeBtn, fontSize: 14 }}>×</button>
             </div>
           )}
-          {graph && (
-            <div style={{ position: 'absolute', top: 10, left: 10, right: isMobile ? 10 : 60, display: 'flex', flexDirection: 'column', gap: 6, pointerEvents: 'none' }}>
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'stretch', pointerEvents: 'auto' }}>
-                <div style={{ background: 'rgba(8,6,0,0.8)', border: `1px solid ${CC[graph.chain]}55`, borderRadius: 10, padding: '6px 12px', fontSize: 12, fontWeight: 700, color: CC[graph.chain], display: 'flex', alignItems: 'center', gap: 7, backdropFilter: 'blur(6px)' }}>
-                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: CC[graph.chain], display: 'inline-block', boxShadow: `0 0 6px ${CC[graph.chain]}` }} />{CL[graph.chain]}
-                </div>
-                {(isMobile || isEmbed) && (
-                  <div style={{ background: 'rgba(0,0,0,0.75)', border: `1px solid ${isEmbed ? accent + '40' : 'rgba(245,200,66,0.25)'}`, borderRadius: 16, padding: '4px 10px', fontSize: 11, color: isEmbed ? accent : '#F5C842', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
-                    {graph.logo && <img src={graph.logo} alt="" style={{ width: 14, height: 14, borderRadius: '50%' }} onError={e => (e.currentTarget.style.display = 'none')} />}
-                    {graph.name || graph.symbol}
-                    <span style={{ color: 'rgba(240,237,230,0.9)' }}>{fmtPrice(graph.price)}</span>
-                    {graph.priceChange24h !== 0 && (
-                      <span style={{ fontSize: 9, fontWeight: 700, color: graph.priceChange24h >= 0 ? '#2EE89A' : '#EF4444' }}>
-                        {graph.priceChange24h >= 0 ? '▲' : '▼'}{Math.abs(graph.priceChange24h).toFixed(1)}%
-                      </span>
-                    )}
-                  </div>
-                )}
-                {([
-                  ['Holders', graph.totalHolders ? (graph.totalHolders >= 1000 ? fAmt(graph.totalHolders) : String(graph.totalHolders)) : holderCount, graph.totalHolders ? `top ${holderCount} mapped` : undefined],
-                  ['Top 10', Math.round(top10pct) + '%', undefined],
-                  ['Clusters', graph.clusters.length, undefined],
-                  ...(graph.marketCap ? [['MCap', fUSD(graph.marketCap), undefined]] : []),
-                  ...(graph.volume24h ? [['24h Vol', fUSD(graph.volume24h), undefined]] : []),
-                ] as [string, string | number, string | undefined][]).map(([l, v, tip]) => (
-                  <div key={l} title={tip} style={{ background: 'rgba(8,6,0,0.8)', border: '1px solid rgba(245,200,66,0.16)', borderRadius: 10, padding: '6px 12px', display: 'flex', alignItems: 'center', gap: 8, backdropFilter: 'blur(6px)' }}>
-                    <span style={{ fontSize: 10, color: 'rgba(245,200,66,0.7)', textTransform: 'uppercase', letterSpacing: '1.2px', fontWeight: 700 }}>{l}</span>
-                    <span style={{ fontSize: 15, color: '#F6F1E6', fontWeight: 800, fontFamily: SANS, fontVariantNumeric: 'tabular-nums', letterSpacing: -0.2 }}>{v}</span>
-                  </div>
-                ))}
-                {rugScore && (
-                  <div onClick={() => setShowRugDetails(!showRugDetails)} title="Risk score — click for the breakdown" style={{ background: 'rgba(8,6,0,0.8)', border: `1px solid ${rugScore.color}66`, borderRadius: 10, padding: '6px 12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 7, backdropFilter: 'blur(6px)' }}>
-                    <span style={{ fontSize: 10, color: 'rgba(245,200,66,0.7)', textTransform: 'uppercase', letterSpacing: '1.2px', fontWeight: 700 }}>Risk</span>
-                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: rugScore.color, display: 'inline-block', boxShadow: `0 0 8px ${rugScore.color}99` }} />
-                    <span style={{ fontSize: 15, color: rugScore.color, fontWeight: 800, fontFamily: SANS, fontVariantNumeric: 'tabular-nums' }}>{rugScore.score}</span>
-                    <span style={{ fontSize: 12, color: rugScore.color, opacity: 0.9, fontWeight: 600 }}>{rugScore.label}</span>
-                    <span style={{ fontSize: 9, color: rugScore.color, opacity: 0.7 }}>{showRugDetails ? '▲' : '▼'}</span>
-                  </div>
-                )}
+          {/* Risk breakdown: flat card anchored under the strip at the left */}
+          {view && rugScore && showRugDetails && (
+            <div style={{ position: 'absolute', top: 10, left: 12, width: 'calc(100% - 24px)', maxWidth: 380, background: THEME.surface, border: `1px solid ${THEME.borderStrong}`, borderRadius: THEME.radiusCard, padding: 14, zIndex: 120, boxSizing: 'border-box' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: THEME.text }}>Risk analysis — <span style={{ color: rugScore.color, fontVariantNumeric: 'tabular-nums' }}>{rugScore.score}/100</span></div>
+                <button onClick={() => setShowRugDetails(false)} aria-label="Close" style={closeBtn}>×</button>
               </div>
-              {rugScore && showRugDetails && (
-                <div style={{ background: 'rgba(8,6,0,0.92)', border: `1px solid ${rugScore.color}44`, borderRadius: 12, padding: '14px', marginTop: 6, maxWidth: 380, pointerEvents: 'auto', backdropFilter: 'blur(8px)' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                    <div style={{ fontSize: 14, fontWeight: 800, color: rugScore.color }}>Risk analysis — {rugScore.score}/100</div>
-                    <button onClick={() => setShowRugDetails(false)} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.3)', cursor: 'pointer', fontSize: 14, padding: 0, lineHeight: 1 }}>×</button>
-                  </div>
-                  {rugScore.factors.map(f => (
-                    <div key={f.name} style={{ marginBottom: 8 }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
-                        <span style={{ fontSize: 12, color: 'rgba(243,238,226,0.85)', fontWeight: 600 }}>{f.name}</span>
-                        <span style={{ fontSize: 12, color: f.score >= 70 ? '#2EE89A' : f.score >= 40 ? '#EAB308' : '#EF4444', fontWeight: 700, fontFamily: SANS, fontVariantNumeric: 'tabular-nums' }}>{f.score}/100</span>
-                      </div>
-                      <div style={{ height: 5, background: 'rgba(255,255,255,0.08)', borderRadius: 2, overflow: 'hidden' }}>
-                        <div style={{ height: '100%', width: `${f.score}%`, background: f.score >= 70 ? '#2EE89A' : f.score >= 40 ? '#EAB308' : '#EF4444', borderRadius: 2, transition: 'width 0.5s' }} />
-                      </div>
-                      <div style={{ fontSize: 11, color: 'rgba(243,238,226,0.5)', marginTop: 4, lineHeight: 1.4 }}>{f.detail}</div>
+              {rugScore.factors.map(f => {
+                const band = f.score >= 70 ? THEME.up : f.score >= 40 ? THEME.warn : THEME.down;
+                return (
+                  <div key={f.name} style={{ marginBottom: 10 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                      <span style={{ fontSize: 12, color: THEME.text, fontWeight: 600 }}>{f.name}</span>
+                      <span style={{ fontSize: 12, color: band, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{f.score}/100</span>
                     </div>
-                  ))}
-                  <div style={{ fontSize: 11.5, color: 'rgba(243,238,226,0.62)', marginTop: 10, lineHeight: 1.45 }}>This score is for informational purposes only and does not constitute financial advice. Always do your own research.</div>
-                </div>
-              )}
+                    <div style={{ height: 4, background: THEME.surface3, borderRadius: 2, overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${f.score}%`, background: band, borderRadius: 2, transition: 'width 0.5s' }} />
+                    </div>
+                    <div style={{ fontSize: 11.5, color: THEME.text2, marginTop: 4, lineHeight: 1.4 }}>{f.detail}</div>
+                  </div>
+                );
+              })}
+              <div style={{ fontSize: 11.5, color: THEME.text2, marginTop: 10, lineHeight: 1.45 }}>This score is for informational purposes only and does not constitute financial advice. Always do your own research.</div>
             </div>
           )}
-          {!isMobile && graph && graph.clusters.length > 0 && (
-            <div style={{ position: 'absolute', bottom: isEmbed ? 52 : 16, left: 12, display: 'flex', gap: 6, flexWrap: 'wrap', maxWidth: 600, alignItems: 'center' }}>
-              {graph.clusters.slice(0, legendOpen ? 30 : 6).map(c => {
+          {!isMobile && view && view.clusters.length > 0 && (
+            <div style={{ position: 'absolute', bottom: isEmbed ? 52 : 14, left: 14, display: 'flex', flexDirection: 'column', gap: 2, padding: '8px 12px', borderRadius: 8, background: COVER, border: `1px solid ${THEME.border}`, fontSize: 11.5, maxHeight: 'calc(100% - 80px)', overflowY: 'auto' }}>
+              {view.clusters.slice(0, legendOpen ? 30 : 6).map(c => {
                 const col = clusterColor(c.id);
-                const hid = c.members.every(i => hidden.has(graph.nodes[i].address));
+                const hid = c.members.every(i => hidden.has(view.nodes[i].address));
                 return (
                   <button key={c.id}
                     onMouseEnter={() => highlightCluster(c.id)}
                     onMouseLeave={() => highlightCluster(null)}
-                    onClick={() => { setExpanded(prev => new Set(prev).add(c.id)); const first = c.members[0]; if (first !== undefined) selectFromList(graph.nodes[first].address); }}
+                    onClick={() => { setExpanded(prev => new Set(prev).add(c.id)); const first = c.members[0]; if (first !== undefined) selectFromList(view.nodes[first].address); }}
                     title={`${c.members.length} wallets · click to locate`}
-                    style={{ display: 'flex', alignItems: 'center', gap: 7, background: 'rgba(8,6,0,0.8)', border: `1px solid ${col}66`, borderRadius: 10, padding: '5px 11px', fontSize: 11.5, fontWeight: 600, color: col, cursor: 'pointer', opacity: hid ? 0.45 : 1, backdropFilter: 'blur(6px)', fontFamily: 'inherit' }}>
-                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: col, display: 'inline-block', boxShadow: `0 0 6px ${col}aa` }} />
-                    Cluster {c.id + 1}
-                    <span style={{ color: 'rgba(243,238,226,0.82)', fontWeight: 500, fontFamily: SANS, fontVariantNumeric: 'tabular-nums', fontSize: 11.5 }}>{c.pct.toFixed(c.pct < 1 ? 2 : 1)}% of supply</span>
+                    style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'none', border: 'none', padding: '2px 0', color: THEME.text, fontSize: 11.5, cursor: 'pointer', opacity: hid ? 0.45 : 1, fontFamily: 'inherit', textAlign: 'left', whiteSpace: 'nowrap' }}>
+                    <span style={dot(col, 8)} />
+                    <span style={{ width: 64 }}>Cluster {c.id + 1}</span>
+                    <span style={{ color: THEME.text2, fontVariantNumeric: 'tabular-nums' }}>{c.pct.toFixed(c.pct < 1 ? 2 : 1)}%</span>
                   </button>
                 );
               })}
-              {graph.clusters.length > 6 && (
+              {view.clusters.length > 6 && (
                 <button onClick={() => setLegendOpen(v => !v)}
-                  style={{ background: 'rgba(8,6,0,0.8)', border: '1px solid rgba(245,200,66,0.2)', borderRadius: 10, padding: '5px 11px', fontSize: 11.5, fontWeight: 600, color: 'rgba(245,200,66,0.8)', cursor: 'pointer', fontFamily: 'inherit' }}>
-                  {legendOpen ? 'Show fewer' : `+${graph.clusters.length - 6} more`}
+                  style={{ background: 'none', border: 'none', padding: '2px 0', color: THEME.text2, fontSize: 11.5, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left' }}>
+                  {legendOpen ? 'Show fewer' : `+${view.clusters.length - 6} more`}
                 </button>
               )}
             </div>
@@ -1113,57 +1243,39 @@ function AppContent({ embed = false, embedOptions }: { embed?: boolean; embedOpt
           {isEmbed && showBadge && (
             <a href={`https://www.bananamaps.io/app?token=${encodeURIComponent(urlToken || '')}${urlChain ? `&chain=${encodeURIComponent(urlChain)}` : ''}`}
               target="_blank" rel="noopener noreferrer" title="Powered by BananaMaps"
-              style={{ position: 'absolute', bottom: 12, left: 12, display: 'flex', alignItems: 'center', gap: 5, background: 'rgba(0,0,0,0.75)', border: '1px solid rgba(245,200,66,0.25)', borderRadius: 16, padding: '5px 12px', fontSize: 11, fontWeight: 700, color: '#f0ede6', textDecoration: 'none', zIndex: 150 }}>
+              style={{ position: 'absolute', bottom: 12, left: 12, display: 'flex', alignItems: 'center', gap: 5, background: THEME.surface, border: `1px solid ${THEME.border}`, borderRadius: THEME.radiusControl, padding: '5px 10px', fontSize: 11.5, fontWeight: 700, color: THEME.text, textDecoration: 'none', zIndex: 150 }}>
               🍌 Banana<span style={{ color: accent }}>Maps</span>
-              <span style={{ color: 'rgba(245,235,200,0.55)', fontWeight: 500 }}>· Open full map ↗</span>
+              <span style={{ color: THEME.text2, fontWeight: 500 }}>· Open full map ↗</span>
             </a>
           )}
-          {isEmbed && graph && (
-            <button onClick={() => setEmbedListOpen(v => !v)}
-              style={{ position: 'absolute', top: 10, right: 10, display: 'flex', alignItems: 'center', gap: 5, background: 'rgba(0,0,0,0.75)', border: `1px solid ${accent}40`, borderRadius: 16, padding: '5px 12px', fontSize: 10, fontWeight: 600, color: 'rgba(245,235,200,0.8)', cursor: 'pointer', zIndex: 150 }}>
-              ☰ Holders
-            </button>
-          )}
-          {isEmbed && embedListOpen && graph && (
-            <div style={{ position: 'absolute', top: 0, right: 0, bottom: 0, width: 300, background: 'rgba(10,8,0,0.97)', borderLeft: '1px solid rgba(245,200,66,0.15)', zIndex: 160, display: 'flex', flexDirection: 'column' }}>
+          {isEmbed && embedListOpen && view && (
+            <div style={{ position: 'absolute', top: 0, right: 0, bottom: 0, width: 300, maxWidth: '100%', background: THEME.surface, borderLeft: `1px solid ${THEME.border}`, zIndex: 160, display: 'flex', flexDirection: 'column' }}>
               <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '6px 8px 0' }}>
-                <button onClick={() => setEmbedListOpen(false)} style={{ background: 'rgba(255,255,255,0.05)', border: 'none', borderRadius: '50%', width: 24, height: 24, color: 'rgba(255,255,255,0.4)', cursor: 'pointer', fontSize: 14 }}>×</button>
+                <button onClick={() => setEmbedListOpen(false)} aria-label="Close" style={{ ...closeBtn, width: 24, height: 24, fontSize: 16 }}>×</button>
               </div>
               <div style={{ flex: 1, minHeight: 0 }}>
                 <AddressList
-                  graph={graph}
-                  hidden={hidden}
-                  toggleHidden={toggleHidden}
-                  selectedAddr={selectedAddr}
+                  graph={view}
+                  {...addressListShared}
                   onSelect={selectFromList}
                   onHoverAddr={addr => { hoveredIdxRef.current = addr !== null ? (addrToIdx.get(addr) ?? -1) : -1; }}
-                  query={query}
-                  setQuery={setQuery}
-                  ungroup={ungroup}
-                  setUngroup={setUngroup}
-                  expanded={expanded}
-                  toggleExpanded={id => setExpanded(prev => {
-                    const next = new Set(prev);
-                    if (next.has(id)) next.delete(id); else next.add(id);
-                    return next;
-                  })}
                 />
               </div>
             </div>
           )}
-          {graph && (
-            <div style={{ position: 'absolute', bottom: 12, right: 12, display: 'flex', flexDirection: 'column', gap: 4 }}>
-              {[['＋', 1.2], ['－', 0.8], ['⊙', 0]].map(([l, f]) => (
-                <button key={l as string} onClick={() => {
+          {view && (
+            <div style={{ position: 'absolute', bottom: 14, right: 14, display: 'flex', flexDirection: 'column', border: `1px solid ${THEME.border}`, borderRadius: THEME.radiusControl, overflow: 'hidden' }}>
+              {([['+', 1.2, 'Zoom in'], ['−', 0.8, 'Zoom out'], ['⊙', 0, 'Fit map']] as [string, number, string][]).map(([l, f, label], i) => (
+                <button key={label} aria-label={label} title={label} onClick={() => {
                   if (f === 0) { userTouchedViewRef.current = false; autoFit(); return; }
                   // Zoom about the canvas center, like the wheel handler does about the cursor
                   userTouchedViewRef.current = true;
                   const { w, h } = sizeRef.current;
-                  const ns = Math.min(Math.max(scaleRef.current * (f as number), 0.05), 8);
+                  const ns = Math.min(Math.max(scaleRef.current * f, 0.05), 8);
                   offsetRef.current.x = w / 2 - (w / 2 - offsetRef.current.x) * (ns / scaleRef.current);
                   offsetRef.current.y = h / 2 - (h / 2 - offsetRef.current.y) * (ns / scaleRef.current);
                   scaleRef.current = ns;
-                }} style={{ width: 30, height: 30, background: 'rgba(0,0,0,0.7)', border: '1px solid rgba(100,120,200,0.2)', borderRadius: 7, color: 'rgba(245,200,66,0.5)', fontSize: 15, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                }} style={{ width: 32, height: 32, background: THEME.surface, border: 'none', borderBottom: i < 2 ? `1px solid ${THEME.border}` : 'none', color: THEME.text, fontSize: f === 0 ? 13 : 15, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, fontFamily: 'inherit' }}>
                   {l}
                 </button>
               ))}
@@ -1171,67 +1283,68 @@ function AppContent({ embed = false, embedOptions }: { embed?: boolean; embedOpt
           )}
           {selected && (
             <div style={getPopupStyle()}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0 }}>
-                  <span style={{ width: 9, height: 9, borderRadius: '50%', flexShrink: 0, background: selected.cluster !== undefined ? clusterColor(selected.cluster) : 'rgba(160,170,220,0.9)', boxShadow: selected.cluster !== undefined ? `0 0 8px ${clusterColor(selected.cluster)}99` : 'none' }} />
-                  <span style={{ fontSize: 12, color: 'rgba(243,238,226,0.7)', fontFamily: SANS, fontVariantNumeric: 'tabular-nums', fontWeight: 700, flexShrink: 0 }}>{selected.rank !== undefined ? `#${selected.rank}` : 'counterparty'}</span>
-                  {selected.cluster !== undefined && (
-                    <span style={{ fontSize: 11, fontWeight: 700, color: clusterColor(selected.cluster), background: clusterColor(selected.cluster) + '18', padding: '2px 8px', borderRadius: 8, border: `1px solid ${clusterColor(selected.cluster)}44`, flexShrink: 0 }}>Cluster {selected.cluster + 1}</span>
-                  )}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, fontSize: 11.5, color: THEME.text2 }}>
+                  <span style={dot(selected.cluster !== undefined ? clusterColor(selected.cluster) : UNCLUSTERED_DOT, 8)} />
+                  <span style={{ fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+                    {selected.rank !== undefined ? `Rank ${selected.rank}` : 'counterparty'}
+                    {selected.cluster !== undefined && ` · Cluster ${selected.cluster + 1}`}
+                  </span>
                   {selected.labelType && (
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700, color: TYPE_META[selected.labelType].color, flexShrink: 0 }}>
-                      <TypeIcon type={selected.labelType} size={11} />{TYPE_META[selected.labelType].text}
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10.5, fontWeight: 600, color: TYPE_COLORS[selected.labelType], border: `1px solid ${hexA(TYPE_COLORS[selected.labelType], 0.4)}`, borderRadius: 4, padding: '0 5px', lineHeight: '16px', flexShrink: 0 }}>
+                      <TypeIcon type={selected.labelType} size={10} />{TYPE_META[selected.labelType].text}
                     </span>
                   )}
                 </div>
-                <button onClick={() => setSelectedAddr(null)} aria-label="Close" style={{ background: 'none', border: 'none', color: 'rgba(243,238,226,0.45)', cursor: 'pointer', fontSize: 18, lineHeight: 1, padding: '0 0 0 8px' }}>×</button>
+                <button onClick={() => setSelectedAddr(null)} aria-label="Close" style={closeBtn}>×</button>
               </div>
-              {selected.label && <div style={{ fontSize: 14, fontWeight: 700, color: '#F6F1E6', marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{selected.label}</div>}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-                <span title={selected.address} style={{ fontFamily: 'DM Mono, monospace', fontSize: 12.5, color: '#F5C842', letterSpacing: 0.2 }}>{shortAddr(selected.address, 10, 8)}</span>
+              {selected.label && <div style={{ fontSize: 13, fontWeight: 600, color: THEME.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{selected.label}</div>}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                <span title={selected.address} style={{ fontFamily: THEME.fontMono, fontSize: 13, color: THEME.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{shortAddr(selected.address, 10, 8)}</span>
                 <button onClick={() => { navigator.clipboard?.writeText(selected.address).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1200); }).catch(() => {}); }}
                   title="Copy address" aria-label="Copy address"
-                  style={{ background: 'rgba(245,200,66,0.08)', border: '1px solid rgba(245,200,66,0.18)', borderRadius: 6, padding: '2px 7px', color: copied ? '#2EE89A' : 'rgba(245,200,66,0.8)', fontSize: 10.5, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+                  style={{ background: THEME.bg, border: `1px solid ${THEME.borderStrong}`, borderRadius: 5, padding: '2px 8px', color: copied ? THEME.up : THEME.text, fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0 }}>
                   {copied ? 'Copied' : 'Copy'}
                 </button>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6, marginBottom: 12 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', borderTop: `1px solid ${THEME.border}` }}>
                 {([
-                  ['Supply', selected.pct ? fmtPct(selected.pct) : '—', '#F6F1E6'],
-                  ['Amount', selected.balanceFormatted ? fAmt(selected.balanceFormatted) : '—', '#F6F1E6'],
+                  ['Share of supply', selected.pct ? fmtPct(selected.pct) : '—', THEME.text],
+                  ['Balance', selected.balanceFormatted ? `${fBalance(selected.balanceFormatted)}${view?.symbol ? ` ${view.symbol}` : ''}` : '—', THEME.text],
                   // USD is always balance × the snapshot price shown in the header, never a
                   // provider's stored figure: Vybe priced positions ~26% off our displayed
                   // price, and worker deltas move balances without touching stored USD.
-                  ['USD', (() => { const usd = selected.balanceFormatted && graph?.price ? selected.balanceFormatted * graph.price : (selected.usdValue || 0); return usd ? fUSD(usd) : '—'; })(), '#2EE89A'],
-                ] as [string, string, string][]).map(([l, v, c]) => (
-                  <div key={l} style={{ background: 'rgba(245,200,66,0.05)', border: '1px solid rgba(245,200,66,0.08)', borderRadius: 8, padding: '7px 8px' }}>
-                    <div style={{ fontSize: 9.5, color: 'rgba(245,200,66,0.65)', textTransform: 'uppercase', letterSpacing: '1.1px', fontWeight: 700, marginBottom: 4 }}>{l}</div>
-                    <div style={{ fontSize: 14, color: c, fontWeight: 700, fontFamily: SANS, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{v}</div>
+                  [view?.price ? `Value at ${fmtPrice(view.price)}` : 'Value', (() => { const usd = selected.balanceFormatted && view?.price ? selected.balanceFormatted * view.price : (selected.usdValue || 0); return usd ? fUSDFull(usd) : '—'; })(), THEME.up],
+                ] as [string, string, string][]).map(([l, v, c], i, arr) => (
+                  <div key={l} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10, padding: '7px 0', borderBottom: i < arr.length - 1 ? `1px solid ${THEME.border}` : 'none', fontSize: 12.5 }}>
+                    <span style={{ color: THEME.text2, whiteSpace: 'nowrap' }}>{l}</span>
+                    <span style={{ fontWeight: 600, color: c, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{v}</span>
                   </div>
                 ))}
               </div>
               {cachedAt && (
-                <div style={{ fontSize: 11.5, color: 'rgba(243,238,226,0.55)', marginTop: -4, marginBottom: 10, fontFamily: SANS }}>
-                  Balance as of {fmtAge(cachedAt)}{graph?.price ? ` · at ${fmtPrice(graph.price)}` : ''}
+                <div style={{ fontSize: 11.5, color: THEME.text2, marginTop: -4 }}>
+                  Balance as of {fmtAge(cachedAt)}{view?.price ? ` · at ${fmtPrice(view.price)}` : ''}
                 </div>
               )}
               {connections.length > 0 && (
-                <div style={{ marginBottom: 10 }}>
-                  <div style={{ fontSize: 9.5, color: 'rgba(245,200,66,0.65)', textTransform: 'uppercase', letterSpacing: '1.1px', fontWeight: 700, marginBottom: 5 }}>
+                <div>
+                  <div style={{ fontSize: 11.5, color: THEME.text2, fontWeight: 600, marginBottom: 4 }}>
                     Transfers with {connections.length} wallet{connections.length !== 1 ? 's' : ''}
                   </div>
                   <div style={{ maxHeight: 6 * 26, overflowY: 'auto' }}>
                     {connections.slice(0, 12).map(c => (
                       <div key={c.node.address}
-                        onClick={() => selectFromList(c.node.address)}
-                        style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '4px 6px', borderRadius: 6, cursor: 'pointer', fontSize: 12, minHeight: 26 }}
-                        onMouseEnter={e => (e.currentTarget.style.background = 'rgba(245,200,66,0.07)')}
-                        onMouseLeave={e => (e.currentTarget.style.background = 'none')}>
-                        <span style={{ width: 7, height: 7, borderRadius: '50%', flexShrink: 0, background: c.node.cluster !== undefined ? clusterColor(c.node.cluster) : 'rgba(140,150,190,0.7)' }} />
-                        <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: c.node.label ? 'inherit' : 'DM Mono, monospace', fontWeight: c.node.label ? 600 : 400, color: '#F3EEE2' }}>
+                        onClick={c.drawn ? () => selectFromList(c.node.address) : undefined}
+                        title={c.drawn ? undefined : 'Not drawn on the map'}
+                        style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '0 6px', borderRadius: 5, cursor: c.drawn ? 'pointer' : 'default', fontSize: 12, height: 26, opacity: c.drawn ? 1 : 0.55, transition: 'background-color 150ms' }}
+                        onMouseEnter={c.drawn ? e => (e.currentTarget.style.background = THEME.surface2) : undefined}
+                        onMouseLeave={c.drawn ? e => (e.currentTarget.style.background = 'none') : undefined}>
+                        <span style={dot(c.cluster !== undefined ? clusterColor(c.cluster) : UNCLUSTERED_DOT, 7)} />
+                        <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: c.node.label ? 'inherit' : THEME.fontMono, fontWeight: c.node.label ? 600 : 400, color: THEME.text }}>
                           {c.node.label || shortAddr(c.node.address)}
                         </span>
-                        <span style={{ color: 'rgba(243,238,226,0.68)', flexShrink: 0, fontFamily: SANS, fontVariantNumeric: 'tabular-nums', fontSize: 12 }}>
+                        <span style={{ color: THEME.text2, flexShrink: 0, fontVariantNumeric: 'tabular-nums', fontSize: 12 }}>
                           {c.out > 0 && c.in > 0 ? '⇄' : c.out > 0 ? '→' : '←'} {c.total}
                         </span>
                       </div>
@@ -1239,7 +1352,7 @@ function AppContent({ embed = false, embedOptions }: { embed?: boolean; embedOpt
                   </div>
                 </div>
               )}
-              <button onClick={() => window.open(explorerHolderUrl(graph?.chain || 'eth', graph?.address || '', selected.address), '_blank')} style={{ width: '100%', background: 'rgba(245,200,66,0.06)', border: '1px solid rgba(245,200,66,0.18)', borderRadius: 8, padding: '7px', color: 'rgba(245,200,66,0.9)', fontSize: 12, cursor: 'pointer', fontWeight: 700, fontFamily: 'inherit' }}>
+              <button onClick={() => window.open(explorerHolderUrl(view?.chain || 'eth', view?.address || '', selected.address), '_blank')} style={{ ...ghostBtn, width: '100%', height: 'auto', padding: 7, textAlign: 'center' }}>
                 View this holding on Explorer ↗
               </button>
             </div>
@@ -1247,67 +1360,50 @@ function AppContent({ embed = false, embedOptions }: { embed?: boolean; embedOpt
         </div>
 
         {!isMobile && !isEmbed && (
-          <div style={{ width: 300, borderLeft: '1px solid rgba(245,200,66,0.08)', background: '#0a0800', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
-            {graph ? (
+          <div style={{ width: 320, borderLeft: `1px solid ${THEME.border}`, background: THEME.surface, display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
+            {view ? (
               <AddressList
-                graph={graph}
-                hidden={hidden}
-                toggleHidden={toggleHidden}
-                selectedAddr={selectedAddr}
+                graph={view}
+                {...addressListShared}
                 hoveredAddr={hoveredAddr}
                 onSelect={selectFromList}
                 onHoverAddr={addr => { hoveredIdxRef.current = addr !== null ? (addrToIdx.get(addr) ?? -1) : -1; }}
-                query={query}
-                setQuery={setQuery}
-                ungroup={ungroup}
-                setUngroup={setUngroup}
-                expanded={expanded}
-                toggleExpanded={id => setExpanded(prev => {
-                  const next = new Set(prev);
-                  if (next.has(id)) next.delete(id); else next.add(id);
-                  return next;
-                })}
               />
             ) : (
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 8, height: '100%', color: 'rgba(243,238,226,0.3)' }}>
-                <div style={{ fontSize: 28 }}>🍌</div><div style={{ fontSize: 13 }}>Select a token</div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: THEME.text3, fontSize: 13 }}>
+                Select a token
               </div>
             )}
           </div>
         )}
 
-        {isMobile && showList && graph && (
+        {isMobile && showList && view && (
           <div style={{ position: 'fixed', inset: 0, zIndex: 300, display: 'flex', flexDirection: 'column' }}>
             <div style={{ flex: 1, background: 'rgba(0,0,0,0.5)' }} onClick={() => setShowList(false)} />
-            <div style={{ background: 'rgba(12,10,0,0.99)', borderRadius: '18px 18px 0 0', borderTop: '1px solid rgba(245,200,66,0.12)', height: '70vh', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ background: THEME.surface, borderRadius: '14px 14px 0 0', borderTop: `1px solid ${THEME.border}`, height: '70vh', display: 'flex', flexDirection: 'column' }}>
               <div style={{ padding: '8px 16px', display: 'flex', justifyContent: 'flex-end' }}>
-                <button onClick={() => setShowList(false)} style={{ background: 'rgba(255,255,255,0.05)', border: 'none', borderRadius: '50%', width: 26, height: 26, color: 'rgba(255,255,255,0.3)', cursor: 'pointer', fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
+                <button onClick={() => setShowList(false)} aria-label="Close" style={{ ...closeBtn, width: 26, height: 26, fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
               </div>
               <div style={{ flex: 1, minHeight: 0 }}>
                 <AddressList
-                  graph={graph}
-                  hidden={hidden}
-                  toggleHidden={toggleHidden}
-                  selectedAddr={selectedAddr}
+                  graph={view}
+                  {...addressListShared}
                   onSelect={addr => { selectFromList(addr); setShowList(false); }}
                   onHoverAddr={() => {}}
-                  query={query}
-                  setQuery={setQuery}
-                  ungroup={ungroup}
-                  setUngroup={setUngroup}
-                  expanded={expanded}
-                  toggleExpanded={id => setExpanded(prev => {
-                    const next = new Set(prev);
-                    if (next.has(id)) next.delete(id); else next.add(id);
-                    return next;
-                  })}
                 />
               </div>
             </div>
           </div>
         )}
       </div>
-      <style>{`@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}`}</style>
+      <style>{`
+        @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+        .bm-spin{animation:spin 1s linear infinite}
+        .bm-app-strip{--fade-l:0px;--fade-r:0px;-webkit-mask-image:linear-gradient(90deg,transparent,#000 var(--fade-l),#000 calc(100% - var(--fade-r)),transparent);mask-image:linear-gradient(90deg,transparent,#000 var(--fade-l),#000 calc(100% - var(--fade-r)),transparent)}
+        .bm-app-strip::-webkit-scrollbar{display:none}
+        .bm-app-search:focus-within{border-color:var(--banana);box-shadow:0 0 0 3px rgba(245,200,66,0.25)}
+        @media (prefers-reduced-motion: reduce){.bm-spin{animation:none}.bm-app-search{transition:none}}
+      `}</style>
     </div>
   );
 }

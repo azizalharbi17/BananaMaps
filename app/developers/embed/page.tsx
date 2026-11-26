@@ -27,7 +27,7 @@ export default function EmbedProductPage() {
       <section className="dev-hero">
         <div className="dev-hero-side">
           <div className="dev-eyebrow">BananaMaps Embed</div>
-          <h1 className="dev-h1">Live holder maps, <span style={{ color: 'var(--banana)' }}>on your site.</span></h1>
+          <h1 className="dev-h1">Live holder maps, on your site.</h1>
           <p className="dev-lead">
             Give your token pages the view traders actually want: who holds the supply, which wallets move together and where the
             exchanges sit. One snippet, any token, any of our five chains.

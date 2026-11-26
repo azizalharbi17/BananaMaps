@@ -7,7 +7,6 @@ import DevSubnav from './components/DevSubnav';
 export default function DevelopersLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="bm-page">
-      <div className="bm-grain" aria-hidden />
       <SiteNav />
       <DevSubnav />
       <main className="bm-main dev-main">{children}</main>

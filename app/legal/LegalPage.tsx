@@ -53,7 +53,6 @@ export default function LegalPage({
 }: LegalPageProps) {
   return (
     <div className="bm-page">
-      <div className="bm-grain" aria-hidden />
       <SiteNav />
 
       <main className="bm-main legal-main">
@@ -122,21 +121,21 @@ export default function LegalPage({
 
       <style>{`
         .legal-main { align-items: center; }
-        .legal-wrap { width: 100%; max-width: 760px; padding: 48px 16px 72px; }
-        .legal-eyebrow { font-family: 'Bricolage Grotesque', sans-serif; font-size: 12px; font-weight: 700; letter-spacing: 1.4px; text-transform: uppercase; color: var(--banana); margin-bottom: 14px; }
-        .legal-title { font-size: clamp(30px, 4.5vw, 44px); font-weight: 800; letter-spacing: -1.2px; line-height: 1.1; margin-bottom: 14px; overflow-wrap: anywhere; }
+        .legal-wrap { width: 100%; max-width: 760px; padding: 48px 16px 72px; font-family: var(--font-sans); }
+        .legal-eyebrow { font-size: 12px; font-weight: 600; color: var(--text2); margin-bottom: 14px; }
+        .legal-title { font-size: clamp(30px, 4.5vw, 44px); font-weight: 800; letter-spacing: -1.2px; line-height: 1.1; margin-bottom: 14px; overflow-wrap: anywhere; color: var(--text); }
         .legal-summary { font-size: 16px; color: var(--text2); line-height: 1.65; max-width: 68ch; }
-        .legal-meta { display: flex; flex-wrap: wrap; gap: 6px 22px; margin-top: 18px; font-family: 'Bricolage Grotesque', sans-serif; font-size: 13px; color: var(--text2); line-height: 1.6; font-variant-numeric: tabular-nums; }
+        .legal-meta { display: flex; flex-wrap: wrap; gap: 6px 22px; margin-top: 18px; font-size: 13px; color: var(--text2); line-height: 1.6; font-variant-numeric: tabular-nums; }
         .legal-meta dt, .legal-meta dd { display: inline; }
         .legal-meta dt { font-weight: 600; }
         .legal-meta dd { color: var(--text); }
-        .legal-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin: 28px 0 30px; padding-bottom: 18px; border-bottom: 1px solid var(--border); }
+        .legal-tabs { display: flex; gap: 22px; flex-wrap: wrap; margin: 28px 0 30px; border-bottom: 1px solid var(--border); }
         .legal-tab {
-          font-size: 13px; font-weight: 600; color: var(--text2); text-decoration: none; padding: 7px 12px; border-radius: 8px;
-          border: 1px solid var(--border); background: var(--surface); transition: color 0.15s, border-color 0.15s; white-space: nowrap;
+          font-size: 13px; font-weight: 600; color: var(--text2); text-decoration: none; padding: 8px 0 10px; margin-bottom: -1px;
+          border-bottom: 2px solid transparent; transition: color 0.15s, border-color 0.15s; white-space: nowrap;
         }
-        .legal-tab:hover { color: var(--text); border-color: var(--border2); }
-        .legal-tab[aria-current="page"] { color: var(--banana); border-color: rgba(245,200,66,0.45); }
+        .legal-tab:hover { color: var(--text); }
+        .legal-tab[aria-current="page"] { color: var(--text); border-bottom-color: var(--banana); }
 
         .legal-body { max-width: 68ch; font-size: 15.5px; line-height: 1.72; color: var(--text2); overflow-wrap: anywhere; }
         .legal-body p { margin: 0 0 14px; }
@@ -144,27 +143,27 @@ export default function LegalPage({
         .legal-body li { margin-bottom: 7px; }
         .legal-body li::marker { color: var(--text3); }
         .legal-body strong { color: var(--text); font-weight: 600; }
-        .legal-body a { color: var(--banana); text-decoration: none; border-bottom: 1px solid rgba(245,200,66,0.35); transition: border-color 0.15s; }
-        .legal-body a:hover { border-bottom-color: var(--banana); }
+        .legal-body a { color: var(--text); text-decoration: underline; text-decoration-color: var(--text3); text-underline-offset: 2px; transition: text-decoration-color 0.15s; }
+        .legal-body a:hover { text-decoration-color: var(--text); }
         .legal-body code {
-          font-family: 'DM Mono', monospace; font-size: 0.86em; background: var(--surface); border: 1px solid var(--border);
+          font-family: var(--font-mono); font-size: 0.86em; background: var(--surface); border: 1px solid var(--border);
           border-radius: 5px; padding: 1px 6px; color: var(--text); white-space: nowrap;
         }
         .legal-body h3 { font-size: 15.5px; font-weight: 700; color: var(--text); margin: 20px 0 8px; }
 
         .legal-callout {
-          background: rgba(245,200,66,0.06); border: 1px solid rgba(245,200,66,0.25); border-radius: 12px;
+          background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
           padding: 14px 16px; margin: 0 0 16px; color: var(--text); font-size: 14.5px; line-height: 1.65;
         }
         .legal-callout p:last-child { margin-bottom: 0; }
-        .legal-callout-label { font-family: 'Bricolage Grotesque', sans-serif; font-size: 11.5px; font-weight: 700; letter-spacing: 1.4px; text-transform: uppercase; color: var(--banana); margin-bottom: 6px; }
+        .legal-callout-label { font-size: 12px; font-weight: 600; color: var(--text2); margin-bottom: 6px; }
 
-        .legal-toc { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; margin: 20px 0 8px; }
-        .legal-toc-label { font-family: 'Bricolage Grotesque', sans-serif; font-size: 11.5px; font-weight: 700; letter-spacing: 1.4px; text-transform: uppercase; color: var(--text2); margin-bottom: 10px; }
+        .legal-toc { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; margin: 20px 0 8px; }
+        .legal-toc-label { font-size: 12px; font-weight: 600; color: var(--text2); margin-bottom: 10px; }
         .legal-toc ol { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 18px; }
         .legal-toc li { margin: 0; font-size: 13px; line-height: 1.45; min-width: 0; }
-        .legal-toc a { color: var(--text2); border: none; display: flex; gap: 9px; align-items: baseline; }
-        .legal-toc a:hover { color: var(--banana); }
+        .legal-toc a { color: var(--text2); text-decoration: none; display: flex; gap: 9px; align-items: baseline; transition: color 0.15s; }
+        .legal-toc a:hover { color: var(--text); text-decoration: none; }
         .legal-toc .legal-num { font-size: 12px; }
 
         .legal-section { margin-top: 40px; scroll-margin-top: 24px; }
@@ -172,16 +171,16 @@ export default function LegalPage({
           font-size: 20px; font-weight: 800; letter-spacing: -0.4px; color: var(--text); margin-bottom: 12px; line-height: 1.3;
           display: flex; gap: 10px; align-items: baseline;
         }
-        .legal-num { font-family: 'Bricolage Grotesque', sans-serif; font-size: 13px; font-weight: 700; color: var(--banana); flex-shrink: 0; font-variant-numeric: tabular-nums; }
+        .legal-num { font-size: 13px; font-weight: 600; color: var(--text2); flex-shrink: 0; font-variant-numeric: tabular-nums; }
 
         .legal-contact {
-          margin-top: 48px; padding: 20px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface);
+          margin-top: 48px; padding: 20px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface);
           display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px 16px;
         }
         .legal-contact-title { font-weight: 700; color: var(--text); font-size: 15px; }
         .legal-contact-sub { font-size: 13px; color: var(--text2); margin-top: 3px; line-height: 1.5; }
-        .legal-body a.legal-contact-btn { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 600; font-size: 13px; border-bottom: 1px solid var(--border2); color: var(--text); max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
-        .legal-body a.legal-contact-btn:hover { color: var(--banana); border-color: var(--banana); }
+        .legal-body a.legal-contact-btn { font-weight: 600; font-size: 13px; text-decoration: none; color: var(--text); max-width: 100%; overflow: hidden; text-overflow: ellipsis; transition: background-color 0.15s, border-color 0.15s; }
+        .legal-body a.legal-contact-btn:hover { background: var(--surface2); border-color: var(--border2); text-decoration: none; }
 
         @media (max-width: 600px) {
           .legal-wrap { padding: 34px 16px 56px; }

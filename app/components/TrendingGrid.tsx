@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import TokenLogo from './TokenLogo';
 import { useTrending } from './useTrending';
-import { CHAINS, DOWN, UP, fmtAgo, fmtPct, fmtUsd, mapHref, type ChainMeta, type TrendingToken } from './chains';
+import { CHAINS, fmtAgo, fmtPct, fmtUsd, mapHref, type ChainMeta, type TrendingToken } from './chains';
 
 const PER_CHAIN = 8;
 
@@ -27,7 +27,7 @@ function TokenCard({ t }: { t: TrendingToken }) {
         <span className="bm-tcard-name">{t.name}</span>
       </span>
       <span className="bm-tcard-side">
-        <span className="bm-tcard-chg" style={{ color: up ? UP : DOWN }}>{fmtPct(t.change24h)}</span>
+        <span className="bm-tcard-chg" style={{ color: up ? 'var(--up)' : 'var(--down)' }}>{fmtPct(t.change24h)}</span>
         {vol && <span className="bm-tcard-vol">{vol} vol</span>}
       </span>
     </Link>
@@ -39,7 +39,7 @@ function ChainRow({ chain, tokens, loading }: { chain: ChainMeta; tokens: Trendi
   return (
     <section className="bm-chain-row" aria-label={`Trending on ${chain.label}`}>
       <header className="bm-chain-head">
-        <span className="bm-chain-dot" style={{ background: chain.color, boxShadow: `0 0 0 3px ${chain.color}26` }} aria-hidden />
+        <span className="bm-chain-dot" style={{ background: chain.color }} aria-hidden />
         <span>{chain.label}</span>
         {!loading && <span className="bm-chain-count">{tokens.length} tokens</span>}
       </header>
@@ -55,11 +55,12 @@ function ChainRow({ chain, tokens, loading }: { chain: ChainMeta; tokens: Trendi
 /** "Trending now" — the real trending tokens from /api/trending, one row per chain. */
 export default function TrendingGrid() {
   const { data, loading } = useTrending();
-  const [now, setNow] = useState(0);
+  // `now` only matters once data exists (data is null on the server and the first
+  // client render, so the lazy initial value never reaches the hydrated markup).
+  const [now, setNow] = useState(() => Date.now());
 
-  // Re-render the "Updated Xm ago" label every 30s; `now` only matters once data exists.
+  // Re-render the "Updated Xm ago" label every 30s.
   useEffect(() => {
-    setNow(Date.now());
     const id = setInterval(() => setNow(Date.now()), 30_000);
     return () => clearInterval(id);
   }, []);

@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { EMBED_PLANS, type BillingInterval, type EmbedPlan, type Product } from '@/lib/plans';
+import { THEME } from '@/lib/theme';
 import CodeBlock from '../components/CodeBlock';
 import { copyText } from '../components/clipboard';
 import { embedSnippet, fmtDate } from '../components/fmt';
@@ -240,7 +241,7 @@ function SiteCard({ partner: p, plan, onUpdate, onRemove, onUpgrade }: {
             <input
               type="color"
               aria-label="Pick accent color"
-              value={HEX_RE.test(accent.trim()) ? '#' + accent.trim().replace('#', '') : '#F5C842'}
+              value={HEX_RE.test(accent.trim()) ? '#' + accent.trim().replace('#', '') : THEME.accent}
               disabled={!isPartner || busy === 'accent'}
               onChange={e => setAccent(e.target.value.toUpperCase())}
             />
@@ -248,7 +249,7 @@ function SiteCard({ partner: p, plan, onUpdate, onRemove, onUpgrade }: {
               id={`accent-${p.pid}`}
               className="dash-input"
               value={accent}
-              placeholder="#F5C842"
+              placeholder={THEME.accent}
               maxLength={7}
               disabled={!isPartner || busy === 'accent'}
               onChange={e => setAccent(e.target.value)}

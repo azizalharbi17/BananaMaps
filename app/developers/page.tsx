@@ -47,7 +47,7 @@ export default function DevelopersPage() {
       <section className="dev-hero">
         <div className="dev-hero-side">
           <div className="dev-eyebrow">BananaMaps for developers</div>
-          <h1 className="dev-h1">Holder intelligence, <span style={{ color: 'var(--banana)' }}>in your product.</span></h1>
+          <h1 className="dev-h1">Holder intelligence, in your product.</h1>
           <p className="dev-lead">
             The same cluster graphs, top-150 holders, wallet labels and risk scores you see in the BananaMaps app — as a versioned
             JSON API, and as <strong style={{ color: 'var(--text)' }}>BananaMaps Embed</strong>, a live holder map you can drop into your own site.
@@ -99,7 +99,7 @@ export default function DevelopersPage() {
             <div key={e.path} className="dev-card">
               <div className="dev-card-icon" aria-hidden>{e.icon}</div>
               <div className="dev-card-title">{e.title}</div>
-              <div className="dev-mono" style={{ fontSize: 12, color: 'var(--banana)', marginBottom: 8 }}>{e.path}/{'{chain}'}/{'{address}'}</div>
+              <div className="dev-mono" style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 8 }}>{e.path}/{'{chain}'}/{'{address}'}</div>
               <div className="dev-card-desc">{e.desc}</div>
             </div>
           ))}

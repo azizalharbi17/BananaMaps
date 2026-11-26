@@ -34,7 +34,6 @@ const STATS = [
 export default function AboutPage() {
   return (
     <div className="bm-page">
-      <div className="bm-grain" aria-hidden />
       <Ticker />
       <SiteNav />
 
@@ -100,7 +99,7 @@ export default function AboutPage() {
           <div className="about-chains-label">Chains supported</div>
           <div className="about-chains">
             {CHAINS.map(c => (
-              <span key={c.id} className="about-chain" style={{ borderColor: `${c.color}55` }}>
+              <span key={c.id} className="about-chain">
                 <span className="about-chain-dot" style={{ background: c.color }} aria-hidden />
                 {c.label}
               </span>
@@ -118,45 +117,49 @@ export default function AboutPage() {
 
       <SiteFooter />
 
+      {/* Theme B "Studio": flat surfaces, sentence-case labels in --text2, no decorative
+          motion. Fonts inherit Inter from body; the accent is reserved for the headline
+          phrase and the primary buttons. */}
       <style>{`
         .about-main { align-items: center; }
-        .about-hero {
-          width: 100%; max-width: 860px; padding: 64px 16px 36px; text-align: center; position: relative;
-          background: radial-gradient(ellipse 70% 60% at 50% 0%, rgba(245,200,66,0.08), transparent 70%);
-        }
-        .about-eyebrow { font-family: 'Bricolage Grotesque', sans-serif; font-size: 12px; font-weight: 700; letter-spacing: 1.6px; text-transform: uppercase; color: var(--banana); margin-bottom: 18px; }
-        .about-title { font-size: clamp(32px, 5vw, 56px); font-weight: 800; letter-spacing: -1.6px; line-height: 1.08; margin-bottom: 22px; }
+        .about-hero { width: 100%; max-width: 860px; padding: 64px 16px 36px; text-align: center; }
+        .about-eyebrow { font-size: 12px; font-weight: 600; color: var(--text2); margin-bottom: 18px; }
+        .about-title { font-size: clamp(32px, 5vw, 56px); font-weight: 800; letter-spacing: -1.5px; line-height: 1.08; margin-bottom: 22px; }
         .about-lead { font-size: 17px; color: var(--text2); line-height: 1.7; max-width: 720px; margin: 0 auto 14px; }
         .about-lead-2 { color: var(--text2); opacity: 0.85; margin-bottom: 30px; }
         .about-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-bottom: 40px; }
-        .about-btn-lg { padding: 12px 24px; font-size: 14px; border-radius: 9px; }
+        .about-btn-lg { padding: 11px 22px; font-size: 14px; border-radius: 7px; }
         .about-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; max-width: 760px; margin: 0 auto; }
-        .about-stat { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px 10px; }
-        .about-stat dd { font-family: 'Bricolage Grotesque', sans-serif; font-size: 24px; font-weight: 800; color: var(--banana); letter-spacing: -0.5px; font-variant-numeric: tabular-nums; }
+        .about-stat { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px 10px; }
+        .about-stat dd { font-size: 24px; font-weight: 800; color: var(--text); letter-spacing: -0.5px; font-variant-numeric: tabular-nums; }
         .about-stat dt { font-size: 12.5px; color: var(--text2); margin-top: 4px; }
         .about-section { width: 100%; max-width: 960px; padding: 40px 16px 8px; }
         .about-h2 { font-size: 24px; font-weight: 800; letter-spacing: -0.6px; margin-bottom: 18px; }
         .feat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; width: 100%; }
-        .feat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 22px; text-align: left; transition: border-color 0.15s; }
+        .feat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 22px; text-align: left; transition: border-color 0.15s; }
         .feat-card:hover { border-color: var(--border2); }
         .feat-icon { font-size: 26px; margin-bottom: 10px; }
         .feat-title { font-weight: 700; font-size: 14px; margin-bottom: 5px; }
         .feat-desc { font-size: 12px; color: var(--text2); line-height: 1.5; }
         .about-steps { list-style: none; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-bottom: 26px; }
-        .about-step { position: relative; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 22px; display: flex; flex-direction: column; gap: 12px; }
-        .about-step-n { font-family: 'Bricolage Grotesque', sans-serif; font-size: 12px; font-weight: 700; letter-spacing: 1.4px; color: var(--banana); font-variant-numeric: tabular-nums; }
+        .about-step { position: relative; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 22px; display: flex; flex-direction: column; gap: 12px; }
+        .about-step-n { font-size: 12px; font-weight: 600; color: var(--text2); font-variant-numeric: tabular-nums; }
         .about-step-title { font-weight: 700; font-size: 15px; margin-bottom: 6px; }
         .about-step-desc { font-size: 12.5px; color: var(--text2); line-height: 1.55; }
         .about-step-arrow { position: absolute; right: -14px; top: 50%; transform: translateY(-50%); width: 16px; text-align: center; color: var(--text3); font-size: 13px; background: var(--bg); line-height: 1; }
-        .about-chains-label { font-family: 'Bricolage Grotesque', sans-serif; font-size: 12px; font-weight: 700; letter-spacing: 1.4px; text-transform: uppercase; color: var(--text2); margin-bottom: 10px; }
+        .about-chains-label { font-size: 12px; font-weight: 600; color: var(--text2); margin-bottom: 10px; }
         .about-chains { display: flex; gap: 8px; flex-wrap: wrap; }
-        .about-chain { display: inline-flex; align-items: center; gap: 7px; padding: 7px 12px; border-radius: 20px; border: 1px solid; background: var(--surface); font-size: 12px; font-weight: 600; color: var(--text); }
+        .about-chain { display: inline-flex; align-items: center; gap: 7px; padding: 7px 12px; border-radius: 7px; border: 1px solid var(--border); background: var(--surface); font-size: 12px; font-weight: 600; color: var(--text); }
         .about-chain-dot { width: 7px; height: 7px; border-radius: 50%; }
         .about-cta { width: 100%; max-width: 960px; padding: 56px 16px 72px; text-align: center; }
         .about-cta-title { font-size: clamp(22px, 3vw, 30px); font-weight: 800; letter-spacing: -0.6px; margin-bottom: 22px; }
-        .cta-btn { display: inline-block; background: var(--banana); color: #000; border-radius: 10px; padding: 15px 44px; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 16px; text-decoration: none; transition: background 0.15s, transform 0.15s; }
-        .cta-btn:hover { background: #ffd45a; transform: translateY(-1px); }
-        .about-cta-note { font-family: 'Bricolage Grotesque', sans-serif; font-size: 13px; color: var(--text2); margin-top: 14px; line-height: 1.7; }
+        .cta-btn {
+          display: inline-block; background: var(--banana); color: var(--banana-ink); border: 1px solid var(--banana); border-radius: 7px; padding: 13px 40px;
+          font-weight: 700; font-size: 15px; text-decoration: none; transition: background 0.15s, border-color 0.15s;
+        }
+        .cta-btn:hover { background: #FFD35A; border-color: #FFD35A; }
+        .cta-btn:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--banana); }
+        .about-cta-note { font-size: 13px; color: var(--text2); margin-top: 14px; line-height: 1.7; }
         .nowrap { white-space: nowrap; }
         @media (max-width: 768px) {
           .about-hero { padding: 44px 16px 28px; }
@@ -166,9 +169,7 @@ export default function AboutPage() {
           .about-step-arrow { display: none; }
           .about-section { padding-top: 30px; }
           .about-cta { padding: 40px 16px 56px; }
-        }
-        @media (prefers-reduced-motion: reduce) {
-          .cta-btn:hover { transform: none; }
+          .cta-btn { padding: 13px 32px; }
         }
       `}</style>
     </div>

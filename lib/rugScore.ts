@@ -1,4 +1,5 @@
 import { isExchange } from "./exchanges";
+import { RISK_COLORS } from "./theme";
 
 export interface RugScoreResult {
   score: number;
@@ -12,7 +13,7 @@ export function calculateRugScore(
   clusterCount: number,
   chain: string = "eth"
 ): RugScoreResult {
-  if (!holders.length) return { score: 0, label: "No Data", color: "#666", factors: [] };
+  if (!holders.length) return { score: 0, label: "No Data", color: RISK_COLORS.none, factors: [] };
 
   // Filter out known exchanges (hardcoded + API-labeled)
   const realHolders = holders.filter(h => {
@@ -82,10 +83,10 @@ export function calculateRugScore(
 
   let labelText: string;
   let color: string;
-  if (score >= 80) { labelText = "Low Risk"; color = "#2EE89A"; }
-  else if (score >= 50) { labelText = "Medium Risk"; color = "#EAB308"; }
-  else if (score >= 25) { labelText = "High Risk"; color = "#F97316"; }
-  else { labelText = "Very High Risk"; color = "#EF4444"; }
+  if (score >= 80) { labelText = "Low Risk"; color = RISK_COLORS.low; }
+  else if (score >= 50) { labelText = "Medium Risk"; color = RISK_COLORS.medium; }
+  else if (score >= 25) { labelText = "High Risk"; color = RISK_COLORS.high; }
+  else { labelText = "Very High Risk"; color = RISK_COLORS.veryHigh; }
 
   return { score, label: labelText, color, factors };
 }

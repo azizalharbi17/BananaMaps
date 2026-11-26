@@ -3,8 +3,8 @@ import { useState } from 'react';
 
 /**
  * Token logo with the same fallback as TokenTile in app/app/AppClient.tsx:
- * first letter of the symbol in a gold circle. A broken image URL swaps to the
- * fallback instead of leaving a hole.
+ * first letter of the symbol on a neutral disc (--surface2 / --text2). A broken
+ * image URL swaps to the fallback instead of leaving a hole.
  */
 export default function TokenLogo({ src, symbol, size }: { src: string; symbol: string; size: number }) {
   const [failed, setFailed] = useState(false);

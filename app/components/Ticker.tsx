@@ -1,26 +1,13 @@
 'use client';
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import TokenLogo from './TokenLogo';
 import { useTrending } from './useTrending';
-import { CHAIN_BY_ID, DOWN, UP, fmtPct, interleave, mapHref, type TrendingToken } from './chains';
+import { CHAIN_BY_ID, fmtPct, interleave, mapHref, type TrendingToken } from './chains';
 
 const MAX_ITEMS = 40;
-/**
- * Seconds per item — keeps the scroll speed constant regardless of list length.
- * 4s/item is about half the original pace (was 2s) so symbols are readable as
- * they pass; the 60s floor keeps short lists from racing.
- */
-const SECONDS_PER_ITEM = 4;
-const MIN_DURATION_S = 60;
 
-/**
- * `clone` marks the item as part of the aria-hidden duplicate sequence that makes
- * the loop seamless: it stays clickable/hoverable for mouse users but leaves the
- * tab order, so keyboard users get 40 stops instead of 80 and no focusable
- * content hides inside aria-hidden.
- */
-function TickerItem({ t, clone }: { t: TrendingToken; clone?: boolean }) {
+function TickerItem({ t }: { t: TrendingToken }) {
   const chain = CHAIN_BY_ID[t.chain];
   const up = t.change24h >= 0;
   return (
@@ -29,61 +16,72 @@ function TickerItem({ t, clone }: { t: TrendingToken; clone?: boolean }) {
       prefetch={false}
       className="bm-ticker-item"
       title={`${t.name || t.symbol} · ${chain?.label ?? t.chain}`}
-      tabIndex={clone ? -1 : undefined}
     >
       <TokenLogo src={t.logo} symbol={t.symbol} size={16} />
       <span className="bm-ticker-sym">{t.symbol || t.name}</span>
-      <span className="bm-ticker-chg" style={{ color: up ? UP : DOWN }}>{fmtPct(t.change24h)}</span>
-      <span className="bm-ticker-dot" style={{ background: chain?.color ?? '#888' }} aria-hidden />
+      <span className="bm-ticker-chg" style={{ color: up ? 'var(--up)' : 'var(--down)' }}>{fmtPct(t.change24h)}</span>
+      <span className="bm-ticker-dot" style={{ background: chain?.color ?? 'var(--text3)' }} aria-hidden />
     </Link>
   );
 }
 
 /**
- * Site-wide trending marquee shown above the nav. Pure CSS translateX over a
- * duplicated list for a seamless loop; pauses on hover and on keyboard focus
- * (CSS :hover / :focus-within in globals.css); with prefers-reduced-motion the
- * list is rendered once and simply scrolls.
+ * Site-wide trending strip shown above the nav. The list is rendered once
+ * inside a horizontally scrollable viewport (hidden scrollbar — see
+ * .bm-ticker-viewport in globals.css): no marquee, no duplicated sequence, so
+ * keyboard users get one tab stop per token and nothing moves on its own.
  * Height is fixed at 34px so data arriving never shifts the layout.
  */
 export default function Ticker() {
   const { data, loading } = useTrending();
-  const [reduced, setReduced] = useState(false);
-
-  useEffect(() => {
-    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
-    const update = () => setReduced(mq.matches);
-    update();
-    mq.addEventListener('change', update);
-    return () => mq.removeEventListener('change', update);
-  }, []);
-
   const items = useMemo(() => (data ? interleave(data.byChain, MAX_ITEMS) : []), [data]);
-  const duration = Math.max(MIN_DURATION_S, items.length * SECONDS_PER_ITEM);
+  const viewportRef = useRef<HTMLDivElement>(null);
+
+  // The scrollbar is hidden, so two things stand in for it: edge fades on the
+  // side(s) where content continues (--fade-l / --fade-r, see globals.css), and
+  // a vertical mouse wheel scrolling the strip sideways while it has somewhere
+  // to go — at either end the wheel falls through to the page as usual.
+  useEffect(() => {
+    const el = viewportRef.current;
+    if (!el) return;
+    const update = () => {
+      const max = el.scrollWidth - el.clientWidth;
+      el.style.setProperty('--fade-l', el.scrollLeft > 1 ? '24px' : '0px');
+      el.style.setProperty('--fade-r', max - el.scrollLeft > 1 ? '24px' : '0px');
+    };
+    const onWheel = (e: WheelEvent) => {
+      if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return; // already a horizontal gesture
+      const max = el.scrollWidth - el.clientWidth;
+      const next = Math.min(max, Math.max(0, el.scrollLeft + e.deltaY));
+      if (next === el.scrollLeft) return;
+      e.preventDefault();
+      el.scrollLeft = next;
+    };
+    update();
+    el.addEventListener('scroll', update, { passive: true });
+    el.addEventListener('wheel', onWheel, { passive: false });
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => {
+      el.removeEventListener('scroll', update);
+      el.removeEventListener('wheel', onWheel);
+      ro.disconnect();
+    };
+  }, [items, loading]);
 
   let body: React.ReactNode;
   if (items.length === 0 && loading) {
     body = (
-      <div className="bm-ticker-track bm-ticker-static" aria-hidden>
+      <div className="bm-ticker-track" aria-hidden>
         {Array.from({ length: 18 }, (_, i) => <span key={i} className="bm-ticker-skel" />)}
       </div>
     );
   } else if (items.length === 0) {
-    body = <div className="bm-ticker-track bm-ticker-static bm-ticker-empty">Trending data is warming up — check back in a few minutes.</div>;
+    body = <div className="bm-ticker-track bm-ticker-empty">Trending data is warming up — check back in a few minutes.</div>;
   } else {
     body = (
-      <div
-        className={`bm-ticker-track${reduced ? ' bm-ticker-static' : ''}`}
-        style={{ '--bm-ticker-dur': `${duration}s` } as React.CSSProperties}
-      >
-        <div className="bm-ticker-seq">
-          {items.map(t => <TickerItem key={`${t.chain}:${t.address}`} t={t} />)}
-        </div>
-        {!reduced && (
-          <div className="bm-ticker-seq" aria-hidden>
-            {items.map(t => <TickerItem key={`${t.chain}:${t.address}`} t={t} clone />)}
-          </div>
-        )}
+      <div className="bm-ticker-track">
+        {items.map(t => <TickerItem key={`${t.chain}:${t.address}`} t={t} />)}
       </div>
     );
   }
@@ -94,7 +92,7 @@ export default function Ticker() {
         <span className="bm-ticker-live" aria-hidden />
         Trending
       </div>
-      <div className="bm-ticker-viewport">{body}</div>
+      <div className="bm-ticker-viewport" ref={viewportRef}>{body}</div>
     </div>
   );
 }

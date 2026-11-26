@@ -17,12 +17,11 @@ export default function SiteNav() {
         @media (max-width: 480px) {
           .bm-nav-left { gap: 2px; }
           .bm-nav-link { padding: 7px 7px; font-size: 12px; }
-          .bm-nav-brand { font-size: 17px; gap: 6px; }
-          .bm-nav-brand .bm-logo { font-size: 20px; }
+          .bm-nav-brand { gap: 5px; }
         }
         @media (max-width: 430px) {
           .bm-nav-wordmark { display: none; }
-          .bm-nav-brand .bm-logo { font-size: 24px; }
+          .bm-nav-brand .bm-logo { font-size: 20px; }
         }
       `}</style>
       <div className="bm-nav-left">
